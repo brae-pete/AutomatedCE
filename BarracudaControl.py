@@ -327,7 +327,7 @@ class InsertScreenController:
         self.screen.num_circles_vertical_input.setEnabled(False)
 
     def select_file(self):
-        file_path = QtWidgets.QFileDialog.getOpenFileName(self.screen, 'Select a file', os.getcwd(),
+        file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Select a file', os.getcwd(),
                                                           'INSERT(*.ins)')
         if file_path[0]:
             file_path = file_path[0]
@@ -415,6 +415,8 @@ class MethodScreenController:
         self._selecting = False
         self._step_well = None
         self._form_data = []
+        self._populating_table = False
+        self._well_labels = ['None']
 
         self.screen.image_view.setSceneRect(0, 0, self.hardware.xy_stage_size[0] * self._um2pix,
                                             self.hardware.xy_stage_size[1] * self._um2pix)
@@ -427,12 +429,16 @@ class MethodScreenController:
         self.method = None
         self.insert = None
 
+        self.add_step(self._well_labels, self._well_labels)
         self.set_callbacks()
 
     def set_callbacks(self):
         self.screen.select_file.released.connect(lambda: self.load_insert())
         self.screen.image_frame.selectionChanged.connect(lambda: self.selecting())
         self.screen.reload_button.released.connect(lambda: self.reload_insert())
+        self.screen.save_file.released.connect(lambda: self.save_method())
+        self.screen.select_file_save.released.connect(lambda: self.select_file())
+        self.screen.load_file_method.released.connect(lambda: self.load_method())
 
     def selecting(self):
         if self.screen.image_frame.selectedItems():
@@ -440,7 +446,6 @@ class MethodScreenController:
             if type(item) != QtWidgets.QGraphicsPixmapItem:
                 location = tuple(item.boundingRect().getRect())
                 for well in self.insert.wells:
-                    print(well.bound_box, location)
                     if well.bound_box == location:
                         if self._selecting:
                             self._step_well.setCurrentText(well.label)
@@ -450,16 +455,38 @@ class MethodScreenController:
                         break
 
     def step_well_change(self, combobox):
-        if combobox.currentText() == 'Select':
+        if combobox.currentText() == 'Select' and not self._populating_table:
             self._selecting = True
             self._step_well = combobox
 
-    def add_step(self, inlets, outlets):
-        self._form_data.extend([{}])
+    def add_step(self, inlets, outlets, action_input=None, inlet_input=None, outlet_input=None,
+                 time_input=None, value_input=None, duration_input=None, summary_input=None):
+        if not self._populating_table:
+            self._form_data.extend([{}])
         actions = ['Select', 'Separate', 'Rinse', 'Inject']
 
         row_count = self.screen.insert_table.rowCount()
         self.screen.insert_table.insertRow(row_count)
+
+        blank_time = QtWidgets.QTableWidgetItem()
+        if time_input:
+            blank_time.setText(time_input)
+        self.screen.insert_table.setItem(row_count, 1, blank_time)
+
+        blank_value = QtWidgets.QTableWidgetItem()
+        if value_input:
+            blank_value.setText(value_input)
+        self.screen.insert_table.setItem(row_count, 3, blank_value)
+
+        blank_duration = QtWidgets.QTableWidgetItem()
+        if duration_input:
+            blank_duration.setText(duration_input)
+        self.screen.insert_table.setItem(row_count, 4, blank_duration)
+
+        blank_summary = QtWidgets.QTableWidgetItem()
+        if summary_input:
+            blank_summary.setText(summary_input)
+        self.screen.insert_table.setItem(row_count, 7, blank_summary)
 
         add_button = QtWidgets.QPushButton('+')
         add_button.setFixedWidth(30)
@@ -468,19 +495,27 @@ class MethodScreenController:
 
         action_choices = QtWidgets.QComboBox()
         action_choices.addItems(actions)
+        if action_input:
+            action_choices.setCurrentText(action_input)
         action_choices.activated.connect(lambda: self.load_dialog(action_choices.currentText()))
         self.screen.insert_table.setCellWidget(row_count, 2, action_choices)
 
         inlet_choices = QtWidgets.QComboBox()
-        inlet_choices.addItems(['None', 'Select'])
-        inlet_choices.addItems(inlets)
+        inlet_choices.addItems(self._well_labels)
+        if inlet_input:
+            if inlet_input not in self._well_labels:
+                inlet_choices.addItem(inlet_input)
+            inlet_choices.setCurrentText(inlet_input)
         inlet_choices.activated.connect(lambda: self.step_well_change(inlet_choices))
         self.screen.insert_table.setCellWidget(row_count, 5, inlet_choices)
 
         outlet_choices = QtWidgets.QComboBox()
         outlet_choices.setEnabled(False)
-        outlet_choices.addItems(['None', 'Select'])
-        outlet_choices.addItems(outlets)
+        outlet_choices.addItems(self._well_labels)
+        if outlet_input:
+            if outlet_input not in self._well_labels:
+                inlet_choices.addItem(outlet_input)
+            outlet_choices.setCurrentText(outlet_input)
         outlet_choices.activated.connect(lambda: self.step_well_change(outlet_choices))
         self.screen.insert_table.setCellWidget(row_count, 6, outlet_choices)
 
@@ -498,35 +533,41 @@ class MethodScreenController:
 
     def set_step_conditions(self, dialog, dialog_data):
         """ Sets table values based on form data from dialog. """
-        print(dialog, dialog_data.keys())
         current_row = self.screen.insert_table.currentRow()
 
-        data = {'Dialog': dialog}
+        data = {'Type': dialog}
         data.update({key: dialog_data[key]() for key in dialog_data.keys()})
+
         try:
             self._form_data[current_row] = data
         except IndexError:
+            print('here?')
             self._form_data.extend([{}])
             self._form_data[current_row] = data
 
         summary = []
         value = ""
 
-        if dialog == 'SEPARATE':
+        if dialog == 'Separate':
             # Determine separation type and value.
             if data['SeparationTypeVoltageRadio']:
+                summary += ['Voltage']
                 value = '{} kV'.format(data['ValuesVoltageEdit'])
 
             elif data['SeparationTypeCurrentRadio']:
+                summary += ['Current']
                 value = '{} kV'.format(data['ValuesVoltageEdit'])
 
             elif data['SeparationTypePowerRadio']:
+                summary += ['Power']
                 value = '{} kV'.format(data['ValuesVoltageEdit'])
 
             elif data['SeparationTypePressureRadio']:
+                summary += ['Pressure']
                 value = '{} psi'.format(data['ValuesPressureEdit'])
 
             elif data['SeparationTypeVacuumRadio']:
+                summary += ['Vacuum']
                 value = '{} psi'.format(data['ValuesPressureEdit'])
 
             # Determine whether it is with pressure or vacuum.
@@ -547,7 +588,7 @@ class MethodScreenController:
             duration = '{} min'.format(data['ValuesDurationEdit'])
             summary += ['{} min Ramp'.format(data['ValuesRampTimeEdit'])]
 
-        elif dialog == 'RINSE':
+        elif dialog == 'Rinse':
             # Get pressure type and value
             if data['PressureTypePressureRadio']:
                 summary += ['Pressure']
@@ -609,8 +650,12 @@ class MethodScreenController:
 
     def load_dialog(self, dialog_type):
         """ Loads the appropriate dialog based on user input in table. """
-        if dialog_type != 'Select':  # Rinse, Inject or Separate (Select is default)
-            self.dialogs[dialog_type](self.set_step_conditions)
+        if not self._populating_table:
+            current_row = self.screen.insert_table.currentRow()
+            inlet = self.screen.insert_table.cellWidget(current_row, 5).currentText()
+            outlet = self.screen.insert_table.cellWidget(current_row, 6).currentText()
+            if dialog_type != 'Select':  # Rinse, Inject or Separate (Select is default)
+                self.dialogs[dialog_type](self.set_step_conditions, inlet, outlet)
 
     def load_insert(self):
         """ Prompts user for and loads an in insert file. """
@@ -635,14 +680,32 @@ class MethodScreenController:
                 self.screen.image_frame.clear()  # Clear image frame for new insert.
                 self.screen.file_name.setText(open_file_path)
 
-                for row in range(self.screen.insert_table.rowCount()):  # Clears the table
-                    self.screen.insert_table.removeRow(self.screen.insert_table.rowCount()-1)
+                # for row in range(self.screen.insert_table.rowCount()):  # Clears the table
+                #     self.screen.insert_table.removeRow(self.screen.insert_table.rowCount()-1)
 
                 for well in self.insert.wells:  # Loads the new shapes onto the frame
                     self.screen.image_frame.add_shape(well.shape, well.bound_box)
 
-                well_labels = [well.label for well in self.insert.wells]
-                self.add_step(well_labels, well_labels)  # Creates the first editable row with all wells.
+                well_labels = ['None', 'Select']
+                well_labels.extend([well.label for well in self.insert.wells])
+
+                for row_index in range(self.screen.insert_table.rowCount()):
+                    current_choice_inlet = self.screen.insert_table.cellWidget(row_index, 5).currentText()
+                    current_choice_outlet = self.screen.insert_table.cellWidget(row_index, 6).currentText()
+
+                    if current_choice_inlet not in well_labels:
+                        well_labels.extend(current_choice_inlet)
+                    if current_choice_outlet not in well_labels:
+                        well_labels.extend(current_choice_outlet)
+
+                    self.screen.insert_table.cellWidget(row_index, 5).clear()
+                    self.screen.insert_table.cellWidget(row_index, 6).clear()
+                    self.screen.insert_table.cellWidget(row_index, 5).addItems(well_labels)
+                    self.screen.insert_table.cellWidget(row_index, 6).addItems(well_labels)
+                    self.screen.insert_table.cellWidget(row_index, 5).setCurrentText(current_choice_inlet)
+                    self.screen.insert_table.cellWidget(row_index, 6).setCurrentText(current_choice_outlet)
+
+                self._well_labels = well_labels
 
     def reload_insert(self):
         """ Reloads the current insert file. """
@@ -666,16 +729,27 @@ class MethodScreenController:
                 for well in self.insert.wells:
                     self.screen.image_frame.add_shape(well.shape, well.bound_box)
 
-                # Keep old steps but add new well labels to inlet and outlet choices on the last row.
-                well_labels = [well.label for well in self.insert.wells]
-                outlet_choice = self.screen.insert_table.cellWidget(self.screen.insert_table.rowCount()-1, 5)
-                outlet_choice.clear()
-                outlet_choice.addItems(['None', 'Select'])
-                outlet_choice.addItems(well_labels)
-                outlet_choice = self.screen.insert_table.cellWidget(self.screen.insert_table.rowCount()-1, 6)
-                outlet_choice.clear()
-                outlet_choice.addItems(['None', 'Select'])
-                outlet_choice.addItems(well_labels)
+                # Keep old steps but add new well labels to inlet and outlet choices.
+                well_labels = ['None', 'Select']
+                well_labels.extend([well.label for well in self.insert.wells])
+
+                for row_index in range(self.screen.insert_table.rowCount()):
+                    current_choice_inlet = self.screen.insert_table.cellWidget(row_index, 5).currentText()
+                    current_choice_outlet = self.screen.insert_table.cellWidget(row_index, 6).currentText()
+
+                    if current_choice_inlet not in well_labels:
+                        well_labels.extend(current_choice_inlet)
+                    if current_choice_outlet not in well_labels:
+                        well_labels.extend(current_choice_outlet)
+
+                    self.screen.insert_table.cellWidget(row_index, 5).clear()
+                    self.screen.insert_table.cellWidget(row_index, 6).clear()
+                    self.screen.insert_table.cellWidget(row_index, 5).addItems(well_labels)
+                    self.screen.insert_table.cellWidget(row_index, 6).addItems(well_labels)
+                    self.screen.insert_table.cellWidget(row_index, 5).setCurrentText(current_choice_inlet)
+                    self.screen.insert_table.cellWidget(row_index, 6).setCurrentText(current_choice_outlet)
+
+                self._well_labels = well_labels
 
     def load_method(self):
         """ Prompts the user for and loads a method file. """
@@ -691,6 +765,8 @@ class MethodScreenController:
             BarracudaQt.ErrorMessageUI(message)
             return
 
+        self.screen.file_name_save.setText(open_file_path)
+
         with open(open_file_path, 'rb') as open_file:
             try:
                 data = pickle.load(open_file)
@@ -703,10 +779,16 @@ class MethodScreenController:
 
     def save_method(self):
         """ Prompts the user for and saves current method to a file path. """
-        saved_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Specify file',
-                                                                os.getcwd(), 'METHOD(*.met)')[0]
+        saved_file_path = self.screen.file_name_save.text()
+
         if not saved_file_path:  # Checks if a file path was actually specified.
-            return
+            self.select_file()
+            saved_file_path = self.screen.file_name_save.text()
+
+            if not saved_file_path:
+                return
+
+        self.compile_method()  # Compile all step information into a method object
 
         with open(saved_file_path, 'wb') as saved_file:
             try:
@@ -714,10 +796,57 @@ class MethodScreenController:
             except pickle.PicklingError:  # Shouldn't occur unless the user really screws up.
                 BarracudaQt.ErrorMessageUI(error_message='Could not save the method.')
 
+    def select_file(self):
+        file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Select a file', os.getcwd(),
+                                                          'METHOD(*.met)')
+        if file_path[0]:
+            file_path = file_path[0]
+        else:
+            return
+
+        if os.path.splitext(file_path)[1] != '.met':
+            BarracudaQt.ErrorMessageUI(error_message='Invalid File Extension')
+            return
+
+        self.screen.file_name_save.setText(file_path)
+
     def populate_table(self, method):
-        if method.steps:
-            for step in method.steps:
+        self._populating_table = True
+
+        self.screen.insert_table.clearContents()
+        for row in range(self.screen.insert_table.rowCount()):
+            self.screen.insert_table.removeRow(self.screen.insert_table.rowCount() - 1)
+
+        self._form_data = []
+        for step in method.steps:
+            print('step')
+            if step:
+                print('good')
+                self.add_step([step['Inlet']], [step['Outlet']], action_input=step['Type'], inlet_input=step['Inlet'],
+                              outlet_input=step['Outlet'], time_input=step['Time'], value_input=step['Value'],
+                              duration_input=step['Duration'], summary_input=step['Summary'])
+                self._form_data += [step]
+                # print(self._form_data)
+            else:
                 print(step)
+
+        # print(self._form_data)
+        self._populating_table = False
+
+    def compile_method(self):
+        """ Compiles all step information into a method object. """
+        n = 0
+        for data in self._form_data:
+            if 'Type' in data.keys():
+                data['Inlet'] = self.screen.insert_table.cellWidget(n, 5).currentText()
+                data['Outlet'] = self.screen.insert_table.cellWidget(n, 6).currentText()
+                data['Time'] = self.screen.insert_table.item(n, 1).text()
+                data['Summary'] = self.screen.insert_table.item(n, 7).text()
+                data['Value'] = self.screen.insert_table.item(n, 3).text()
+                data['Duration'] = self.screen.insert_table.item(n, 4).text()
+                n += 1
+
+        self.method = Method(steps=self._form_data)
 
 
 class SequenceScreenController:
@@ -725,6 +854,23 @@ class SequenceScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
+
+        self._set_callbacks()
+
+    def _set_callbacks(self):
+        pass
+
+    def add_method(self):
+        pass
+
+    def remove_method(self):
+        pass
+
+    def load_sequence(self):
+        pass
+
+    def save_sequence(self):
+        pass
 
 
 class RunScreenController:
