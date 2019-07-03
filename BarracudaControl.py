@@ -1,0 +1,751 @@
+# Standard library modules
+import sys
+import os
+import pickle
+import threading
+import random
+
+if r"C:\Micro-Manager-2.0gamma" not in sys.path:
+    sys.path.append(r"C:\Micro-Manager-2.0gamma")
+prev_dir = os.getcwd()
+os.chdir(r"C:\Micro-Manager-2.0gamma")
+
+# Custom modules
+import BarracudaQt
+import ArduinoBase
+
+# fixme in ComHelper
+import ComHelper
+import DAQBoardControl
+import DAQControl
+import FocusControl
+import ImageControl
+import OutletControl
+import OutletHeightControl
+import XYControl
+import ZStageControl
+
+# Installed modules
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+os.chdir(prev_dir)
+
+HOME = True
+
+
+# Possible Model Classes
+class BarracudaSystem:
+    _z_stage_com = "COM4"
+    _outlet_com = "COM9"
+    _daq_dev = "/Dev1/"
+    _z_stage_lock = threading.Lock()
+    _outlet_lock = threading.Lock()
+    _xy_stage_lock = threading.Lock()
+
+    xy_stage_size = [112792, 64340]  # Rough size in mm
+    xy_stage_upper_left = [112598, -214]  # Reading on stage controller when all the way to left and up (towards wall)
+
+    def __init__(self):
+        self.z_stage_control = None
+        self.outlet_control = None
+        self.image_control = None
+        self.xy_stage_control = None
+        self.daq_board_control = None
+
+    def start_system(self, live_feed=True):
+        # self.z_stage_control = ZStageControl.ZStageControl(self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        # self.outlet_control = OutletControl.OutletControl(self._outlet_com, lock=self._outlet_lock, home=HOME)
+        # self.image_control = ImageControl.ImageControl(home=HOME)
+        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
+        # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
+
+        self.start_daq()
+
+        if live_feed:
+            self.start_image()
+
+    def start_daq(self):
+        pass
+
+    def start_image(self):
+        pass
+
+
+class FinchSystem:
+    def __init__(self):
+        pass
+
+
+class OstrichSystem:
+    def __init__(self):
+        pass
+
+
+class CERepository:
+    def __init__(self):
+        self.methods = None
+        self.inserts = None
+        self.sequences = None
+
+
+class Well:
+    def __init__(self, location, label=None, contents=None, shape=None, bounding_box=None):
+        self.location = location
+        self.label = label
+        self.contents = contents
+        self.shape = shape
+        self.bound_box = bounding_box
+
+    def __str__(self):
+        return '{} at {} - SHAPE {} - BBOX {}'.format(self.label, self.location, self.shape, self.bound_box)
+
+
+class Insert:
+    def __init__(self, wells=None, label=None):
+        self.wells = wells
+        self.label = label
+
+
+class Method:
+    def __init__(self, label=None, steps=None, ID=None):
+        self.ID = ID
+        self.steps = steps
+        self.label = label
+
+
+class Sequence:
+    def __init__(self, steps=None):
+        self.steps = steps
+
+
+# Control Classes
+class ProgramController:
+    def __init__(self):
+        # Initialize system model, system hardware and the GUI
+        self.repository = CERepository()
+        self.hardware = BarracudaSystem()
+        self.hardware.start_system()
+
+        app = QtWidgets.QApplication(sys.argv)
+        self.program_window = BarracudaQt.MainWindow()
+
+        # Connect the views to the controllers.
+        self.gs_screen = self.program_window.getting_started_screen
+        self.gs_control = GettingStartedScreenController(self.gs_screen, self.hardware, self.repository)
+
+        self.i_screen = self.program_window.insert_screen
+        self.i_control = InsertScreenController(self.i_screen, self.hardware, self.repository)
+
+        self.m_screen = self.program_window.method_screen
+        self.m_control = MethodScreenController(self.m_screen, self.hardware, self.repository)
+
+        self.s_screen = self.program_window.sequence_screen
+        self.s_control = SequenceScreenController(self.s_screen, self.hardware, self.repository)
+
+        self.r_screen = self.program_window.run_screen
+        self.r_control = RunScreenController(self.r_screen, self.hardware, self.repository)
+
+        self.d_screen = self.program_window.data_screen
+        self.d_control = DataScreenController(self.d_screen, self.hardware, self.repository)
+
+        self.program_window.show()
+        sys.exit(app.exec_())
+
+
+class GettingStartedScreenController:
+    def __init__(self, screen, hardware, repository):
+        self.screen = screen
+        self.hardware = hardware
+        self.repository = repository
+
+        self.set_callbacks()
+
+    def set_callbacks(self):
+        pass
+
+    def load_data(self):
+        pass
+
+    def load_insert(self):
+        pass
+
+    def load_method(self):
+        pass
+
+    def load_sequence(self):
+        pass
+
+    def load_system(self):
+        pass
+
+    def new_insert(self):
+        pass
+
+    def new_method(self):
+        pass
+
+    def new_sequence(self):
+        pass
+
+
+class InsertScreenController:
+    def __init__(self, screen, hardware, repository):
+        self.screen = screen
+        self.hardware = hardware
+        self.repository = repository
+
+        self._um2pix = 1 / 200
+        self._mm2pix = 2
+        self._initial = True
+
+        self.screen.image_view.setSceneRect(0, 0, self.hardware.xy_stage_size[0]*self._um2pix,
+                                            self.hardware.xy_stage_size[1]*self._um2pix)
+        self.screen.image_frame.controller = self
+        self.insert = None
+        self._set_callbacks()
+
+    def _set_callbacks(self):
+        """ Sets the callbacks for the InsertScreen. """
+        self.screen.draw_circle_action.triggered.connect(lambda: self.draw_circle())
+        self.screen.draw_rectangle_action.triggered.connect(lambda: self.draw_rectangle())
+        self.screen.draw_array_action.triggered.connect(lambda: self.draw_array())
+        self.screen.clear_object_action.triggered.connect(lambda: self.clear_object())
+        self.screen.load_insert_action.triggered.connect(lambda: self.load_insert())
+        self.screen.clear_area_action.triggered.connect(lambda: self.clear_area())
+        self.screen.joystick_action.triggered.connect(lambda: self.joystick())
+        self.screen.insert_table.currentCellChanged.connect(lambda: self.highlight_well())
+        self.screen.select_file.released.connect(lambda: self.select_file())
+        self.screen.save_file.released.connect(lambda: self.save_insert())
+
+    def highlight_well(self):
+        """ Prompts the view to highlight the well whose cell in the table is selected. """
+        location = self.screen.insert_table.item(self.screen.insert_table.currentRow(), 1)
+        if location:  # This check is necessary in case the last well is deleted.
+            # Convert from the '({}, {})' format to [f, f]
+            try:
+                location = [float(x)*self._um2pix for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
+            except ValueError:  # The user changed the table contents to an invalid coordinate
+                BarracudaQt.ErrorMessageUI(error_message='Well location is invalid.')
+            else:
+                self.screen.image_frame.highlight_item(location)
+
+    def joystick(self):
+        """ Prompts shapes to be created in the view via the joystick method. """
+        # The event we are sending holds the current coordinates of the stage and converts them to pixel
+        event = self.hardware.xy_stage_control.readXY()
+        event[0] *= self._um2pix
+        event[1] *= self._um2pix
+
+        # If the user is trying to create and array or circle but hasn't specified radius, simply throw error.
+        if not self.screen.circle_radius_input.text() and self.screen.image_frame.draw_shape != 'RECT':
+            BarracudaQt.ErrorMessageUI(error_message='Radius not specified.')
+            return
+
+        if self.screen.image_frame.draw_shape == 'CIRCLE':  # Only need to know radius of well.
+            event.append(float(self.screen.circle_radius_input.text())*self._mm2pix)
+
+        elif self.screen.image_frame.draw_shape == 'ARRAY':  # Need to know dimensions of array and radius of wells.
+            event.append(float(self.screen.circle_radius_input.text()) * self._mm2pix)
+            event.append(float(self.screen.num_circles_horizontal_input.text()))
+            event.append(float(self.screen.num_circles_vertical_input.text()))
+
+        self.screen.image_frame.joystick = True  # So the image frame in the view handles the events appropriately.
+
+        # Note: Every shape requires at least a press and release event ('move' as well in case of array and rect).
+        if self._initial:
+            self.screen.image_frame.mousePressEvent(event=event)
+
+            if self.screen.image_frame.draw_shape == 'CIRCLE':  # Only one point necessary for a circle.
+                self.screen.image_frame.mouseReleaseEvent(event=event)
+        else:
+            self.screen.image_frame.mouseMoveEvent(event=event)  # For arrays and rects, need to wait for second point.
+            self.screen.image_frame.mouseReleaseEvent(event=event)
+
+        if self.screen.image_frame.draw_shape != 'CIRCLE':  # Then the second point is a move and release event.
+            self._initial = not self._initial
+
+        self.screen.image_frame.joystick = False  # Returns image frame to mouse functionality.
+
+    def add_row(self, well_location, label_saved=None):
+        """ Adds a row to the table with the well label and location. """
+        row_count = self.screen.insert_table.rowCount()
+        self.screen.insert_table.insertRow(row_count)
+
+        label = QtWidgets.QTableWidgetItem()
+        location = QtWidgets.QTableWidgetItem()
+
+        if not label_saved:
+            label.setText('Well_{}'.format(row_count))  # Default well label is 'Well_[row_number]'
+        else:
+            label.setText(label_saved)
+        location.setText('({:.0f}, {:.0f})'.format(well_location[0]/self._um2pix, well_location[1]/self._um2pix))
+
+        self.screen.insert_table.setItem(row_count, 0, label)
+        self.screen.insert_table.setItem(row_count, 1, location)
+
+    def remove_item(self, location):
+        """ Removes row from table based on well location. """
+        location[0] /= self._um2pix
+        location[1] /= self._um2pix
+        location = '({:.0f}, {:.0f})'.format(location[0], location[1])
+
+        for row_index in range(self.screen.insert_table.rowCount()):
+            item = self.screen.insert_table.item(row_index, 1)
+            item_location = item.text()
+            if item_location == location:
+                self.screen.insert_table.removeRow(row_index)
+                break
+
+    def draw_circle(self):
+        self.screen.image_frame.draw_shape = 'CIRCLE'
+        self.screen.circle_radius_input.setEnabled(True)
+        self.screen.num_circles_horizontal_input.setEnabled(False)
+        self.screen.num_circles_vertical_input.setEnabled(False)
+
+    def draw_rectangle(self):
+        self.screen.image_frame.draw_shape = 'RECT'
+        self.screen.circle_radius_input.setEnabled(False)
+        self.screen.num_circles_horizontal_input.setEnabled(False)
+        self.screen.num_circles_vertical_input.setEnabled(False)
+
+    def draw_array(self):
+        self.screen.image_frame.draw_shape = 'ARRAY'
+        self.screen.circle_radius_input.setEnabled(True)
+        self.screen.num_circles_horizontal_input.setEnabled(True)
+        self.screen.num_circles_vertical_input.setEnabled(True)
+
+    def clear_object(self):
+        self.screen.image_frame.draw_shape = 'REMOVE'
+        self.screen.circle_radius_input.setEnabled(False)
+        self.screen.num_circles_horizontal_input.setEnabled(False)
+        self.screen.num_circles_vertical_input.setEnabled(False)
+
+    def clear_area(self):
+        self.screen.image_frame.draw_shape = 'RAREA'
+        self.screen.circle_radius_input.setEnabled(False)
+        self.screen.num_circles_horizontal_input.setEnabled(False)
+        self.screen.num_circles_vertical_input.setEnabled(False)
+
+    def select_file(self):
+        file_path = QtWidgets.QFileDialog.getOpenFileName(self.screen, 'Select a file', os.getcwd(),
+                                                          'INSERT(*.ins)')
+        if file_path[0]:
+            file_path = file_path[0]
+        else:
+            return
+
+        if os.path.splitext(file_path)[1] != '.ins':
+            BarracudaQt.ErrorMessageUI(error_message='Invalid File Extension')
+            return
+
+        self.screen.file_name.setText(file_path)
+
+    def load_insert(self):
+        open_file_path = QtWidgets.QFileDialog.getOpenFileNames(self.screen, 'Choose previous session',
+                                                                os.getcwd(), 'INSERT(*.ins)')
+        if open_file_path[0]:
+            open_file_path = open_file_path[0][0]
+        else:
+            return
+
+        if os.path.splitext(open_file_path)[1] != '.ins':
+            BarracudaQt.ErrorMessageUI(error_message='Invalid file chosen')
+            return
+
+        with open(open_file_path, 'rb') as open_file:
+            try:
+                self.insert = pickle.load(open_file)
+            except pickle.UnpicklingError:
+                message = 'Could not read in data from {}'.format(open_file_path)
+                BarracudaQt.ErrorMessageUI(message)
+            else:
+                self.screen.image_frame.clear()
+                self.screen.insert_table.clearContents()
+                for row in range(self.screen.insert_table.rowCount()):
+                    self.screen.insert_table.removeRow(self.screen.insert_table.rowCount()-1)
+                self.screen.file_name.setText(open_file_path)
+
+                for well in self.insert.wells:
+                    self.screen.image_frame.add_shape(well.shape, well.bound_box)
+                    self.add_row(well.location, well.label)
+
+    def save_insert(self):
+        if not self.screen.file_name.text():
+            saved_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Specify file',
+                                                                    os.getcwd(), 'METHOD(*.met)')[0]
+            if not saved_file_path:
+                return
+        else:
+            saved_file_path = self.screen.file_name.text()
+
+        self.create_insert()
+
+        with open(saved_file_path, 'wb') as saved_file:
+            try:
+                pickle.dump(self.insert, saved_file)
+            except TypeError:
+                return
+
+    def create_insert(self):
+        row_count = self.screen.insert_table.rowCount()
+        wells = []
+
+        for row_index in range(row_count):
+            location = self.screen.insert_table.item(row_index, 1)
+
+            location = [float(x) * self._um2pix for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
+            label = self.screen.insert_table.item(row_index, 0).text()
+            bounding_box = self.screen.image_frame.get_bounding_rect(location)
+            shape = self.screen.image_frame.get_shape(location)
+
+            new_well = Well(label=label, location=location, bounding_box=bounding_box, shape=shape)
+            wells.append(new_well)
+
+        self.insert = Insert(wells=wells)
+
+
+class MethodScreenController:
+    def __init__(self, screen, hardware, repository):
+        self.screen = screen
+        self.hardware = hardware
+        self.repository = repository
+
+        self._um2pix = 1 / 200
+        self._mm2pix = 2
+        self._selecting = False
+        self._step_well = None
+        self._form_data = []
+
+        self.screen.image_view.setSceneRect(0, 0, self.hardware.xy_stage_size[0] * self._um2pix,
+                                            self.hardware.xy_stage_size[1] * self._um2pix)
+        self.screen.image_frame.controller = self
+
+        self.dialogs = {'Separate': BarracudaQt.SeparateDialog,
+                        'Rinse': BarracudaQt.RinseDialog,
+                        'Inject': BarracudaQt.InjectDialog}
+
+        self.method = None
+        self.insert = None
+
+        self.set_callbacks()
+
+    def set_callbacks(self):
+        self.screen.select_file.released.connect(lambda: self.load_insert())
+        self.screen.image_frame.selectionChanged.connect(lambda: self.selecting())
+        self.screen.reload_button.released.connect(lambda: self.reload_insert())
+
+    def selecting(self):
+        if self.screen.image_frame.selectedItems():
+            item = self.screen.image_frame.selectedItems()[0]
+            if type(item) != QtWidgets.QGraphicsPixmapItem:
+                location = tuple(item.boundingRect().getRect())
+                for well in self.insert.wells:
+                    print(well.bound_box, location)
+                    if well.bound_box == location:
+                        if self._selecting:
+                            self._step_well.setCurrentText(well.label)
+                            self._selecting = False
+                        self.screen.well_label.setText(well.label)
+                        self.screen.well_location.setText(str([x/self._um2pix for x in well.location]))
+                        break
+
+    def step_well_change(self, combobox):
+        if combobox.currentText() == 'Select':
+            self._selecting = True
+            self._step_well = combobox
+
+    def add_step(self, inlets, outlets):
+        self._form_data.extend([{}])
+        actions = ['Select', 'Separate', 'Rinse', 'Inject']
+
+        row_count = self.screen.insert_table.rowCount()
+        self.screen.insert_table.insertRow(row_count)
+
+        add_button = QtWidgets.QPushButton('+')
+        add_button.setFixedWidth(30)
+        add_button.released.connect(lambda: self.add_step(inlets, outlets))
+        self.screen.insert_table.setCellWidget(row_count, 0, add_button)
+
+        action_choices = QtWidgets.QComboBox()
+        action_choices.addItems(actions)
+        action_choices.activated.connect(lambda: self.load_dialog(action_choices.currentText()))
+        self.screen.insert_table.setCellWidget(row_count, 2, action_choices)
+
+        inlet_choices = QtWidgets.QComboBox()
+        inlet_choices.addItems(['None', 'Select'])
+        inlet_choices.addItems(inlets)
+        inlet_choices.activated.connect(lambda: self.step_well_change(inlet_choices))
+        self.screen.insert_table.setCellWidget(row_count, 5, inlet_choices)
+
+        outlet_choices = QtWidgets.QComboBox()
+        outlet_choices.setEnabled(False)
+        outlet_choices.addItems(['None', 'Select'])
+        outlet_choices.addItems(outlets)
+        outlet_choices.activated.connect(lambda: self.step_well_change(outlet_choices))
+        self.screen.insert_table.setCellWidget(row_count, 6, outlet_choices)
+
+        if row_count > 0:
+            remove_button = QtWidgets.QPushButton('-')
+            remove_button.setFixedWidth(30)
+            remove_button.released.connect(lambda: self.remove_step())
+            self.screen.insert_table.setCellWidget(row_count-1, 0, remove_button)
+
+    def remove_step(self):
+        current_row = self.screen.insert_table.currentRow()
+        self._form_data.remove(self._form_data[current_row])
+        print(self._form_data)
+        self.screen.insert_table.removeRow(current_row)
+
+    def set_step_conditions(self, dialog, dialog_data):
+        """ Sets table values based on form data from dialog. """
+        print(dialog, dialog_data.keys())
+        current_row = self.screen.insert_table.currentRow()
+
+        data = {'Dialog': dialog}
+        data.update({key: dialog_data[key]() for key in dialog_data.keys()})
+        try:
+            self._form_data[current_row] = data
+        except IndexError:
+            self._form_data.extend([{}])
+            self._form_data[current_row] = data
+
+        summary = []
+        value = ""
+
+        if dialog == 'SEPARATE':
+            # Determine separation type and value.
+            if data['SeparationTypeVoltageRadio']:
+                value = '{} kV'.format(data['ValuesVoltageEdit'])
+
+            elif data['SeparationTypeCurrentRadio']:
+                value = '{} kV'.format(data['ValuesVoltageEdit'])
+
+            elif data['SeparationTypePowerRadio']:
+                value = '{} kV'.format(data['ValuesVoltageEdit'])
+
+            elif data['SeparationTypePressureRadio']:
+                value = '{} psi'.format(data['ValuesPressureEdit'])
+
+            elif data['SeparationTypeVacuumRadio']:
+                value = '{} psi'.format(data['ValuesPressureEdit'])
+
+            # Determine whether it is with pressure or vacuum.
+            if data['SeparationTypeWithPressureCheck']:
+                summary += ['With Pressure']
+
+            elif data['SeparationTypeWithVacuumCheck']:
+                summary += ['With Vacuum']
+
+            # Determine whether the polarity is normal or reversed.
+            if data['PolarityNormalRadio']:
+                summary += ['Normal Polarity']
+
+            elif data['PolarityReverseRadio']:
+                summary += ['Reverse Polarity']
+
+            # Get duration and ramp time.
+            duration = '{} min'.format(data['ValuesDurationEdit'])
+            summary += ['{} min Ramp'.format(data['ValuesRampTimeEdit'])]
+
+        elif dialog == 'RINSE':
+            # Get pressure type and value
+            if data['PressureTypePressureRadio']:
+                summary += ['Pressure']
+
+            elif data['PressureTypeVacuumRadio']:
+                summary += ['Vacuum']
+
+            if data['PressureDirectionForwardRadio']:
+                summary += ['Forward']
+
+            elif data['PressureDirectionReverseRadio']:
+                summary += ['Reverse']
+
+            value = '{} psi'.format(data['ValuesPressureEdit'])
+            duration = '{} min'.format(data['ValuesDurationEdit'])
+
+        else:
+            # Get injection type and value
+            if data['InjectionTypeVoltageRadio']:
+                summary += ['Voltage']
+
+            elif data['InjectionTypePressureRadio']:
+                summary += ['Pressure']
+
+            elif data['InjectionTypeVacuumRadio']:
+                summary += ['Vacuum']
+
+            if data['PolarityNormalRadio']:
+                summary += ['Normal']
+
+            elif data['PolarityReverseRadio']:
+                summary += ['Reverse']
+
+            if data['PressureDirectionForwardRadio']:
+                summary += ['Forward Pressure']
+
+            elif data['PressureDirectionReverseRadio']:
+                summary += ['Reverse Pressure']
+
+            if data['SequenceTableAllowOverrideCheck']:
+                summary += ['Override']
+
+            value = '{} psi'.format(data['ValuesPressureEdit'])
+            duration = '{} min'.format(data['ValuesDurationEdit'])
+
+        s = ', '
+        summary = s.join(summary)
+
+        value_item = QtWidgets.QTableWidgetItem()
+        duration_item = QtWidgets.QTableWidgetItem()
+        summary_item = QtWidgets.QTableWidgetItem()
+        value_item.setText(value)
+        duration_item.setText(duration)
+        summary_item.setText(summary)
+
+        self.screen.insert_table.setItem(current_row, 3, value_item)
+        self.screen.insert_table.setItem(current_row, 4, duration_item)
+        self.screen.insert_table.setItem(current_row, 7, summary_item)
+
+    def load_dialog(self, dialog_type):
+        """ Loads the appropriate dialog based on user input in table. """
+        if dialog_type != 'Select':  # Rinse, Inject or Separate (Select is default)
+            self.dialogs[dialog_type](self.set_step_conditions)
+
+    def load_insert(self):
+        """ Prompts user for and loads an in insert file. """
+        open_file_path = QtWidgets.QFileDialog.getOpenFileNames(self.screen, 'Choose previous session',
+                                                                os.getcwd(), 'INSERT(*.ins)')
+        if open_file_path[0]:  # Checks if user selected a file or exited.
+            open_file_path = open_file_path[0][0]
+        else:
+            return
+
+        if os.path.splitext(open_file_path)[1] != '.ins':  # Checks for appropriate extension
+            BarracudaQt.ErrorMessageUI(error_message='Invalid file chosen')
+            return
+
+        with open(open_file_path, 'rb') as open_file:
+            try:
+                self.insert = pickle.load(open_file)
+            except pickle.UnpicklingError:  # Errors due to file corruption or wrong files with right ext.
+                message = 'Could not read in data from {}'.format(open_file_path)
+                BarracudaQt.ErrorMessageUI(message)
+            else:
+                self.screen.image_frame.clear()  # Clear image frame for new insert.
+                self.screen.file_name.setText(open_file_path)
+
+                for row in range(self.screen.insert_table.rowCount()):  # Clears the table
+                    self.screen.insert_table.removeRow(self.screen.insert_table.rowCount()-1)
+
+                for well in self.insert.wells:  # Loads the new shapes onto the frame
+                    self.screen.image_frame.add_shape(well.shape, well.bound_box)
+
+                well_labels = [well.label for well in self.insert.wells]
+                self.add_step(well_labels, well_labels)  # Creates the first editable row with all wells.
+
+    def reload_insert(self):
+        """ Reloads the current insert file. """
+        open_file_path = self.screen.file_name.text()
+        if not open_file_path:  # If there is no current file then return.
+            return
+
+        if os.path.splitext(open_file_path)[1] != '.ins':  # Checks current file for correct extension.
+            BarracudaQt.ErrorMessageUI(error_message='Invalid file chosen')
+            return
+
+        with open(open_file_path, 'rb') as open_file:
+            try:
+                self.insert = pickle.load(open_file)
+            except pickle.UnpicklingError:  # Errors due to file corruption or wrong files with right ext.
+                message = 'Could not read in data from {}'.format(open_file_path)
+                BarracudaQt.ErrorMessageUI(message)
+            else:
+                self.screen.image_frame.clear()
+
+                for well in self.insert.wells:
+                    self.screen.image_frame.add_shape(well.shape, well.bound_box)
+
+                # Keep old steps but add new well labels to inlet and outlet choices on the last row.
+                well_labels = [well.label for well in self.insert.wells]
+                outlet_choice = self.screen.insert_table.cellWidget(self.screen.insert_table.rowCount()-1, 5)
+                outlet_choice.clear()
+                outlet_choice.addItems(['None', 'Select'])
+                outlet_choice.addItems(well_labels)
+                outlet_choice = self.screen.insert_table.cellWidget(self.screen.insert_table.rowCount()-1, 6)
+                outlet_choice.clear()
+                outlet_choice.addItems(['None', 'Select'])
+                outlet_choice.addItems(well_labels)
+
+    def load_method(self):
+        """ Prompts the user for and loads a method file. """
+        open_file_path = QtWidgets.QFileDialog.getOpenFileNames(self.screen, 'Choose previous session',
+                                                                os.getcwd(), 'METHOD(*.met)')
+        if open_file_path[0]:
+            open_file_path = open_file_path[0][0]
+        else:
+            return
+
+        if os.path.splitext(open_file_path)[1] != '.met':
+            message = '\t\t\tInvalid file chosen\t\t\t'
+            BarracudaQt.ErrorMessageUI(message)
+            return
+
+        with open(open_file_path, 'rb') as open_file:
+            try:
+                data = pickle.load(open_file)
+            except pickle.UnpicklingError:
+                message = '\t\t\tCould not read in data from {}\t\t\t'.format(open_file_path)
+                BarracudaQt.ErrorMessageUI(message)
+            else:
+                self.method = data
+                self.populate_table(data)
+
+    def save_method(self):
+        """ Prompts the user for and saves current method to a file path. """
+        saved_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Specify file',
+                                                                os.getcwd(), 'METHOD(*.met)')[0]
+        if not saved_file_path:  # Checks if a file path was actually specified.
+            return
+
+        with open(saved_file_path, 'wb') as saved_file:
+            try:
+                pickle.dump(self.method, saved_file)
+            except pickle.PicklingError:  # Shouldn't occur unless the user really screws up.
+                BarracudaQt.ErrorMessageUI(error_message='Could not save the method.')
+
+    def populate_table(self, method):
+        if method.steps:
+            for step in method.steps:
+                print(step)
+
+
+class SequenceScreenController:
+    def __init__(self, screen, hardware, repository):
+        self.screen = screen
+        self.hardware = hardware
+        self.repository = repository
+
+
+class RunScreenController:
+    def __init__(self, screen, hardware, repository):
+        self.screen = screen
+        self.hardware = hardware
+        self.repository = repository
+
+
+class DataScreenController:
+    def __init__(self, screen, hardware, repository):
+        self.screen = screen
+        self.hardware = hardware
+        self.repository = repository
+
+
+class SystemScreenController:
+    def __init__(self, screen, hardware, repository):
+        self.screen = screen
+        self.hardware = hardware
+        self.repository = repository
+
+
+pc = ProgramController()
