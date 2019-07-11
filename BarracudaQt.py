@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 cwd = os.getcwd()
 contents = os.listdir(cwd)
 
+# Locate the directory of icons
 if "Icons" in contents:
     ICON_FOLDER = os.path.join(cwd, "Icons")
 elif "BarracudaQt" in contents:
@@ -459,7 +460,7 @@ class RunScreen(QtWidgets.QMainWindow):
         temper_wid = QtWidgets.QWidget()
         temper_wid.setLayout(main_layout)
         temper_wid = wrap_widget(temper_wid)
-        temper_wid.setFixedWidth(350)
+        temper_wid.setFixedWidth(380)
         self.hardware_control_panel.setWidget(temper_wid)
 
     def init_xy_stage_form(self):
@@ -473,9 +474,13 @@ class RunScreen(QtWidgets.QMainWindow):
         self.xy_right.setArrowType(QtCore.Qt.RightArrow)
         self.xy_x_value = QtWidgets.QLineEdit()
         self.xy_y_value = QtWidgets.QLineEdit()
+        self.xy_step_size = QtWidgets.QDoubleSpinBox()
         self.xy_origin = QtWidgets.QPushButton('Origin')
         self.xy_set_origin = QtWidgets.QPushButton('Set Origin')
         self.xy_stop = QtWidgets.QPushButton('Stop')
+
+        self.xy_step_size.setSuffix(" µm")
+        self.xy_step_size.setValue(50)
 
         form_layout = QtWidgets.QFormLayout()
         row_outer = QtWidgets.QHBoxLayout()
@@ -495,6 +500,11 @@ class RunScreen(QtWidgets.QMainWindow):
         bottom_arrow.addWidget(self.xy_down)
         bottom_arrow.addStretch()
         column_arrows.addLayout(bottom_arrow)
+        step_row = QtWidgets.QHBoxLayout()
+        step_row.addStretch()
+        step_row.addWidget(self.xy_step_size)
+        step_row.addStretch()
+        column_arrows.addLayout(step_row)
         row_outer.addLayout(column_arrows)
         column_control = QtWidgets.QVBoxLayout()
         row_one = QtWidgets.QHBoxLayout()
@@ -519,6 +529,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.focus_value = QtWidgets.QLineEdit()
         self.focus_stop = QtWidgets.QPushButton('Stop')
         self.focus_step_size = QtWidgets.QDoubleSpinBox()
+
+        self.focus_step_size.setSuffix(" µm")
+        self.focus_step_size.setValue(5)
 
         form_layout = QtWidgets.QFormLayout()
         form_layout.addWidget(self.focus_value)
@@ -546,6 +559,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.outlet_stop = QtWidgets.QPushButton('Stop')
         self.outlet_step_size = QtWidgets.QDoubleSpinBox()
 
+        self.outlet_step_size.setSuffix(" mm")
+        self.outlet_step_size.setValue(25)
+
         form_layout = QtWidgets.QFormLayout()
         form_layout.addWidget(self.outlet_value)
         col_one = QtWidgets.QVBoxLayout()
@@ -572,6 +588,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.z_stop = QtWidgets.QPushButton('Stop')
         self.z_step_size = QtWidgets.QDoubleSpinBox()
 
+        self.z_step_size.setSuffix(" mm")
+        self.z_step_size.setValue(25)
+
         form_layout = QtWidgets.QFormLayout()
         col_one = QtWidgets.QVBoxLayout()
         form_layout.addWidget(self.z_value)
@@ -594,6 +613,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.pressure_rinse = QtWidgets.QPushButton('Rinse')
         self.pressure_off = QtWidgets.QPushButton('Stop')
 
+        self.pressure_value.setSuffix(" psi")
+
         form_layout = QtWidgets.QFormLayout()
         row_one = QtWidgets.QHBoxLayout()
         row_one.addWidget(self.pressure_value)
@@ -606,7 +627,7 @@ class RunScreen(QtWidgets.QMainWindow):
     def init_laser_form(self):
         self.laser_pfn = QtWidgets.QSpinBox()
         self.laser_attenuation = QtWidgets.QSpinBox()
-        self.laser_energy = QtWidgets.QSpinBox()
+        # self.laser_energy = QtWidgets.QSpinBox()
         self.laser_burst_count = QtWidgets.QSpinBox()
         self.laser_fire = QtWidgets.QPushButton('Fire')
         self.laser_off = QtWidgets.QPushButton('Stop')
@@ -662,6 +683,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.voltage_on_check.stateChanged.connect(lambda: self.enable_button(self.voltage_on, self.voltage_on_check))
 
         self.voltage_on.setEnabled(False)
+        self.voltage_value.setSuffix(" kV")
+        self.voltage_value.setValue(1)
 
         form_layout = QtWidgets.QFormLayout()
         row_one = QtWidgets.QHBoxLayout()

@@ -932,6 +932,150 @@ class RunScreenController:
         self.hardware = hardware
         self.repository = repository
 
+        self._set_callbacks()
+
+    def _set_callbacks(self):
+        self.screen.xy_up.released.connect(lambda: self.set_y(step=self.screen.xy_step_size.value()))
+        self.screen.xy_down.released.connect(lambda: self.set_y(step=-self.screen.xy_step_size.value()))
+        self.screen.xy_right.released.connect(lambda: self.set_x(step=self.screen.xy_step_size.value()))
+        self.screen.xy_left.released.connect(lambda: self.set_x(step=-self.screen.xy_step_size.value()))
+        self.screen.xy_x_value.returnPressed.connect(lambda: self.set_x(x=float(self.screen.xy_x_value.text())))
+        self.screen.xy_y_value.returnPressed.connect(lambda: self.set_y(y=float(self.screen.xy_y_value.text())))
+        self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
+        self.screen.xy_origin.released.connect(lambda: self.origin())
+        self.screen.xy_stop.released.connect(lambda: self.stop_xy_stage())
+
+        self.screen.focus_up.released.connect(lambda: self.set_focus(step=self.screen.focus_step_size.value()))
+        self.screen.focus_down.released.connect(lambda: self.set_focus(step=-self.screen.focus_step_size.value()))
+        self.screen.focus_value.returnPressed.connect(lambda: self.set_focus(height=float(self.screen.focus_value.text())))
+        self.screen.focus_stop.released.connect(lambda: self.stop_focus())
+
+        self.screen.outlet_up.released.connect(lambda: self.set_outlet(step=self.screen.outlet_step_size.value()))
+        self.screen.outlet_down.released.connect(lambda: self.set_outlet(step=-self.screen.outlet_step_size.value()))
+        self.screen.outlet_value.returnPressed.connect(lambda: self.set_outlet(height=float(self.screen.outlet_value.text())))
+        self.screen.outlet_stop.released.connect(lambda: self.stop_outlet())
+
+        self.screen.z_up.released.connect(lambda: self.set_z(step=self.screen.z_step_size.value()))
+        self.screen.z_down.released.connect(lambda: self.set_z(step=-self.screen.z_step_size.value()))
+        self.screen.z_value.returnPressed.connect(lambda: self.set_z(height=float(self.screen.z_value.text())))
+        self.screen.z_stop.released.connect(lambda: self.stop_z_stage())
+
+        self.screen.pressure_value.valueChanged.connect(lambda: self.set_pressure(value=float(self.screen.pressure_value.text())))
+        self.screen.pressure_rinse.released.connect(lambda: self.rinse_pressure())
+        self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
+
+        self.screen.laser_pfn.valueChanged.connect(lambda: self.set_pfn(value=self.screen.laser_pfn.value()))
+        self.screen.laser_attenuation.valueChanged.connect(lambda: self.set_attenuation(value=self.screen.laser_attenuation.value()))
+        self.screen.laser_burst_count.valueChanged.connect(lambda: self.set_burst(count=self.screen.laser_burst_count.value()))
+        self.screen.laser_fire.released.connect(lambda: self.fire_laser())
+        self.screen.laser_standby.released.connect(lambda: self.laser_on())
+        self.screen.laser_off.released.connect(lambda: self.stop_laser())
+
+        self.screen.voltage_value.valueChanged.connect(lambda: self.set_voltage(value=self.screen.voltage_value.value()))
+        self.screen.voltage_on.released.connect(lambda: self.voltage_on())
+        self.screen.voltage_off.released.connect(lambda: self.stop_voltage())
+
+        self.screen.all_stop.released.connect(lambda: self.stop_all())
+
+        self.screen.start_sequence.released.connect(lambda: self.start_sequence())
+        self.screen.pause_sequence.released.connect(lambda: self.pause_sequence())
+        self.screen.stop_sequence.released.connect(lambda: self.end_sequence())
+        self.screen.add_method.released.connect(lambda: self.add_method())
+        self.screen.remove_method.released.connect(lambda: self.remove_method())
+
+    def set_origin(self):
+        pass
+
+    def origin(self):
+        pass
+
+    def set_x(self, x=None, step=None):
+        pass
+
+    def set_y(self, y=None, step=None):
+        pass
+
+    def set_z(self, height=None, step=None):
+        pass
+
+    def set_focus(self, height=None, step=None):
+        pass
+
+    def set_outlet(self, height=None, step=None):
+        pass
+
+    def set_pressure(self, value=None):
+        pass
+
+    def set_voltage(self, value=None):
+        pass
+
+    def set_pfn(self, value=None):
+        pass
+
+    def set_attenuation(self, value=None):
+        pass
+
+    def set_burst(self, count=None):
+        pass
+
+    def stop_xy_stage(self):
+        pass
+
+    def stop_outlet(self):
+        pass
+
+    def stop_focus(self):
+        pass
+
+    def stop_z_stage(self):
+        pass
+
+    def stop_pressure(self):
+        pass
+
+    def stop_laser(self):
+        pass
+
+    def stop_voltage(self):
+        pass
+
+    def stop_all(self):
+        # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
+        self.stop_laser()
+        self.stop_voltage()
+        self.stop_xy_stage()
+        self.stop_focus()
+        self.stop_z_stage()
+        self.stop_outlet()
+        self.stop_pressure()
+
+    def rinse_pressure(self):
+        pass
+
+    def fire_laser(self):
+        pass
+
+    def voltage_on(self):
+        pass
+
+    def laser_on(self):
+        pass
+
+    def add_method(self):
+        pass
+
+    def remove_method(self):
+        pass
+
+    def start_sequence(self):
+        pass
+
+    def pause_sequence(self):
+        pass
+
+    def end_sequence(self):
+        pass
 
 class DataScreenController:
     def __init__(self, screen, hardware, repository):
