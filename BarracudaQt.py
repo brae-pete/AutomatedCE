@@ -1,5 +1,6 @@
 # Standard library modules
 import sys
+import os
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -10,6 +11,18 @@ import numpy as np
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 import matplotlib.pyplot as plt
 
+
+cwd = os.getcwd()
+contents = os.listdir(cwd)
+
+if "Icons" in contents:
+    ICON_FOLDER = os.path.join(cwd, "Icons")
+elif "BarracudaQt" in contents:
+    contents = os.listdir(os.chdir(os.path.join(contents, "BarracudaQt")))
+    if "Icons" in contents:
+        ICON_FOLDER = os.path.join(os.getcwd(), "Icons")
+else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
+    ICON_FOLDER = os.getcwd()
 
 CUSTOM = True
 
@@ -132,7 +145,7 @@ class InsertScreen(QtWidgets.QMainWindow):
         self.file_name = QtWidgets.QLineEdit()
         self.save_file = QtWidgets.QPushButton('Save')
         self.select_file = QtWidgets.QPushButton(
-            QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\folder2.png"), "")
+            QtGui.QIcon(os.path.join(ICON_FOLDER, "folder2.png")), "")
 
         self.init_toolbar()
         self.init_graphics_view()
@@ -157,28 +170,28 @@ class InsertScreen(QtWidgets.QMainWindow):
         self.insert_tool_bar.setOrientation(QtCore.Qt.Vertical)
         self.insert_joystick_tool_bar.setOrientation(QtCore.Qt.Horizontal)
 
-        self.draw_circle_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\oval.png"), "")
+        self.draw_circle_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "oval.png")), "")
         self.draw_circle_action.setToolTip('Drawing single circles')
 
-        self.draw_rectangle_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\rectangle.png"), "")
+        self.draw_rectangle_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "rectangle.png")), "")
         self.draw_rectangle_action.setToolTip('Draw rectangle')
 
-        self.draw_array_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\menu.png"), "")
+        self.draw_array_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "menu.png")), "")
         self.draw_array_action.setToolTip('Drawing array of circles')
 
-        self.clear_object_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\eraser.png"), "")
+        self.clear_object_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "eraser.png")), "")
         self.clear_object_action.setToolTip('Delete object')
 
-        self.load_insert_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\open-archive.png"), "")
+        self.load_insert_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "open-archive.png")), "")
         self.load_insert_action.setToolTip('Load an old insert')
 
-        self.clear_area_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\clear.png"), "")
+        self.clear_area_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "clear.png")), "")
         self.clear_area_action.setToolTip('Clear objects in an area')
 
-        self.joystick_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\game.png"), "")
+        self.joystick_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "game.png")), "")
         self.joystick_action.setToolTip('Start shape at current point')
 
-        self.init_grid_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\grid.png"), "")
+        self.init_grid_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "grid.png")), "")
         self.init_grid_action.setToolTip('Initialize stage dimensions')
 
         # self.select_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\pointing.png"))
@@ -226,8 +239,7 @@ class InsertScreen(QtWidgets.QMainWindow):
             self.insert_tool_bar.setStyleSheet(open("style.qss", "r").read())
 
     def init_graphics_view(self):
-        self.pixel_map = QtGui.QPixmap(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\black_"
-                                       r"grid_thick_lines_mirror.png")
+        self.pixel_map = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
         self.image_frame = GraphicsScene()
         self.image_frame.addPixmap(self.pixel_map)
         self.image_view = QtWidgets.QGraphicsView(self.image_frame)
@@ -267,15 +279,15 @@ class MethodScreen(QtWidgets.QMainWindow):
         self.insert_table = QtWidgets.QTableWidget()
         self.file_name = QtWidgets.QLineEdit()
         self.select_file = QtWidgets.QPushButton(
-            QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\open-archive.png"), "")
+            QtGui.QIcon(os.path.join(ICON_FOLDER, "open-archive.png")), "")
         self.reload_button = QtWidgets.QPushButton(
-            QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\refresh-button.png"), "")
+            QtGui.QIcon(os.path.join(ICON_FOLDER, "refresh-button.png")), "")
         self.well_label = QtWidgets.QLineEdit()
         self.well_location = QtWidgets.QLineEdit()
         self.file_name_save = QtWidgets.QLineEdit()
         self.save_file = QtWidgets.QPushButton('Save')
         self.select_file_save = QtWidgets.QPushButton(
-            QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\folder2.png"), "")
+            QtGui.QIcon(os.path.join(ICON_FOLDER, "folder2.png")), "")
         self.load_file_method = QtWidgets.QPushButton('Open')
 
         self.init_graphics_view()
@@ -296,8 +308,7 @@ class MethodScreen(QtWidgets.QMainWindow):
         self.setCentralWidget(insert_screen_widget)
 
     def init_graphics_view(self):
-        self.pixel_map = QtGui.QPixmap(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\black_"
-                                       r"grid_thick_lines_mirror.png")
+        self.pixel_map = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
         self.image_frame = GraphicsScene()
         self.image_frame.addPixmap(self.pixel_map)
         self.image_view = QtWidgets.QGraphicsView(self.image_frame)
@@ -724,8 +735,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.live_feed_panel.setWidget(temper_wid)
 
     def init_graphics_view(self):
-        self.pixel_map = QtGui.QPixmap(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\black_"
-                                       r"grid_thick_lines_mirror.png")
+        self.pixel_map = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
         self.live_insert = GraphicsScene()
         self.live_insert.addPixmap(self.pixel_map)
         self.image_view = QtWidgets.QGraphicsView(self.live_insert)
@@ -735,8 +745,7 @@ class RunScreen(QtWidgets.QMainWindow):
         return live_feed_layout
 
     def init_graphics_view2(self):
-        self.pixel_map2 = QtGui.QPixmap(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\black_"
-                                       r"grid_thick_lines_mirror.png")
+        self.pixel_map2 = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
         self.live_insert2 = GraphicsScene()
         self.live_insert2.addPixmap(self.pixel_map2)
         self.image_view2 = QtWidgets.QGraphicsView(self.live_insert2)
@@ -1202,8 +1211,8 @@ class LoadNewMainWidget(AlteredTabWidget):
         tab1 = QtWidgets.QWidget()
         tab2 = QtWidgets.QWidget()
 
-        self.addTab(tab1, QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\folder.png"), "   Load")
-        self.addTab(tab2, QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\add-file.png"), "   New")
+        self.addTab(tab1, QtGui.QIcon(os.path.join(ICON_FOLDER, "folder.png")), "   Load")
+        self.addTab(tab2, QtGui.QIcon(os.path.join(ICON_FOLDER, "add-file.png")), "   New")
 
         v1 = QtWidgets.QHBoxLayout()
         v2 = QtWidgets.QHBoxLayout()
@@ -1213,28 +1222,28 @@ class LoadNewMainWidget(AlteredTabWidget):
         pushButton1.setObjectName('MAIN')
         if CUSTOM:
             pushButton1.setStyleSheet(open("style.qss", "r").read())
-        pushButton1.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\graph.png"))
+        pushButton1.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "graph.png")))
         pushButton1.setIconSize(QtCore.QSize(48, 48))
 
         pushButton2 = QtWidgets.QPushButton("                   Method")
         pushButton2.setObjectName('MAIN')
         if CUSTOM:
             pushButton2.setStyleSheet(open("style.qss", "r").read())
-        pushButton2.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\meter.png"))
+        pushButton2.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "meter.png")))
         pushButton2.setIconSize(QtCore.QSize(48, 48))
 
         pushButton3 = QtWidgets.QPushButton("                   Insert")
         pushButton3.setObjectName('MAIN')
         if CUSTOM:
             pushButton3.setStyleSheet(open("style.qss", "r").read())
-        pushButton3.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\plastic.png"))
+        pushButton3.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "plastic.png")))
         pushButton3.setIconSize(QtCore.QSize(48, 48))
 
         pushButton4 = QtWidgets.QPushButton("                   Sequence")
         pushButton4.setObjectName('MAIN')
         if CUSTOM:
             pushButton4.setStyleSheet(open("style.qss", "r").read())
-        pushButton4.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\tick.png"))
+        pushButton4.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "tick.png")))
         pushButton4.setIconSize(QtCore.QSize(48, 48))
 
         v1.addSpacing(40)
@@ -1261,28 +1270,28 @@ class LoadNewMainWidget(AlteredTabWidget):
         pushButton5.setObjectName('MAIN')
         if CUSTOM:
             pushButton5.setStyleSheet(open("style.qss", "r").read())
-        pushButton5.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\graph.png"))
+        pushButton5.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "graph.png")))
         pushButton5.setIconSize(QtCore.QSize(48, 48))
 
         pushButton6 = QtWidgets.QPushButton("                   Method")
         pushButton6.setObjectName('MAIN')
         if CUSTOM:
             pushButton6.setStyleSheet(open("style.qss", "r").read())
-        pushButton6.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\meter.png"))
+        pushButton6.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "meter.png")))
         pushButton6.setIconSize(QtCore.QSize(48, 48))
 
         pushButton7 = QtWidgets.QPushButton("                   Insert")
         pushButton7.setObjectName('MAIN')
         if CUSTOM:
             pushButton7.setStyleSheet(open("style.qss", "r").read())
-        pushButton7.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\plastic.png"))
+        pushButton7.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "plastic.png")))
         pushButton7.setIconSize(QtCore.QSize(48, 48))
 
         pushButton8 = QtWidgets.QPushButton("                   Sequence")
         pushButton8.setObjectName('MAIN')
         if CUSTOM:
             pushButton8.setStyleSheet(open("style.qss", "r").read())
-        pushButton8.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\tick.png"))
+        pushButton8.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "tick.png")))
         pushButton8.setIconSize(QtCore.QSize(48, 48))
 
         v3.addSpacing(40)
@@ -1319,15 +1328,15 @@ class SystemSelectionWidget(AlteredTabWidget):
 
         barracuda_button = QtWidgets.QPushButton("       Barracuda")
         barracuda_button.setObjectName('MAIN')
-        barracuda_button.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\7079-200.png"))
+        barracuda_button.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "7079-200.png")))
         barracuda_button.setIconSize(QtCore.QSize(48, 48))
         finch_button = QtWidgets.QPushButton("       Finch")
         finch_button.setObjectName('MAIN')
-        finch_button.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\angry-birds.png"))
+        finch_button.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "angry-birds.png")))
         finch_button.setIconSize(QtCore.QSize(48, 48))
         ostrich_button = QtWidgets.QPushButton("       Ostrich")
         ostrich_button.setObjectName('MAIN')
-        ostrich_button.setIcon(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\ostrich.png"))
+        ostrich_button.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "ostrich.png")))
         ostrich_button.setIconSize(QtCore.QSize(48, 48))
 
         layouts = QtWidgets.QVBoxLayout()

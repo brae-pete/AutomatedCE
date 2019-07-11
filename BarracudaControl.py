@@ -5,23 +5,24 @@ import pickle
 import threading
 import random
 
+# GUI Framework
+import BarracudaQt
+
 if r"C:\Micro-Manager-2.0gamma" not in sys.path:
     sys.path.append(r"C:\Micro-Manager-2.0gamma")
 prev_dir = os.getcwd()
 os.chdir(r"C:\Micro-Manager-2.0gamma")
 
 # Custom modules
-import BarracudaQt
 import ArduinoBase
-
 # fixme in ComHelper
 import ComHelper
-import DAQBoardControl
+# import DAQBoardControl
 import DAQControl
-import FocusControl
+# import FocusControl
 import ImageControl
 import OutletControl
-import OutletHeightControl
+# import OutletHeightControl
 import XYControl
 import ZStageControl
 
