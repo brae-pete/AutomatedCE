@@ -1161,6 +1161,7 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
 
 class ValueDisplay(QtWidgets.QLineEdit):
     selected = QtCore.pyqtSignal()
+    unselected = QtCore.pyqtSignal()
 
     def __init__(self):
         super(ValueDisplay, self).__init__()
@@ -1170,7 +1171,7 @@ class ValueDisplay(QtWidgets.QLineEdit):
         super(ValueDisplay, self).focusInEvent(QFocusEvent)
 
     def focusOutEvent(self, QFocusEvent):
-        self.selected.emit()
+        self.unselected.emit()
         super(ValueDisplay, self).focusOutEvent(QFocusEvent)
 
 

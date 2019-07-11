@@ -53,9 +53,16 @@ class OutletControl:
 
     def set_z(self, set_z):
         """ set_z (absolute position in mm)
-        User requests in mmm absolute distance to go
         returns False if unable to set_z, True if command went through
         """
+        with self.lock:
+            if self.home:
+                self.pos = set_z
+                return
+            self.arduino.set_outlet_z(-set_z)
+        return True
+
+    def set_rel_z(self, set_z):
         with self.lock:
             if self.home:
                 self.pos = set_z

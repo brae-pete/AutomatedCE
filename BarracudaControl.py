@@ -964,8 +964,10 @@ class RunScreenController:
             self.screen.xy_down.released.connect(lambda: self.set_y(step=-self.screen.xy_step_size.value()))
             self.screen.xy_right.released.connect(lambda: self.set_x(step=self.screen.xy_step_size.value()))
             self.screen.xy_left.released.connect(lambda: self.set_x(step=-self.screen.xy_step_size.value()))
-            self.screen.xy_x_value.selected.connect(lambda: self._value_display_interact())
-            self.screen.xy_y_value.selected.connect(lambda: self._value_display_interact())
+            self.screen.xy_x_value.selected.connect(lambda: self._value_display_interact(selected=True))
+            self.screen.xy_y_value.selected.connect(lambda: self._value_display_interact(selected=True))
+            self.screen.xy_x_value.unselected.connect(lambda: self._value_display_interact(selected=False))
+            self.screen.xy_y_value.unselected.connect(lambda: self._value_display_interact(selected=False))
             self.screen.xy_x_value.returnPressed.connect(lambda: self.set_x(x=float(self.screen.xy_x_value.text())))
             self.screen.xy_y_value.returnPressed.connect(lambda: self.set_y(y=float(self.screen.xy_y_value.text())))
             self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
@@ -977,14 +979,16 @@ class RunScreenController:
             self.screen.objective_down.released.connect(lambda: self.set_objective(step=-self.screen.objective_step_size.value()))
             self.screen.objective_value.returnPressed.connect(lambda: self.set_objective(height=float(self.screen.objective_value.text())))
             self.screen.objective_stop.released.connect(lambda: self.stop_objective())
-            self.screen.objective_value.selected.connect(lambda: self._value_display_interact())
+            self.screen.objective_value.selected.connect(lambda: self._value_display_interact(selected=True))
+            self.screen.objective_value.unselected.connect(lambda: self._value_display_interact(selected=False))
 
         if self.hardware.outlet_control:
             self.screen.outlet_up.released.connect(lambda: self.set_outlet(step=self.screen.outlet_step_size.value()))
             self.screen.outlet_down.released.connect(lambda: self.set_outlet(step=-self.screen.outlet_step_size.value()))
             self.screen.outlet_value.returnPressed.connect(lambda: self.set_outlet(height=float(self.screen.outlet_value.text())))
             self.screen.outlet_stop.released.connect(lambda: self.stop_outlet())
-            self.screen.outlet_value.selected.connect(lambda: self._value_display_interact())
+            self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
+            self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
 
             self.screen.pressure_value.valueChanged.connect(lambda: self.set_pressure(value=float(self.screen.pressure_value.text())))
             self.screen.pressure_rinse.released.connect(lambda: self.rinse_pressure())
@@ -995,7 +999,8 @@ class RunScreenController:
             self.screen.z_down.released.connect(lambda: self.set_z(step=-self.screen.z_step_size.value()))
             self.screen.z_value.returnPressed.connect(lambda: self.set_z(height=float(self.screen.z_value.text())))
             self.screen.z_stop.released.connect(lambda: self.stop_z_stage())
-            self.screen.z_value.selected.connect(lambda: self._value_display_interact())
+            self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
+            self.screen.z_value.unselected.connect(lambda: self._value_display_interact(selected=False))
 
         if self.hardware.laser_control:
             self.screen.laser_pfn.valueChanged.connect(lambda: self.set_pfn(value=self.screen.laser_pfn.value()))
@@ -1038,11 +1043,11 @@ class RunScreenController:
 
         threading.Thread(target=self._update_stages).start()
 
-    def _value_display_interact(self):
-        if self._stop.is_set():
-            self._stop.clear()
-        else:
+    def _value_display_interact(self, selected=False):
+        if selected:
             self._stop.set()
+        else:
+            self._stop.clear()
 
     def _update_stages(self):
         while True:
@@ -1119,10 +1124,19 @@ class RunScreenController:
             self._stop.clear()
 
     def set_objective(self, height=None, step=None):
-        pass
+        if step:
+            pass
+        elif height:
+            pass
 
     def set_outlet(self, height=None, step=None):
-        pass
+        if step:
+            self.hardware.outlet_control.set_rel_z(step)
+        elif height:
+            self.hardware.outlet_control.set_z(height)
+
+        if self._stop.is_set():
+            self._stop.clear()
 
     def set_pressure(self, value=None):
         pass

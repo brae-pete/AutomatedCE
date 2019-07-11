@@ -97,7 +97,7 @@ class ArduinoBase:
             return self.pos, offset
         return pos, offset
 
-    def set_outlet_z(self,pos):
+    def set_outlet_z(self, pos):
         """set the outlet position (mm) (precision to hundreths)"""
         if self.home:
             return
