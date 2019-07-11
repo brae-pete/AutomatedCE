@@ -2,11 +2,13 @@ import serial
 import random
 import logging
 import time
-MAX_OUTLET_SPEED = 12.5 #mm/sec
+MAX_OUTLET_SPEED = 12.5  # mm/sec
+
+
 class ArduinoBase:
     """Base class for the Arduino. Will perform these without checking locks"""
 
-    def __init__(self, com="COM9", home=True, *args):
+    def __init__(self, com="COM9", home=True):
         self.home = home
         self.com = com
         self.serial = serial.Serial()
@@ -51,19 +53,19 @@ class ArduinoBase:
             time.sleep(2)
             return 0
         # logging.info(response)
-        response= float(response.strip("\n"))
+        response = float(response.strip("\n"))
         pos = float(response)*(8. / 200.)
         return pos
 
-    def set_outlet_z(self,pos):
-        """set the outlet position (mm) (precision to hundreths)"""
+    def set_outlet_z(self, pos):
+        """set the outlet position (mm) (precision to hundredths)"""
         if self.home:
             return
         logging.warning("M0L{:+.2f}\n".format(pos))
         self.serial.write("M0L{:+.2f}\n".format(pos))
         return
 
-    def set_outlet_speed(self,mm_per_sec):
+    def set_outlet_speed(self, mm_per_sec):
         if self.home:
             return
 
@@ -73,4 +75,3 @@ class ArduinoBase:
         if self.home:
             return
         self.serial.write("M0LH\n")
-
