@@ -16,12 +16,12 @@ cwd = os.getcwd()
 contents = os.listdir(cwd)
 
 # Locate the directory of icons
-if "Icons" in contents:
-    ICON_FOLDER = os.path.join(cwd, "Icons")
+if "icons" in contents:
+    ICON_FOLDER = os.path.join(cwd, "icons")
 elif "BarracudaQt" in contents:
     contents = os.listdir(os.chdir(os.path.join(contents, "BarracudaQt")))
-    if "Icons" in contents:
-        ICON_FOLDER = os.path.join(os.getcwd(), "Icons")
+    if "icons" in contents:
+        ICON_FOLDER = os.path.join(os.getcwd(), "icons")
 else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
     ICON_FOLDER = os.getcwd()
 

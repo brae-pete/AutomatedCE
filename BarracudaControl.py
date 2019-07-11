@@ -15,14 +15,10 @@ os.chdir(r"C:\Micro-Manager-2.0gamma")
 
 # Custom modules
 import ArduinoBase
-# fixme in ComHelper
 import ComHelper
-# import DAQBoardControl
 import DAQControl
-# import FocusControl
 import ImageControl
 import OutletControl
-# import OutletHeightControl
 import XYControl
 import ZStageControl
 

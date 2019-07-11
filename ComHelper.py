@@ -32,16 +32,15 @@ def serial_ports():
     return result
 
 
-ser2 = None  # fixme fixme fixme fixme fixme
-# ser2 = serial.Serial()
+ser2 = serial.Serial()
 
 
 def quickTest(com):
-    ser2.timeout=1
+    ser2.timeout = 1
     ser2.port = com
     ser2.open()
     ser2.write("?R\r")
-    info=ser2.readlines()
+    info = ser2.readlines()
     print(info)
     ser2.close()
 

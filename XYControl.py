@@ -2,6 +2,25 @@ import MMCorePy
 import logging
 import threading
 import random
+import os
+
+# Locate the directory of config files
+cwd = os.getcwd()
+contents = os.listdir(cwd)
+
+if "config" in contents:
+    CONFIG_FOLDER = os.path.join(cwd, "config")
+elif "BarracudaQt" in contents:
+    contents = os.listdir(os.path.join(contents, "BarracudaQt"))
+    if "config" in contents:
+        os.chdir(os.path.join(contents, "BarracudaQt"))
+        CONFIG_FOLDER = os.path.join(os.getcwd(), "config")
+    else:
+        CONFIG_FOLDER = os.getcwd()
+else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
+    CONFIG_FOLDER = os.getcwd()
+
+CONFIG_FILE = os.path.join(CONFIG_FOLDER, "PriorXY.cfg")
 
 logging.basicConfig(level=logging.DEBUG)
 logging.debug("This will be logged")
@@ -11,6 +30,7 @@ total_height = 110
 travel_width = 112
 travel_height = 70
 
+
 class XYControl:
     """ Basic XY Control class. If you switch hardware so that it no longer uses MMC. You only need
     to maintain the outputs for each method."""
@@ -18,18 +38,17 @@ class XYControl:
     x_inversion = 1
     y_inversion = -1
 
-    def __init__(self,parent = None,  home=True, lock=-1, *args):
+    def __init__(self, parent = None,  home=True, lock=-1, *args):
         logging.info("{} IS LOCK {} IS HOME".format(lock, home))
-        #Properties
+
         if lock == -1:
             lock = threading.Lock()
         self.lock = lock
         self.mmc = MMCorePy.CMMCore()
         self.home = home
         self.stageID = 'XYStage'
-        self.configFile = r'C:\Users\Barracuda\KivyBarracuda\ConfigFiles\PriorXY.cfg'
         self.position = [0, 0]
-        #Run Config
+
         self.loadConfig()
 
     def loadConfig(self, *args):
@@ -42,7 +61,7 @@ class XYControl:
             return self.home
         logging.info("{} is lock".format(type(self.lock)))
         with self.lock:
-            self.mmc.loadSystemConfiguration(self.configFile)
+            self.mmc.loadSystemConfiguration(CONFIG_FILE)
             self.stageID = self.mmc.getXYStageDevice()
 
     def readXY(self,*args):
@@ -81,7 +100,7 @@ class XYControl:
 
     def setX(self,x):
         if self.home:
-            self.position = [0,0]
+            self.position = [0, 0]
             return
         x = x*self.scale
         pos = self.readXY()
@@ -124,7 +143,7 @@ class XYControl:
             print("Device Re-Loaded")
             return
         with self.lock:
-            self.mmc.loadSystemConfiguration(self.configFile)
+            self.mmc.loadSystemConfiguration(CONFIG_FILE)
 
 if __name__ == '__main__':
     xyc = XYControl()
