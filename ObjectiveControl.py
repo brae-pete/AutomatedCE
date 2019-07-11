@@ -90,7 +90,6 @@ class ObjectiveControl:
 
     def set_z(self, set_z):
         """ set_z (absolute position in mm)
-        User requests in mmm absolute distance to go
         returns False if unable to set_z, True if command went through
         """
         with self.lock:
@@ -101,8 +100,10 @@ class ObjectiveControl:
             self.arduino.set_objective_z(go_to)
             logging.warning("set_z:{} offset:{}  pos:{}".format(set_z, self.offset, self.pos))
             logging.warning(self.inversion*(set_z-self.offset))
-
         return True
+
+    def set_rel_z(self):
+        pass
 
     def stop_z(self):
         """ Stops the objective motor where it is at. """
