@@ -489,7 +489,7 @@ class MethodScreenController:
         self.screen.insert_table.setItem(row_count, 7, blank_summary)
 
         add_button = QtWidgets.QPushButton('+')
-        add_button.setFixedWidth(30)
+        add_button.setFixedWidth(38)
         add_button.released.connect(lambda: self.add_step(inlets, outlets))
         self.screen.insert_table.setCellWidget(row_count, 0, add_button)
 
@@ -521,14 +521,13 @@ class MethodScreenController:
 
         if row_count > 0:
             remove_button = QtWidgets.QPushButton('-')
-            remove_button.setFixedWidth(30)
+            remove_button.setFixedWidth(38)
             remove_button.released.connect(lambda: self.remove_step())
             self.screen.insert_table.setCellWidget(row_count-1, 0, remove_button)
 
     def remove_step(self):
         current_row = self.screen.insert_table.currentRow()
         self._form_data.remove(self._form_data[current_row])
-        print(self._form_data)
         self.screen.insert_table.removeRow(current_row)
 
     def set_step_conditions(self, dialog, dialog_data):
@@ -761,7 +760,7 @@ class MethodScreenController:
             return
 
         if os.path.splitext(open_file_path)[1] != '.met':
-            message = '\t\t\tInvalid file chosen\t\t\t'
+            message = 'Invalid file chosen.'
             BarracudaQt.ErrorMessageUI(message)
             return
 
@@ -771,7 +770,7 @@ class MethodScreenController:
             try:
                 data = pickle.load(open_file)
             except pickle.UnpicklingError:
-                message = '\t\t\tCould not read in data from {}\t\t\t'.format(open_file_path)
+                message = 'Could not read in data from {}.'.format(open_file_path)
                 BarracudaQt.ErrorMessageUI(message)
             else:
                 self.method = data
@@ -819,18 +818,12 @@ class MethodScreenController:
 
         self._form_data = []
         for step in method.steps:
-            print('step')
             if step:
-                print('good')
                 self.add_step([step['Inlet']], [step['Outlet']], action_input=step['Type'], inlet_input=step['Inlet'],
                               outlet_input=step['Outlet'], time_input=step['Time'], value_input=step['Value'],
                               duration_input=step['Duration'], summary_input=step['Summary'])
                 self._form_data += [step]
-                # print(self._form_data)
-            else:
-                print(step)
 
-        # print(self._form_data)
         self._populating_table = False
 
     def compile_method(self):
@@ -856,15 +849,74 @@ class SequenceScreenController:
         self.repository = repository
 
         self._set_callbacks()
+        self.add_row()
 
     def _set_callbacks(self):
         pass
 
+    def add_row(self, filename=None, inlet=None, duration=None, sample=None, method=None):
+        row_count = self.screen.method_table.rowCount()
+        self.screen.method_table.insertRow(row_count)
+
+        if row_count > 0:
+            remove_button = QtWidgets.QPushButton('-')
+            remove_button.setFixedWidth(38)
+            remove_button.released.connect(lambda: self.remove_method())
+            self.screen.method_table.setCellWidget(row_count-1, 0, remove_button)
+
+        add_button = QtWidgets.QPushButton('+')
+        add_button.setFixedWidth(38)
+        add_button.released.connect(lambda: self.add_method())
+        self.screen.method_table.setCellWidget(row_count, 0, add_button)
+
+        sample_inject_inlet = QtWidgets.QTableWidgetItem()
+        sample_inject_inlet.setText(inlet)
+        self.screen.method_table.setItem(row_count, 1, sample_inject_inlet)
+
+        sample_inject_duration = QtWidgets.QTableWidgetItem()
+        sample_inject_duration.setText(duration)
+        self.screen.method_table.setItem(row_count, 2, sample_inject_duration)
+
+        sample_item = QtWidgets.QTableWidgetItem()
+        sample_item.setText(sample)
+        self.screen.method_table.setItem(row_count, 3, sample_item)
+
+        method_item = QtWidgets.QTableWidgetItem()
+        method_item.setText(method)
+        self.screen.method_table.setItem(row_count, 4, method_item)
+
+        filename_item = QtWidgets.QTableWidgetItem()
+        filename_item.setText(filename)
+        self.screen.method_table.setItem(row_count, 5, filename_item)
+
+        sample_amount = QtWidgets.QTableWidgetItem()
+        self.screen.method_table.setItem(row_count, 6, sample_amount)
+
     def add_method(self):
-        pass
+        open_file_path = QtWidgets.QFileDialog.getOpenFileNames(self.screen, 'Choose previous session',
+                                                                os.getcwd(), 'METHOD(*.met)')
+        if open_file_path[0]:  # Check if user selected a file or just exited.
+            open_file_path = open_file_path[0][0]
+        else:
+            return
+
+        if os.path.splitext(open_file_path)[1] != '.met':  # Check file for correct extension.
+            message = 'Invalid file chosen.'
+            BarracudaQt.ErrorMessageUI(message)
+            return
+
+        with open(open_file_path, 'rb') as open_file:
+            try:
+                data = pickle.load(open_file)
+            except pickle.UnpicklingError:  # Should not occur unless user really screws up.
+                message = 'Could not read in data from {}.'.format(open_file_path)
+                BarracudaQt.ErrorMessageUI(message)
+            else:
+                self.add_row(filename=os.path.split(open_file_path)[1], method=open_file_path)
 
     def remove_method(self):
-        pass
+        current_row = self.screen.method_table.currentRow()
+        self.screen.method_table.removeRow(current_row)
 
     def load_sequence(self):
         pass

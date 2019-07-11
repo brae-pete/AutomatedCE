@@ -7,6 +7,9 @@ import qtmodern.styles
 import qtmodern.windows
 import qdarkstyle
 import numpy as np
+from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
+import matplotlib.pyplot as plt
+
 
 CUSTOM = True
 
@@ -15,6 +18,7 @@ CUSTOM = True
 class MainWindow(QtWidgets.QTabWidget):
     def __init__(self):
         QtWidgets.QTabWidget.__init__(self)
+        self.setWindowTitle('Barracuda CE')
         self.setTabBar(MainTabBar())
         # if CUSTOM:
         #     self.setStyleSheet(open("style.qss", "r").read())
@@ -77,7 +81,6 @@ class MainTabBar(QtWidgets.QTabBar):
             self.setStyleSheet(open("style.qss", "r").read())
 
 
-# Classes for main tabbed screens
 class GettingStartedScreen(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
@@ -269,6 +272,11 @@ class MethodScreen(QtWidgets.QMainWindow):
             QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\refresh-button.png"), "")
         self.well_label = QtWidgets.QLineEdit()
         self.well_location = QtWidgets.QLineEdit()
+        self.file_name_save = QtWidgets.QLineEdit()
+        self.save_file = QtWidgets.QPushButton('Save')
+        self.select_file_save = QtWidgets.QPushButton(
+            QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\folder2.png"), "")
+        self.load_file_method = QtWidgets.QPushButton('Open')
 
         self.init_graphics_view()
         self.init_table()
@@ -300,19 +308,31 @@ class MethodScreen(QtWidgets.QMainWindow):
         wid_layout = QtWidgets.QVBoxLayout()
 
         temp_layout = QtWidgets.QHBoxLayout()
+        temp_layout.addWidget(QtWidgets.QLabel('Insert'))
+        temp_layout.addSpacing(7)
         temp_layout.addWidget(self.file_name)
         temp_layout.addWidget(self.select_file)
         temp_layout.addWidget(self.reload_button)
 
         temp_layout2 = QtWidgets.QHBoxLayout()
         self.well_label.setReadOnly(True)
+        self.well_label.setPlaceholderText('Well Name (none selected)')
         self.well_location.setReadOnly(True)
+        self.well_location.setPlaceholderText('Well Location (none selected)')
         temp_layout2.addWidget(self.well_label)
         temp_layout2.addWidget(self.well_location)
-        temp_layout2.addSpacing(250)
+        temp_layout2.addSpacing(230)
+
+        temp_layout3 = QtWidgets.QHBoxLayout()
+        temp_layout3.addWidget(QtWidgets.QLabel('Method'))
+        temp_layout3.addWidget(self.file_name_save)
+        temp_layout3.addWidget(self.select_file_save)
+        temp_layout3.addWidget(self.save_file)
+        temp_layout3.addWidget(self.load_file_method)
 
         wid_layout.addLayout(temp_layout2)
         wid_layout.addLayout(temp_layout)
+        wid_layout.addLayout(temp_layout3)
 
         temp_widget.setLayout(wid_layout)
         temp_dock.setWidget(temp_widget)
@@ -327,6 +347,7 @@ class MethodScreen(QtWidgets.QMainWindow):
         self.insert_table.setHorizontalHeaderLabels(["", 'Time (min)', 'Event', 'Value', 'Duration',
                                                      'Inlet Vial', 'Outlet Vial', 'Summary'])
         self.insert_table.setColumnWidth(0, 30)
+        self.insert_table.setColumnWidth(7, 200)
         self.insert_table.verticalHeader().setVisible(False)
         self.insert_table.setMinimumWidth(800)
 
@@ -335,10 +356,398 @@ class SequenceScreen(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
 
+        main_layout = QtWidgets.QHBoxLayout()
+        self.method_table = QtWidgets.QTableWidget()
+        self.init_table()
+        self.method_container = wrap_widget(self.method_table)
+
+        main_layout.addStretch()
+        main_layout.addWidget(self.method_container)
+        main_layout.addStretch()
+
+        wid = QtWidgets.QWidget()
+        wid.setLayout(main_layout)
+
+        self.setCentralWidget(wid)
+
+    def init_table(self):
+        self.method_table.setRowCount(0)
+        self.method_table.setColumnCount(7)
+        self.method_table.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
+        self.method_table.setHorizontalHeaderLabels(["", 'Sample Inject Inlet', 'Sample Inject Duration',
+                                                     'Sample', 'Method', 'Filename', 'Sample Amt.'])
+        self.method_table.setColumnWidth(0, 30)
+        self.method_table.setColumnWidth(1, 180)
+        self.method_table.setColumnWidth(2, 180)
+        self.method_table.setColumnWidth(3, 80)
+        self.method_table.setColumnWidth(4, 400)
+        self.method_table.setColumnWidth(5, 240)
+        self.method_table.setColumnWidth(6, 80)
+
+        self.method_table.verticalHeader().setVisible(True)
+        self.method_table.setMinimumWidth(800)
+
 
 class RunScreen(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
+        self.init_run_control()
+        self.init_hardware_control()
+        self.init_live_display()
+
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.hardware_control_panel)
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.live_feed_panel)
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.run_control_panel)
+
+    def init_hardware_control(self):
+        self.xy_stage_form = QtWidgets.QGroupBox('XY Stage')
+        self.init_xy_stage_form()
+
+        self.focus_form = QtWidgets.QGroupBox('Focus')
+        self.init_focus_form()
+
+        self.outlet_form = QtWidgets.QGroupBox('Outlet')
+        self.init_outlet_form()
+
+        self.z_stage_form = QtWidgets.QGroupBox('Z Stage')
+        self.init_z_stage_form()
+
+        self.pressure_form = QtWidgets.QGroupBox('Pressure')
+        self.init_pressure_form()
+
+        self.laser_form = QtWidgets.QGroupBox('Laser')
+        self.init_laser_form()
+
+        self.voltage_form = QtWidgets.QGroupBox('Voltage')
+        self.init_voltage_form()
+
+        self.stop_form = QtWidgets.QGroupBox()
+        self.init_stop_form()
+
+        main_layout = QtWidgets.QVBoxLayout()
+        main_layout.addStretch()
+        main_layout.addWidget(self.xy_stage_form)
+        main_layout.addSpacing(20)
+        motor_layout = QtWidgets.QHBoxLayout()
+        motor_layout.addWidget(self.focus_form)
+        motor_layout.addWidget(self.outlet_form)
+        motor_layout.addWidget(self.z_stage_form)
+        main_layout.addLayout(motor_layout)
+        main_layout.addSpacing(20)
+        main_layout.addWidget(self.pressure_form)
+        main_layout.addSpacing(20)
+        main_layout.addWidget(self.laser_form)
+        main_layout.addSpacing(20)
+        main_layout.addWidget(self.voltage_form)
+        main_layout.addSpacing(20)
+        main_layout.addWidget(self.stop_form)
+        main_layout.addStretch()
+
+        self.hardware_control_panel = QtWidgets.QDockWidget()
+        self.hardware_control_panel.setTitleBarWidget(QtWidgets.QWidget())
+        temper_wid = QtWidgets.QWidget()
+        temper_wid.setLayout(main_layout)
+        temper_wid = wrap_widget(temper_wid)
+        temper_wid.setFixedWidth(350)
+        self.hardware_control_panel.setWidget(temper_wid)
+
+    def init_xy_stage_form(self):
+        self.xy_up = QtWidgets.QToolButton()
+        self.xy_up.setArrowType(QtCore.Qt.UpArrow)
+        self.xy_down = QtWidgets.QToolButton()
+        self.xy_down.setArrowType(QtCore.Qt.DownArrow)
+        self.xy_left = QtWidgets.QToolButton()
+        self.xy_left.setArrowType(QtCore.Qt.LeftArrow)
+        self.xy_right = QtWidgets.QToolButton()
+        self.xy_right.setArrowType(QtCore.Qt.RightArrow)
+        self.xy_x_value = QtWidgets.QLineEdit()
+        self.xy_y_value = QtWidgets.QLineEdit()
+        self.xy_origin = QtWidgets.QPushButton('Origin')
+        self.xy_set_origin = QtWidgets.QPushButton('Set Origin')
+        self.xy_stop = QtWidgets.QPushButton('Stop')
+
+        form_layout = QtWidgets.QFormLayout()
+        row_outer = QtWidgets.QHBoxLayout()
+        column_arrows = QtWidgets.QVBoxLayout()
+        top_arrow = QtWidgets.QHBoxLayout()
+        top_arrow.addStretch()
+        top_arrow.addWidget(self.xy_up)
+        top_arrow.addStretch()
+        column_arrows.addLayout(top_arrow)
+        row_arrow = QtWidgets.QHBoxLayout()
+        row_arrow.addWidget(self.xy_left)
+        row_arrow.addSpacing(30)
+        row_arrow.addWidget(self.xy_right)
+        column_arrows.addLayout(row_arrow)
+        bottom_arrow = QtWidgets.QHBoxLayout()
+        bottom_arrow.addStretch()
+        bottom_arrow.addWidget(self.xy_down)
+        bottom_arrow.addStretch()
+        column_arrows.addLayout(bottom_arrow)
+        row_outer.addLayout(column_arrows)
+        column_control = QtWidgets.QVBoxLayout()
+        row_one = QtWidgets.QHBoxLayout()
+        row_one.addWidget(self.xy_x_value)
+        row_one.addWidget(self.xy_y_value)
+        column_control.addLayout(row_one)
+        row_two = QtWidgets.QHBoxLayout()
+        row_two.addWidget(self.xy_origin)
+        row_two.addWidget(self.xy_set_origin)
+        row_two.addWidget(self.xy_stop)
+        column_control.addLayout(row_two)
+        row_outer.addLayout(column_control)
+        form_layout.addRow(row_outer)
+
+        self.xy_stage_form.setLayout(form_layout)
+
+    def init_focus_form(self):
+        self.focus_up = QtWidgets.QToolButton()
+        self.focus_up.setArrowType(QtCore.Qt.UpArrow)
+        self.focus_down = QtWidgets.QToolButton()
+        self.focus_down.setArrowType(QtCore.Qt.DownArrow)
+        self.focus_value = QtWidgets.QLineEdit()
+        self.focus_stop = QtWidgets.QPushButton('Stop')
+        self.focus_step_size = QtWidgets.QDoubleSpinBox()
+
+        form_layout = QtWidgets.QFormLayout()
+        form_layout.addWidget(self.focus_value)
+        col_one = QtWidgets.QVBoxLayout()
+        col_one.addSpacing(10)
+        col_one.addWidget(self.focus_up)
+        col_one.addWidget(self.focus_down)
+        col_one.addSpacing(10)
+        row = QtWidgets.QHBoxLayout()
+        row.addStretch()
+        row.addLayout(col_one)
+        row.addStretch()
+        form_layout.addRow(row)
+        form_layout.addWidget(self.focus_step_size)
+        form_layout.addWidget(self.focus_stop)
+
+        self.focus_form.setLayout(form_layout)
+
+    def init_outlet_form(self):
+        self.outlet_up = QtWidgets.QToolButton()
+        self.outlet_up.setArrowType(QtCore.Qt.UpArrow)
+        self.outlet_down = QtWidgets.QToolButton()
+        self.outlet_down.setArrowType(QtCore.Qt.DownArrow)
+        self.outlet_value = QtWidgets.QLineEdit()
+        self.outlet_stop = QtWidgets.QPushButton('Stop')
+        self.outlet_step_size = QtWidgets.QDoubleSpinBox()
+
+        form_layout = QtWidgets.QFormLayout()
+        form_layout.addWidget(self.outlet_value)
+        col_one = QtWidgets.QVBoxLayout()
+        col_one.addSpacing(10)
+        col_one.addWidget(self.outlet_up)
+        col_one.addWidget(self.outlet_down)
+        col_one.addSpacing(10)
+        row = QtWidgets.QHBoxLayout()
+        row.addStretch()
+        row.addLayout(col_one)
+        row.addStretch()
+        form_layout.addRow(row)
+        form_layout.addWidget(self.outlet_step_size)
+        form_layout.addWidget(self.outlet_stop)
+
+        self.outlet_form.setLayout(form_layout)
+
+    def init_z_stage_form(self):
+        self.z_up = QtWidgets.QToolButton()
+        self.z_up.setArrowType(QtCore.Qt.UpArrow)
+        self.z_down = QtWidgets.QToolButton()
+        self.z_down.setArrowType(QtCore.Qt.DownArrow)
+        self.z_value = QtWidgets.QLineEdit()
+        self.z_stop = QtWidgets.QPushButton('Stop')
+        self.z_step_size = QtWidgets.QDoubleSpinBox()
+
+        form_layout = QtWidgets.QFormLayout()
+        col_one = QtWidgets.QVBoxLayout()
+        form_layout.addWidget(self.z_value)
+        col_one.addSpacing(10)
+        col_one.addWidget(self.z_up)
+        col_one.addWidget(self.z_down)
+        col_one.addSpacing(10)
+        row = QtWidgets.QHBoxLayout()
+        row.addStretch()
+        row.addLayout(col_one)
+        row.addStretch()
+        form_layout.addRow(row)
+        form_layout.addWidget(self.z_step_size)
+        form_layout.addWidget(self.z_stop)
+
+        self.z_stage_form.setLayout(form_layout)
+
+    def init_pressure_form(self):
+        self.pressure_value = QtWidgets.QDoubleSpinBox()
+        self.pressure_rinse = QtWidgets.QPushButton('Rinse')
+        self.pressure_off = QtWidgets.QPushButton('Stop')
+
+        form_layout = QtWidgets.QFormLayout()
+        row_one = QtWidgets.QHBoxLayout()
+        row_one.addWidget(self.pressure_value)
+        row_one.addWidget(self.pressure_rinse)
+        row_one.addWidget(self.pressure_off)
+        form_layout.addRow(row_one)
+
+        self.pressure_form.setLayout(form_layout)
+
+    def init_laser_form(self):
+        self.laser_pfn = QtWidgets.QSpinBox()
+        self.laser_attenuation = QtWidgets.QSpinBox()
+        self.laser_energy = QtWidgets.QSpinBox()
+        self.laser_burst_count = QtWidgets.QSpinBox()
+        self.laser_fire = QtWidgets.QPushButton('Fire')
+        self.laser_off = QtWidgets.QPushButton('Stop')
+        self.laser_timer = QtWidgets.QTimeEdit()
+        self.laser_standby = QtWidgets.QPushButton('Standby')
+        self.laser_on_check = QtWidgets.QCheckBox()
+        self.laser_fire_check = QtWidgets.QCheckBox()
+
+        self.laser_pfn.setFixedWidth(40)
+        self.laser_attenuation.setFixedWidth(40)
+        self.laser_burst_count.setFixedWidth(40)
+
+        self.laser_on_check.stateChanged.connect(lambda: self.enable_button(self.laser_standby, self.laser_on_check))
+        self.laser_fire_check.stateChanged.connect(lambda: self.enable_button(self.laser_fire, self.laser_fire_check))
+
+        self.laser_fire.setEnabled(False)
+        self.laser_standby.setEnabled(False)
+
+        form_layout = QtWidgets.QFormLayout()
+        col_one = QtWidgets.QVBoxLayout()
+        row_one = QtWidgets.QHBoxLayout()
+        row_one.addSpacing(15)
+        row_one.addWidget(self.laser_on_check)
+        row_one.addWidget(self.laser_standby)
+        row_one.addStretch()
+        row_one.addWidget(self.laser_fire_check)
+        row_one.addWidget(self.laser_fire)
+        row_one.addSpacing(15)
+        col_one.addLayout(row_one)
+        row_two = QtWidgets.QHBoxLayout()
+        row_two.addStretch()
+        row_two.addWidget(QtWidgets.QLabel('PFN'))
+        row_two.addWidget(self.laser_pfn)
+        row_two.addSpacing(5)
+        row_two.addWidget(QtWidgets.QLabel('Attenuation'))
+        row_two.addWidget(self.laser_attenuation)
+        row_two.addSpacing(5)
+        row_two.addWidget(QtWidgets.QLabel('Burst'))
+        row_two.addWidget(self.laser_burst_count)
+        row_two.addStretch()
+        col_one.addLayout(row_two)
+        col_one.addWidget(self.laser_off)
+        form_layout.addRow(col_one)
+
+        self.laser_form.setLayout(form_layout)
+
+    def init_voltage_form(self):
+        self.voltage_value = QtWidgets.QDoubleSpinBox()
+        self.voltage_off = QtWidgets.QPushButton('Stop')
+        self.voltage_on = QtWidgets.QPushButton('On')
+        self.voltage_on_check = QtWidgets.QCheckBox()
+
+        self.voltage_on_check.stateChanged.connect(lambda: self.enable_button(self.voltage_on, self.voltage_on_check))
+
+        self.voltage_on.setEnabled(False)
+
+        form_layout = QtWidgets.QFormLayout()
+        row_one = QtWidgets.QHBoxLayout()
+        row_one.addWidget(self.voltage_on_check)
+        row_one.addWidget(self.voltage_on)
+        row_one.addStretch()
+        row_one.addWidget(self.voltage_value)
+        row_one.addWidget(self.voltage_off)
+        form_layout.addRow(row_one)
+
+        self.voltage_form.setLayout(form_layout)
+
+    def init_stop_form(self):
+        self.all_stop = QtWidgets.QPushButton('STOP')
+
+        form_layout = QtWidgets.QFormLayout()
+        col = QtWidgets.QVBoxLayout()
+        row = QtWidgets.QHBoxLayout()
+        row.addStretch()
+        row.addWidget(self.all_stop)
+        row.addStretch()
+        col.addLayout(row)
+        form_layout.addRow(col)
+
+        self.stop_form.setLayout(form_layout)
+
+    def init_run_control(self):
+        self.start_sequence = QtWidgets.QPushButton('Start')
+        self.pause_sequence = QtWidgets.QPushButton('Pause')
+        self.stop_sequence = QtWidgets.QPushButton('Stop')
+        self.sequence_timer = QtWidgets.QLineEdit()
+        self.sequence_display = QtWidgets.QTableView()
+        self.add_method = QtWidgets.QPushButton('+')
+        self.remove_method = QtWidgets.QPushButton('-')
+
+        self.sequence_display.setFixedWidth(500)
+
+        main_layout = QtWidgets.QHBoxLayout()
+        col = QtWidgets.QVBoxLayout()
+        col.addWidget(self.sequence_display)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.add_method)
+        row.addWidget(self.remove_method)
+        row.addSpacing(100)
+        row.addWidget(self.start_sequence)
+        row.addWidget(self.pause_sequence)
+        row.addWidget(self.stop_sequence)
+        row.addStretch()
+        col.addLayout(row)
+        main_layout.addLayout(col)
+
+        self.run_control_panel = QtWidgets.QDockWidget()
+        self.run_control_panel.setTitleBarWidget(QtWidgets.QWidget())
+        temper_wid = QtWidgets.QWidget()
+        temper_wid.setLayout(main_layout)
+        temper_wid = wrap_widget(temper_wid)
+        temper_wid.setFixedHeight(250)
+        self.run_control_panel.setWidget(temper_wid)
+
+    def init_live_display(self):
+        self.live_insert = GraphicsScene()
+
+        self.live_feed_panel = QtWidgets.QDockWidget()
+        self.live_feed_panel.setTitleBarWidget(QtWidgets.QWidget())
+        temper_wid = QtWidgets.QWidget()
+        temp_layout = QtWidgets.QHBoxLayout()
+        temp_layout.addLayout(self.init_graphics_view())
+        temp_layout.addLayout(self.init_graphics_view2())
+        temper_wid.setLayout(temp_layout)
+        temper_wid = wrap_widget(temper_wid)
+        self.live_feed_panel.setWidget(temper_wid)
+
+    def init_graphics_view(self):
+        self.pixel_map = QtGui.QPixmap(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\black_"
+                                       r"grid_thick_lines_mirror.png")
+        self.live_insert = GraphicsScene()
+        self.live_insert.addPixmap(self.pixel_map)
+        self.image_view = QtWidgets.QGraphicsView(self.live_insert)
+        live_feed_layout = QtWidgets.QHBoxLayout()
+        live_feed_layout.addWidget(self.image_view)
+
+        return live_feed_layout
+
+    def init_graphics_view2(self):
+        self.pixel_map2 = QtGui.QPixmap(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\black_"
+                                       r"grid_thick_lines_mirror.png")
+        self.live_insert2 = GraphicsScene()
+        self.live_insert2.addPixmap(self.pixel_map2)
+        self.image_view2 = QtWidgets.QGraphicsView(self.live_insert2)
+        live_feed_layour2 = QtWidgets.QHBoxLayout()
+        live_feed_layour2.addWidget(self.image_view2)
+
+        return live_feed_layour2
+
+    @staticmethod
+    def enable_button(button, checkbox):
+        button.setEnabled(checkbox.isChecked())
 
 
 class DataScreen(QtWidgets.QMainWindow):
@@ -351,7 +760,6 @@ class SystemScreen(QtWidgets.QMainWindow):
         QtWidgets.QMainWindow.__init__(self)
 
 
-# Altered Widgets
 class AlteredTabBar(QtWidgets.QTabBar):
 
     def tabSizeHint(self, index):
@@ -720,6 +1128,54 @@ class WidgetContainer(QtWidgets.QWidget):
             self.setStyleSheet(open("style.qss", "r").read())
 
 
+# fixme just beams code
+class PlotPanel(QtWidgets.QDockWidget):
+    def __init__(self):
+        super(PlotPanel, self).__init__()
+
+        self.init_center_UI()
+
+        plt.ion()
+
+    def init_center_UI(self):
+        self.setWindowTitle("Graphing Area")
+        tempWidget = QtWidgets.QWidget()
+
+        self.canvas_one = RunPlot()
+        self.canvas_two = RunPlot()
+        self.linestyle = 'None'
+
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(self.canvas_one)
+        hbox.addWidget(self.canvas_two)
+        tempWidget.setLayout(hbox)
+
+        self.setWidget(tempWidget)
+
+
+# fixme just beams code
+class RunPlot(FigureCanvas):
+    def __init__(self, dpi=100):
+        fig = plt.figure(dpi=dpi)
+        self.axes_time = fig.add_subplot(211)
+        self.axes_freq = fig.add_subplot(212)
+        self.set_style()
+        FigureCanvas.__init__(self, fig)
+
+    def set_style(self):
+        title_font_size = 12
+        self.axes_time.spines['right'].set_visible(False)
+        self.axes_time.spines['top'].set_visible(False)
+        self.axes_time.set_xlabel("Time (" + chr(956) + "s)", fontsize=title_font_size)
+        self.axes_time.set_ylabel("Asymmetry", fontsize=title_font_size)
+
+        self.axes_freq.spines['right'].set_visible(False)
+        self.axes_freq.spines['top'].set_visible(False)
+        self.axes_freq.set_xlabel("Frequency (MHz)", fontsize=title_font_size)
+        self.axes_freq.set_ylabel("Magnitude", fontsize=title_font_size)
+        self.axes_freq.legend(loc='upper right')
+
+
 def wrap_widget(widget):
     wrapper_widget = QtWidgets.QFrame()
     if CUSTOM:
@@ -737,7 +1193,6 @@ def wrap_widget(widget):
     return wrapper_widget
 
 
-# Class for Loading/Creating options widget in Getting Started.
 class LoadNewMainWidget(AlteredTabWidget):
     def __init__(self):
         AlteredTabWidget.__init__(self)
@@ -851,7 +1306,6 @@ class LoadNewMainWidget(AlteredTabWidget):
         # pushButton1.released.connect(lambda: )
 
 
-# Class for System Selection widget in Getting Started.
 class SystemSelectionWidget(AlteredTabWidget):
     def __init__(self):
         AlteredTabWidget.__init__(self)
@@ -896,9 +1350,11 @@ class SystemSelectionWidget(AlteredTabWidget):
         self.setFixedSize(1000, 81)
 
 
-# Classes for Method Popups
 class RinseDialog(QtWidgets.QDialog):
-    def __init__(self, pos_function=None):
+    def __init__(self, pos_function=None, inlet=None, outlet=None):
+        self._inlet = inlet
+        self._outlet = outlet
+
         super(RinseDialog, self).__init__()
         self.form_data = {}
         self.setWindowTitle('Rinse')
@@ -920,7 +1376,7 @@ class RinseDialog(QtWidgets.QDialog):
 
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         if pos_function:
-            button_box.accepted.connect(lambda: pos_function('RINSE', self.form_data))
+            button_box.accepted.connect(lambda: pos_function('Rinse', self.form_data))
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
 
@@ -1021,6 +1477,8 @@ class RinseDialog(QtWidgets.QDialog):
         row.addWidget(wid)
 
         wid = QtWidgets.QLineEdit()
+        wid.setText(self._inlet)
+        wid.setReadOnly(True)
         self.form_data['TrayPositionsInletEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
@@ -1035,6 +1493,8 @@ class RinseDialog(QtWidgets.QDialog):
         row.addWidget(wid)
 
         wid = QtWidgets.QLineEdit()
+        wid.setText(self._outlet)
+        wid.setEnabled(False)
         self.form_data['TrayPositionsOutletEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
@@ -1088,14 +1548,14 @@ class RinseDialog(QtWidgets.QDialog):
         layout.addRow(row)
 
         # TRAYS ROW
-        row = QtWidgets.QHBoxLayout()
-        wid = QtWidgets.QPushButton('Trays ...')
-        # self.form_data['TrayPositionsTraysPushbutton'] = wid
-        wid.setFixedWidth(60)
-        wid.setEnabled(True)
-        row.addSpacing(30)
-        row.addWidget(wid)
-        layout.addRow(row)
+        # row = QtWidgets.QHBoxLayout()
+        # wid = QtWidgets.QPushButton('Trays ...')
+        # # self.form_data['TrayPositionsTraysPushbutton'] = wid
+        # wid.setFixedWidth(60)
+        # wid.setEnabled(True)
+        # row.addSpacing(30)
+        # row.addWidget(wid)
+        # layout.addRow(row)
 
         self.tray_positions_form.setLayout(layout)
 
@@ -1150,8 +1610,11 @@ class RinseDialog(QtWidgets.QDialog):
 
 
 class SeparateDialog(QtWidgets.QDialog):
-    def __init__(self, pos_function=None):
+    def __init__(self, pos_function=None, inlet=None, outlet=None):
         QtWidgets.QDialog.__init__(self)
+        self._inlet = inlet
+        self._outlet = outlet
+
         self.form_data = {}
         self.setWindowTitle('Separate')
 
@@ -1178,7 +1641,7 @@ class SeparateDialog(QtWidgets.QDialog):
 
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         if pos_function:
-            button_box.accepted.connect(lambda: pos_function('SEPARATE', self.form_data))
+            button_box.accepted.connect(lambda: pos_function('Separate', self.form_data))
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
 
@@ -1324,7 +1787,7 @@ class SeparateDialog(QtWidgets.QDialog):
         self.form_data['ValuesVoltageEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
-        row.addWidget(QtWidgets.QLabel('KV'))
+        row.addWidget(QtWidgets.QLabel('kV'))
         row.addStretch()
         layout.addRow(row)
 
@@ -1371,6 +1834,8 @@ class SeparateDialog(QtWidgets.QDialog):
         row.addWidget(wid)
 
         wid = QtWidgets.QLineEdit()
+        wid.setText(self._inlet)
+        wid.setReadOnly(True)
         self.form_data['TrayPositionsInletEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
@@ -1385,6 +1850,8 @@ class SeparateDialog(QtWidgets.QDialog):
         row.addWidget(wid)
 
         wid = QtWidgets.QLineEdit()
+        wid.setText(self._outlet)
+        wid.setEnabled(False)
         self.form_data['TrayPositionsOutletEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
@@ -1438,14 +1905,14 @@ class SeparateDialog(QtWidgets.QDialog):
         layout.addRow(row)
 
         # TRAYS ROW
-        row = QtWidgets.QHBoxLayout()
-        wid = QtWidgets.QPushButton('Trays ...')
-        # self.form_data['TrayPositionsTraysPushbutton'] = wid
-        wid.setFixedWidth(60)
-        wid.setEnabled(True)
-        row.addSpacing(30)
-        row.addWidget(wid)
-        layout.addRow(row)
+        # row = QtWidgets.QHBoxLayout()
+        # wid = QtWidgets.QPushButton('Trays ...')
+        # # self.form_data['TrayPositionsTraysPushbutton'] = wid
+        # wid.setFixedWidth(60)
+        # wid.setEnabled(True)
+        # row.addSpacing(30)
+        # row.addWidget(wid)
+        # layout.addRow(row)
 
         self.tray_positions_form.setLayout(layout)
 
@@ -1500,8 +1967,11 @@ class SeparateDialog(QtWidgets.QDialog):
 
 
 class InjectDialog(QtWidgets.QDialog):
-    def __init__(self, pos_function=None):
+    def __init__(self, pos_function=None, inlet=None, outlet=None):
         QtWidgets.QDialog.__init__(self)
+        self._inlet = inlet
+        self._outlet = outlet
+
         self.form_data = {}
         self.setWindowTitle('Inject')
 
@@ -1525,7 +1995,7 @@ class InjectDialog(QtWidgets.QDialog):
 
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         if pos_function:
-            button_box.accepted.connect(lambda: pos_function('INJECT', self.form_data))
+            button_box.accepted.connect(lambda: pos_function('Inject', self.form_data))
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
 
@@ -1708,6 +2178,8 @@ class InjectDialog(QtWidgets.QDialog):
         row.addWidget(wid)
 
         wid = QtWidgets.QLineEdit()
+        wid.setText(self._inlet)
+        wid.setReadOnly(True)
         self.form_data['TrayPositionsInletEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
@@ -1722,6 +2194,8 @@ class InjectDialog(QtWidgets.QDialog):
         row.addWidget(wid)
 
         wid = QtWidgets.QLineEdit()
+        wid.setText(self._outlet)
+        wid.setEnabled(False)
         self.form_data['TrayPositionsOutletEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
@@ -1775,19 +2249,18 @@ class InjectDialog(QtWidgets.QDialog):
         layout.addRow(row)
 
         # TRAYS ROW
-        row = QtWidgets.QHBoxLayout()
-        wid = QtWidgets.QPushButton('Trays ...')
-        # self.form_data['TrayPositionsTraysPushbutton'] = wid
-        wid.setFixedWidth(60)
-        wid.setEnabled(True)
-        row.addSpacing(30)
-        row.addWidget(wid)
-        layout.addRow(row)
+        # row = QtWidgets.QHBoxLayout()
+        # wid = QtWidgets.QPushButton('Trays ...')
+        # # self.form_data['TrayPositionsTraysPushbutton'] = wid
+        # wid.setFixedWidth(60)
+        # wid.setEnabled(True)
+        # row.addSpacing(30)
+        # row.addWidget(wid)
+        # layout.addRow(row)
 
         self.tray_positions_form.setLayout(layout)
 
 
-# Classes for other popups
 class ErrorMessageUI(QtWidgets.QDialog):
     def __init__(self, error_message=None, pos_function=None):
         super(ErrorMessageUI, self).__init__()
