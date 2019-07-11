@@ -8,10 +8,10 @@ import random
 # GUI Framework
 import BarracudaQt
 
-if r"C:\Micro-Manager-2.0gamma" not in sys.path:
-    sys.path.append(r"C:\Micro-Manager-2.0gamma")
-prev_dir = os.getcwd()
-os.chdir(r"C:\Micro-Manager-2.0gamma")
+# if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
+#     sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
+# prev_dir = os.getcwd()
+# os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
 
 # Custom modules
 import ArduinoBase
@@ -25,9 +25,9 @@ import ZStageControl
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-os.chdir(prev_dir)
+# os.chdir(prev_dir)
 
-HOME = True
+HOME = False
 
 
 # Possible Model Classes

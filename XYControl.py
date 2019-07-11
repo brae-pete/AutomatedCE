@@ -1,8 +1,17 @@
-import MMCorePy
+import sys
+import os
 import logging
 import threading
 import random
-import os
+
+if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
+    sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
+prev_dir = os.getcwd()
+os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
+
+import MMCorePy
+
+os.chdir(prev_dir)
 
 # Locate the directory of config files
 cwd = os.getcwd()

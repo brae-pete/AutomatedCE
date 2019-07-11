@@ -1,12 +1,19 @@
 import sys
 import os
-
-import MMCorePy
 from PIL import Image as pilImage
 import cv2
 import time
 import numpy as np
 import logging
+
+if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
+    sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
+prev_dir = os.getcwd()
+os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
+
+import MMCorePy
+
+os.chdir(prev_dir)
 
 # Locate the directory of config files
 cwd = os.getcwd()
