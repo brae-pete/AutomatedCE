@@ -3,14 +3,14 @@ import threading
 import logging
 
 
-class ZStageControl():
+class ZStageControl:
     """Class to control Z-stage for capillary/optical train
     If switching controllers modify the function calls here
     Make sure that what you program matches the inputs and outputs
     This is called by the GUI and needs data types to match
     """
 
-    def __init__(self, com="COM4", lock=-1, home=False, *args):
+    def __init__(self, com="COM4", lock=-1, home=False):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -39,7 +39,7 @@ class ZStageControl():
             return
         self.stage = OpticsFocusZStage(self.com)
 
-    def readZ(self, *args):
+    def read_z(self, *args):
         """ returns float of current position
         User requests to get current position of stage, returned in mm
         """
@@ -50,44 +50,44 @@ class ZStageControl():
                     self.pos = args[0]
                 return self.pos
 
-            z = self.stage.getZ()
+            z = self.stage.get_z()
         if type(z) == str:
-            # Dont update position if the controller was busy
+            # Don't update position if the controller was busy
             pass
         else:
             self.pos = z
 
         return self.pos
 
-    def setZ(self, setZ, *args):
-        """ setZ (absolute position in mm)
+    def set_z(self, set_z, *args):
+        """ set_z (absolute position in mm)
         User requests in mmm absolute distance to go
-        returns False if unable to setZ, True if command went through
+        returns False if unable to set_z, True if command went through
         """
-        print(args, setZ)
+        print(args, set_z)
         with self.lock:
             print("Hey  There")
             if self.home:
                 print("Hi")
-                self.pos = setZ
+                self.pos = set_z
                 return True
 
             # check if stage is busy
-            response = self.stage.getZ()
+            response = self.stage.get_z()
             if response == type(str):
                 return False
-            logging.info(type(setZ))
+            logging.info(type(set_z))
             logging.info(type(self.pos))
-            setZ = setZ - self.pos
-            self.stage.goZ(setZ)
+            set_z = set_z - self.pos
+            self.stage.go_z(set_z)
         return True
 
-    def setSpeed(self, speed, *args):
+    def set_speed(self, speed):
         """User requests to set speed in mm/s"""
         with self.lock:
             if self.home:
                 return
-            self.stage.setSpeed(speed)
+            self.stage.set_speed(speed)
 
     def stop(self):
         """Stop the Z-stage from moving"""
@@ -109,11 +109,11 @@ class ZStageControl():
             return
         self.stage.serial.close()
 
-    def goHome(self):
-        self.stage.goHome()
+    def go_home(self):
+        self.stage.go_home()
 
 
-class OpticsFocusZStage():
+class OpticsFocusZStage:
     """Helper class for the OpticsFocus Z stage
     Called by the ZStageControl Class
     Don't change this unless you are changing how you talk to the OpticsFocusZ Stage
@@ -125,22 +125,24 @@ class OpticsFocusZStage():
         self.serial = serial.Serial()
         self.serial.timeout = 0.8
         self.serial.port = port
+        self.pos = None
+
         self.serial.open()
 
-    def mm2Steps(self, position):
-        ""
+    @staticmethod
+    def mm_to_steps(position):
         pulse_eq = 1.5 / (360 / 0.9 * 2)
         return int(round(position / pulse_eq))
 
-    def steps2mm(self, steps):
-        ""
-        pulseEq = 1.5 / (360 / 0.9 * 2)
-        return steps * pulseEq
+    @ staticmethod
+    def steps_to_mm(steps):
+        pulse_eq = 1.5 / (360 / 0.9 * 2)
+        return steps * pulse_eq
 
-    def getZ(self):
+    def get_z(self):
         self.serial.write("?X\r")
         response = self.serial.readlines()
-        #logging.info("Z_STAGE RESPONSE {}".format(response))
+        # logging.info("Z_STAGE RESPONSE {}".format(response))
         try:
             response = response[-1]
         except IndexError:
@@ -163,26 +165,26 @@ class OpticsFocusZStage():
         elif response == "":
             return self.pos
         else:
-            #logging.info(response)
+            # logging.info(response)
             try:
-                position = self.steps2mm(int(response[1:]))
+                position = self.steps_to_mm(int(response[1:]))
                 self.pos = position
-            #logging.info("{} POSITION {} RESPONSE".format(position,response[1:]))
+            # logging.info("{} POSITION {} RESPONSE".format(position,response[1:]))
             except ValueError:
                 position = self.pos
         return position
 
-    def goZ(self, mm_to_travel):
-        steps = self.mm2Steps(mm_to_travel)
+    def go_z(self, mm_to_travel):
+        steps = self.mm_to_steps(mm_to_travel)
         self.serial.write("X{:+d}\r".format(steps))
 
-    def goHome(self):
+    def go_home(self):
         self.serial.write("HX0\r")
 
     def stop(self):
         self.serial.write("S\r")
 
-    def setSpeed(self, mm_per_sec):
+    def set_speed(self, mm_per_sec):
         if mm_per_sec > 10:
             mm_per_sec = 255
         elif mm_per_sec < 0:
@@ -197,8 +199,10 @@ class OpticsFocusZStage():
         self.serial.write("?R\r")
         response = self.serial.readlines()
         logging.info(response)
-def threadingTest():
-    import threading
-    lock = threading.Lock()
+
+
+def threading_test():
+    # import threading
+    # lock = threading.Lock()
     print("We are Locked")
-    ser2 = ZStageControl()
+    # ser2 = ZStageControl()
