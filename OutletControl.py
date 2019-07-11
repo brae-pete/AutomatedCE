@@ -1,14 +1,15 @@
 import threading
 import ArduinoBase
 
-class OutletControl():
+
+class OutletControl:
     """Class to control Z-stage for capillary/optical train
     If switching controllers modify the function calls here
     Make sure that what you program matches the inputs and outputs
     This is called by the GUI and needs data types to match
     """
 
-    def __init__(self, com="COM9", arduino=-1, lock=-1, home=True, *args):
+    def __init__(self, com="COM9", arduino=-1, lock=-1, home=True):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -30,13 +31,13 @@ class OutletControl():
         self.lock = lock
         return
 
-    def open(self, *args):
+    def open(self):
         """User initializes whatever resources are required
          (open ports, create MMC + load config, etc...)
          """
         self.arduino.open()
 
-    def readZ(self, *args):
+    def read_z(self, *args):
         """ returns float of current position
         User requests to get current position of stage, returned in mm
         """
@@ -50,19 +51,19 @@ class OutletControl():
             self.pos = -response[0]
         return self.pos
 
-    def setZ(self, setZ, *args):
-        """ setZ (absolute position in mm)
+    def set_z(self, set_z):
+        """ set_z (absolute position in mm)
         User requests in mmm absolute distance to go
-        returns False if unable to setZ, True if command went through
+        returns False if unable to set_z, True if command went through
         """
         with self.lock:
             if self.home:
-                self.pos = setZ
+                self.pos = set_z
                 return
-            self.arduino.set_outlet_z(-setZ)
+            self.arduino.set_outlet_z(-set_z)
         return True
 
-    def setSpeed(self, speed, *args):
+    def set_speed(self, speed):
         """User requests to set speed in mm/s"""
         with self.lock:
             if self.home:

@@ -1016,13 +1016,13 @@ class RunScreenController:
             threading.Thread(target=self._update_z).start()
 
         if self.hardware.outlet_control:
-            value = self.hardware.outlet_control.readZ()
+            value = self.hardware.outlet_control.read_z()
             self.screen.outlet_value.setText("{:.3f}".format(float(value)))
 
             threading.Thread(target=self._update_outlet).start()
 
         if self.hardware.objective_control:
-            value = self.hardware.objective_control.readZ()
+            value = self.hardware.objective_control.read_z()
             self.screen.objective_value.setText("{:.3f}".format(float(value)))
 
             threading.Thread(target=self._update_objective).start()
