@@ -20,9 +20,9 @@ contents = os.listdir(cwd)
 if "config" in contents:
     CONFIG_FOLDER = os.path.join(cwd, "config")
 elif "BarracudaQt" in contents:
-    contents = os.listdir(os.path.join(contents, "BarracudaQt"))
+    contents = os.listdir(os.path.join(cwd, "BarracudaQt"))
     if "config" in contents:
-        os.chdir(os.path.join(contents, "BarracudaQt"))
+        os.chdir(os.path.join(cwd, "BarracudaQt"))
         CONFIG_FOLDER = os.path.join(os.getcwd(), "config")
     else:
         CONFIG_FOLDER = os.getcwd()
@@ -47,7 +47,7 @@ class XYControl:
     x_inversion = 1
     y_inversion = -1
 
-    def __init__(self, parent = None,  home=True, lock=-1, *args):
+    def __init__(self, home=True, lock=-1):
         logging.info("{} IS LOCK {} IS HOME".format(lock, home))
 
         if lock == -1:
@@ -58,9 +58,9 @@ class XYControl:
         self.stageID = 'XYStage'
         self.position = [0, 0]
 
-        self.loadConfig()
+        self.load_config()
 
-    def loadConfig(self, *args):
+    def load_config(self):
         """ starts MMC object, [config file] [home]
         config file is mmc config file created by micro manager for the stage
         home is a flag that allows the core functionality of XY control to be tested
@@ -73,7 +73,7 @@ class XYControl:
             self.mmc.loadSystemConfiguration(CONFIG_FILE)
             self.stageID = self.mmc.getXYStageDevice()
 
-    def readXY(self,*args):
+    def read_xy(self):
         """ Reads the current XY position of the stage, sets XYControl.position and returns list [X, Y]  """
         if self.home:
             return [float(random.randint(0, 110000)), float(random.randint(0, 60000))]
@@ -92,7 +92,7 @@ class XYControl:
 
         return pos
 
-    def setXY(self, xy):
+    def set_xy(self, xy):
         """Moves stage to position defined by pos (x,y). Returns nothing
         pos must be defined in microns """
         if self.home:
@@ -107,35 +107,35 @@ class XYControl:
         with self.lock:
             self.mmc.setXYPosition(self.stageID, pos[0], pos[1])
 
-    def setX(self,x):
+    def set_x(self, x):
         if self.home:
             self.position = [0, 0]
             return
         x = x*self.scale
-        pos = self.readXY()
+        pos = self.read_xy()
         with self.lock:
             self.mmc.setXYPosition(self.stageID, x, pos[1]*self.scale)
 
-    def setY(self,y):
+    def set_y(self, y):
         if self.home:
-            self.position = [0,0]
+            self.position = [0, 0]
             return
-        y=y*self.scale
-        pos = self.readXY()
+        y = y*self.scale
+        pos = self.read_xy()
         with self.lock:
-            self.mmc.setXYPosition(self.stageID,pos[0]*self.scale,y)
+            self.mmc.setXYPosition(self.stageID, pos[0]*self.scale, y)
 
-    def setOrigin(self):
-        """Redefines current position as Origin. Calls XYControl.readXY after reset"""
+    def set_origin(self):
+        """Redefines current position as Origin. Calls XYControl.read_xy after reset"""
         print("Home is ", self.home)
         if self.home:
             print("Set Origin as 0,0")
             self.position = [0, 0]
-            self.readXY()
+            self.read_xy()
             return
         with self.lock:
             self.mmc.setOriginXY(self.stageID)
-        self.readXY()
+        self.read_xy()
 
     def close(self):
         """Releases any communication ports that may be used"""
@@ -154,6 +154,6 @@ class XYControl:
         with self.lock:
             self.mmc.loadSystemConfiguration(CONFIG_FILE)
 
+
 if __name__ == '__main__':
     xyc = XYControl()
-

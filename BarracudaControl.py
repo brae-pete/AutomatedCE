@@ -1003,7 +1003,7 @@ class RunScreenController:
 
     def _start_updating_display(self):
         if self.hardware.xy_stage_control:
-            value = self.hardware.xy_stage_control.readXY()
+            value = self.hardware.xy_stage_control.read_xy()
             self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
             self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
 
