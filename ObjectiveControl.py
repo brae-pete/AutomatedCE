@@ -62,19 +62,19 @@ class ObjectiveControl:
         return self.pos
 
     def save_history(self):
-        fout = open("ObjectiveHistory.p", "w")
-        data = {'pos': self.pos, 'offset': self.offset}
-        pickle.dump(data, fout)
-        fout.close()
+        with open("ObjectiveHistory.p", "wb") as fout:
+            data = {'pos': self.pos, 'offset': self.offset}
+            pickle.dump(data, fout)
 
     def load_history(self):
         try:
-            fin = open("ObjectiveHistory.p", "r")
-            data = pickle.load(fin)
-            fin.close()
-            # adjust for the new offset, and add the old offset that  may be present
-            self.offset = (data['pos'] - self.pos) + self.offset
-            self.pos = data['pos']
+            with open("ObjectiveHistory.p", "rb") as fin:
+                logging.info(fin)
+                data = pickle.load(fin)
+                logging.info(data)
+                # adjust for the new offset, and add the old offset that  may be present
+                self.offset = (data['pos'] - self.pos) + self.offset
+                self.pos = data['pos']
         except IOError:
             logging.warning("No Objective History found")
 

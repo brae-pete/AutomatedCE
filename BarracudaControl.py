@@ -3,8 +3,8 @@ import sys
 import os
 import pickle
 import threading
-import random
 import logging
+import time
 
 # GUI Framework
 import BarracudaQt
@@ -15,8 +15,6 @@ import BarracudaQt
 # os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
 
 # Custom modules
-import ArduinoBase
-import ComHelper
 import DAQControl
 import ImageControl
 import OutletControl
@@ -944,6 +942,9 @@ class SequenceScreenController:
 
 
 class RunScreenController:
+    _stop = threading.Event()
+    _update_delay = 0.15
+
     def __init__(self, screen, hardware, repository):
         self.screen = screen
         self.hardware = hardware
@@ -953,45 +954,51 @@ class RunScreenController:
         self._set_callbacks()
 
     def _set_callbacks(self):
-        self.screen.xy_up.released.connect(lambda: self.set_y(step=self.screen.xy_step_size.value()))
-        self.screen.xy_down.released.connect(lambda: self.set_y(step=-self.screen.xy_step_size.value()))
-        self.screen.xy_right.released.connect(lambda: self.set_x(step=self.screen.xy_step_size.value()))
-        self.screen.xy_left.released.connect(lambda: self.set_x(step=-self.screen.xy_step_size.value()))
-        self.screen.xy_x_value.returnPressed.connect(lambda: self.set_x(x=float(self.screen.xy_x_value.text())))
-        self.screen.xy_y_value.returnPressed.connect(lambda: self.set_y(y=float(self.screen.xy_y_value.text())))
-        self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
-        self.screen.xy_origin.released.connect(lambda: self.origin())
-        self.screen.xy_stop.released.connect(lambda: self.stop_xy_stage())
+        if self.hardware.xy_stage_control:
+            self.screen.xy_up.released.connect(lambda: self.set_y(step=self.screen.xy_step_size.value()))
+            self.screen.xy_down.released.connect(lambda: self.set_y(step=-self.screen.xy_step_size.value()))
+            self.screen.xy_right.released.connect(lambda: self.set_x(step=self.screen.xy_step_size.value()))
+            self.screen.xy_left.released.connect(lambda: self.set_x(step=-self.screen.xy_step_size.value()))
+            self.screen.xy_x_value.returnPressed.connect(lambda: self.set_x(x=float(self.screen.xy_x_value.text())))
+            self.screen.xy_y_value.returnPressed.connect(lambda: self.set_y(y=float(self.screen.xy_y_value.text())))
+            self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
+            self.screen.xy_origin.released.connect(lambda: self.origin())
+            self.screen.xy_stop.released.connect(lambda: self.stop_xy_stage())
 
-        self.screen.objective_up.released.connect(lambda: self.set_objective(step=self.screen.objective_step_size.value()))
-        self.screen.objective_down.released.connect(lambda: self.set_objective(step=-self.screen.objective_step_size.value()))
-        self.screen.objective_value.returnPressed.connect(lambda: self.set_objective(height=float(self.screen.objective_value.text())))
-        self.screen.objective_stop.released.connect(lambda: self.stop_objective())
+        if self.hardware.objective_control:
+            self.screen.objective_up.released.connect(lambda: self.set_objective(step=self.screen.objective_step_size.value()))
+            self.screen.objective_down.released.connect(lambda: self.set_objective(step=-self.screen.objective_step_size.value()))
+            self.screen.objective_value.returnPressed.connect(lambda: self.set_objective(height=float(self.screen.objective_value.text())))
+            self.screen.objective_stop.released.connect(lambda: self.stop_objective())
 
-        self.screen.outlet_up.released.connect(lambda: self.set_outlet(step=self.screen.outlet_step_size.value()))
-        self.screen.outlet_down.released.connect(lambda: self.set_outlet(step=-self.screen.outlet_step_size.value()))
-        self.screen.outlet_value.returnPressed.connect(lambda: self.set_outlet(height=float(self.screen.outlet_value.text())))
-        self.screen.outlet_stop.released.connect(lambda: self.stop_outlet())
+        if self.hardware.outlet_control:
+            self.screen.outlet_up.released.connect(lambda: self.set_outlet(step=self.screen.outlet_step_size.value()))
+            self.screen.outlet_down.released.connect(lambda: self.set_outlet(step=-self.screen.outlet_step_size.value()))
+            self.screen.outlet_value.returnPressed.connect(lambda: self.set_outlet(height=float(self.screen.outlet_value.text())))
+            self.screen.outlet_stop.released.connect(lambda: self.stop_outlet())
 
-        self.screen.z_up.released.connect(lambda: self.set_z(step=self.screen.z_step_size.value()))
-        self.screen.z_down.released.connect(lambda: self.set_z(step=-self.screen.z_step_size.value()))
-        self.screen.z_value.returnPressed.connect(lambda: self.set_z(height=float(self.screen.z_value.text())))
-        self.screen.z_stop.released.connect(lambda: self.stop_z_stage())
+            self.screen.pressure_value.valueChanged.connect(lambda: self.set_pressure(value=float(self.screen.pressure_value.text())))
+            self.screen.pressure_rinse.released.connect(lambda: self.rinse_pressure())
+            self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
 
-        self.screen.pressure_value.valueChanged.connect(lambda: self.set_pressure(value=float(self.screen.pressure_value.text())))
-        self.screen.pressure_rinse.released.connect(lambda: self.rinse_pressure())
-        self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
+        if self.hardware.z_stage_control:
+            self.screen.z_up.released.connect(lambda: self.set_z(step=self.screen.z_step_size.value()))
+            self.screen.z_down.released.connect(lambda: self.set_z(step=-self.screen.z_step_size.value()))
+            self.screen.z_value.returnPressed.connect(lambda: self.set_z(height=float(self.screen.z_value.text())))
+            self.screen.z_stop.released.connect(lambda: self.stop_z_stage())
 
-        self.screen.laser_pfn.valueChanged.connect(lambda: self.set_pfn(value=self.screen.laser_pfn.value()))
-        self.screen.laser_attenuation.valueChanged.connect(lambda: self.set_attenuation(value=self.screen.laser_attenuation.value()))
-        self.screen.laser_burst_count.valueChanged.connect(lambda: self.set_burst(count=self.screen.laser_burst_count.value()))
-        self.screen.laser_fire.released.connect(lambda: self.fire_laser())
-        self.screen.laser_standby.released.connect(lambda: self.laser_on())
-        self.screen.laser_off.released.connect(lambda: self.stop_laser())
+        if self.hardware.laser_control:
+            self.screen.laser_pfn.valueChanged.connect(lambda: self.set_pfn(value=self.screen.laser_pfn.value()))
+            self.screen.laser_attenuation.valueChanged.connect(lambda: self.set_attenuation(value=self.screen.laser_attenuation.value()))
+            self.screen.laser_burst_count.valueChanged.connect(lambda: self.set_burst(count=self.screen.laser_burst_count.value()))
+            self.screen.laser_fire.released.connect(lambda: self.fire_laser())
+            self.screen.laser_standby.released.connect(lambda: self.laser_on())
+            self.screen.laser_off.released.connect(lambda: self.stop_laser())
 
-        self.screen.voltage_value.valueChanged.connect(lambda: self.set_voltage(value=self.screen.voltage_value.value()))
-        self.screen.voltage_on.released.connect(lambda: self.voltage_on())
-        self.screen.voltage_off.released.connect(lambda: self.stop_voltage())
+        if self.hardware.daq_board_control:
+            self.screen.voltage_value.valueChanged.connect(lambda: self.set_voltage(value=self.screen.voltage_value.value()))
+            self.screen.voltage_on.released.connect(lambda: self.voltage_on())
+            self.screen.voltage_off.released.connect(lambda: self.stop_voltage())
 
         self.screen.all_stop.released.connect(lambda: self.stop_all())
 
@@ -1007,37 +1014,53 @@ class RunScreenController:
             self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
             self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
 
-            threading.Thread(target=self._update_xy).start()
-
         if self.hardware.z_stage_control:
             value = self.hardware.z_stage_control.read_z()
             self.screen.z_value.setText("{:.3f}".format(float(value)))
-
-            threading.Thread(target=self._update_z).start()
 
         if self.hardware.outlet_control:
             value = self.hardware.outlet_control.read_z()
             self.screen.outlet_value.setText("{:.3f}".format(float(value)))
 
-            threading.Thread(target=self._update_outlet).start()
-
         if self.hardware.objective_control:
             value = self.hardware.objective_control.read_z()
             self.screen.objective_value.setText("{:.3f}".format(float(value)))
 
-            threading.Thread(target=self._update_objective).start()
+        threading.Thread(target=self._update_stages).start()
 
-    def _update_xy(self):
-        pass
+    def _update_stages(self):
+        while True:
+            if self._stop.is_set():
+                return
 
-    def _update_z(self):
-        pass
+            if self.hardware.xy_stage_control:
+                prev = self.hardware.xy_stage_control.position
+                value = self.hardware.xy_stage_control.read_xy()
+                if value != prev:
+                    self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+                    self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+                time.sleep(self._update_delay)
 
-    def _update_objective(self):
-        pass
+            if self.hardware.z_stage_control:
+                prev = self.hardware.z_stage_control.pos
+                value = str(self.hardware.z_stage_control.read_z())
+                if value != prev:
+                    self.screen.z_value.setText("{:.3f}".format(float(value)))
+                time.sleep(self._update_delay)
 
-    def _update_outlet(self):
-        pass
+            if self.hardware.objective_control:
+                prev = self.hardware.objective_control.pos
+                value = str(self.hardware.objective_control.read_z())
+                if value != prev:
+                    self.screen.objective_value.setText("{:.3f}".format(float(value)))
+                time.sleep(self._update_delay)
+
+            if self.hardware.outlet_control:
+                prev = self.hardware.outlet_control.pos
+                value = str(self.hardware.outlet_control.read_z())
+                if value != prev:
+                    self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+                time.sleep(self._update_delay)
 
     def set_origin(self):
         pass
