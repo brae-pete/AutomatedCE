@@ -22,6 +22,8 @@ import ImageControl
 import OutletControl
 import XYControl
 import ZStageControl
+import ObjectiveControl
+import LaserControl
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -32,31 +34,48 @@ HOME = False
 
 
 # Possible Model Classes
-class BarracudaSystem:
+class BaseSystem:
+    def __init__(self):
+        self.z_stage_control = None
+        self.outlet_control = None
+        self.objective_control = None
+        self.image_control = None
+        self.xy_stage_control = None
+        self.daq_board_control = None
+        self.laser_control = None
+
+    def start_system(self):
+        pass
+
+    def close_system(self):
+        pass
+
+
+class BarracudaSystem(BaseSystem):
     _z_stage_com = "COM4"
     _outlet_com = "COM7"
+    _objective_com = "COM8"
+    _laser_com = "COM6"
     _daq_dev = "/Dev1/"
     _z_stage_lock = threading.Lock()
     _outlet_lock = threading.Lock()
+    _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
 
     xy_stage_size = [112792, 64340]  # Rough size in mm
     xy_stage_upper_left = [112598, -214]  # Reading on stage controller when all the way to left and up (towards wall)
 
     def __init__(self):
-        self.z_stage_control = None
-        self.outlet_control = None
-        self.image_control = None
-        self.xy_stage_control = None
-        self.daq_board_control = None
+        super(BarracudaSystem, self).__init__()
 
     def start_system(self, live_feed=True):
-        # self.z_stage_control = ZStageControl.ZStageControl(self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        self.outlet_control = OutletControl.OutletControl(self._outlet_com, lock=self._outlet_lock, home=HOME)
-
+        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         # self.image_control = ImageControl.ImageControl(home=HOME)
-        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
+        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
+        # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
 
         self.start_daq()
 
@@ -70,14 +89,14 @@ class BarracudaSystem:
         pass
 
 
-class FinchSystem:
+class FinchSystem(BaseSystem):
     def __init__(self):
-        pass
+        super(FinchSystem, self).__init__()
 
 
-class OstrichSystem:
+class OstrichSystem(BaseSystem):
     def __init__(self):
-        pass
+        super(OstrichSystem, self).__init__()
 
 
 class CERepository:
@@ -930,7 +949,7 @@ class RunScreenController:
         self.hardware = hardware
         self.repository = repository
 
-        self._init_current_values()
+        self._start_updating_display()
         self._set_callbacks()
 
     def _set_callbacks(self):
@@ -944,10 +963,10 @@ class RunScreenController:
         self.screen.xy_origin.released.connect(lambda: self.origin())
         self.screen.xy_stop.released.connect(lambda: self.stop_xy_stage())
 
-        self.screen.focus_up.released.connect(lambda: self.set_focus(step=self.screen.focus_step_size.value()))
-        self.screen.focus_down.released.connect(lambda: self.set_focus(step=-self.screen.focus_step_size.value()))
-        self.screen.focus_value.returnPressed.connect(lambda: self.set_focus(height=float(self.screen.focus_value.text())))
-        self.screen.focus_stop.released.connect(lambda: self.stop_focus())
+        self.screen.objective_up.released.connect(lambda: self.set_objective(step=self.screen.objective_step_size.value()))
+        self.screen.objective_down.released.connect(lambda: self.set_objective(step=-self.screen.objective_step_size.value()))
+        self.screen.objective_value.returnPressed.connect(lambda: self.set_objective(height=float(self.screen.objective_value.text())))
+        self.screen.objective_stop.released.connect(lambda: self.stop_objective())
 
         self.screen.outlet_up.released.connect(lambda: self.set_outlet(step=self.screen.outlet_step_size.value()))
         self.screen.outlet_down.released.connect(lambda: self.set_outlet(step=-self.screen.outlet_step_size.value()))
@@ -982,14 +1001,43 @@ class RunScreenController:
         self.screen.add_method.released.connect(lambda: self.add_method())
         self.screen.remove_method.released.connect(lambda: self.remove_method())
 
-    def _init_current_values(self):
-        # xy = self.hardware.xy_stage_control.readXY()
-        # logging.info(xy)
-        #
-        z = self.hardware.outlet_control.readZ()
-        logging.info(z)
+    def _start_updating_display(self):
+        if self.hardware.xy_stage_control:
+            value = self.hardware.xy_stage_control.readXY()
+            self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+            self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
 
-        # outlet = self.hardware.outlet_control.readZ()
+            threading.Thread(target=self._update_xy).start()
+
+        if self.hardware.z_stage_control:
+            value = self.hardware.z_stage_control.read_z()
+            self.screen.z_value.setText("{:.3f}".format(float(value)))
+
+            threading.Thread(target=self._update_z).start()
+
+        if self.hardware.outlet_control:
+            value = self.hardware.outlet_control.readZ()
+            self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+
+            threading.Thread(target=self._update_outlet).start()
+
+        if self.hardware.objective_control:
+            value = self.hardware.objective_control.readZ()
+            self.screen.objective_value.setText("{:.3f}".format(float(value)))
+
+            threading.Thread(target=self._update_objective).start()
+
+    def _update_xy(self):
+        pass
+
+    def _update_z(self):
+        pass
+
+    def _update_objective(self):
+        pass
+
+    def _update_outlet(self):
+        pass
 
     def set_origin(self):
         pass
@@ -1006,7 +1054,7 @@ class RunScreenController:
     def set_z(self, height=None, step=None):
         pass
 
-    def set_focus(self, height=None, step=None):
+    def set_objective(self, height=None, step=None):
         pass
 
     def set_outlet(self, height=None, step=None):
@@ -1033,7 +1081,7 @@ class RunScreenController:
     def stop_outlet(self):
         pass
 
-    def stop_focus(self):
+    def stop_objective(self):
         pass
 
     def stop_z_stage(self):
@@ -1053,15 +1101,15 @@ class RunScreenController:
         self.stop_laser()
         self.stop_voltage()
         self.stop_xy_stage()
-        self.stop_focus()
+        self.stop_objective()
         self.stop_z_stage()
         self.stop_outlet()
         self.stop_pressure()
 
         # fixme
-        # self.hardware.xy_stage_control.close()
+        self.hardware.xy_stage_control.close()
         # self.hardware.image_control.close()
-        # sys.exit()
+        sys.exit()
 
     def rinse_pressure(self):
         pass

@@ -417,8 +417,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.xy_stage_form = QtWidgets.QGroupBox('XY Stage')
         self.init_xy_stage_form()
 
-        self.focus_form = QtWidgets.QGroupBox('Focus')
-        self.init_focus_form()
+        self.objective_form = QtWidgets.QGroupBox('Objective')
+        self.init_objective_form()
 
         self.outlet_form = QtWidgets.QGroupBox('Outlet')
         self.init_outlet_form()
@@ -443,7 +443,7 @@ class RunScreen(QtWidgets.QMainWindow):
         main_layout.addWidget(self.xy_stage_form)
         main_layout.addSpacing(20)
         motor_layout = QtWidgets.QHBoxLayout()
-        motor_layout.addWidget(self.focus_form)
+        motor_layout.addWidget(self.objective_form)
         motor_layout.addWidget(self.outlet_form)
         motor_layout.addWidget(self.z_stage_form)
         main_layout.addLayout(motor_layout)
@@ -523,34 +523,34 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.xy_stage_form.setLayout(form_layout)
 
-    def init_focus_form(self):
-        self.focus_up = QtWidgets.QToolButton()
-        self.focus_up.setArrowType(QtCore.Qt.UpArrow)
-        self.focus_down = QtWidgets.QToolButton()
-        self.focus_down.setArrowType(QtCore.Qt.DownArrow)
-        self.focus_value = QtWidgets.QLineEdit()
-        self.focus_stop = QtWidgets.QPushButton('Stop')
-        self.focus_step_size = QtWidgets.QDoubleSpinBox()
+    def init_objective_form(self):
+        self.objective_up = QtWidgets.QToolButton()
+        self.objective_up.setArrowType(QtCore.Qt.UpArrow)
+        self.objective_down = QtWidgets.QToolButton()
+        self.objective_down.setArrowType(QtCore.Qt.DownArrow)
+        self.objective_value = QtWidgets.QLineEdit()
+        self.objective_stop = QtWidgets.QPushButton('Stop')
+        self.objective_step_size = QtWidgets.QDoubleSpinBox()
 
-        self.focus_step_size.setSuffix(" µm")
-        self.focus_step_size.setValue(5)
+        self.objective_step_size.setSuffix(" µm")
+        self.objective_step_size.setValue(5)
 
         form_layout = QtWidgets.QFormLayout()
-        form_layout.addWidget(self.focus_value)
+        form_layout.addWidget(self.objective_value)
         col_one = QtWidgets.QVBoxLayout()
         col_one.addSpacing(10)
-        col_one.addWidget(self.focus_up)
-        col_one.addWidget(self.focus_down)
+        col_one.addWidget(self.objective_up)
+        col_one.addWidget(self.objective_down)
         col_one.addSpacing(10)
         row = QtWidgets.QHBoxLayout()
         row.addStretch()
         row.addLayout(col_one)
         row.addStretch()
         form_layout.addRow(row)
-        form_layout.addWidget(self.focus_step_size)
-        form_layout.addWidget(self.focus_stop)
+        form_layout.addWidget(self.objective_step_size)
+        form_layout.addWidget(self.objective_stop)
 
-        self.focus_form.setLayout(form_layout)
+        self.objective_form.setLayout(form_layout)
 
     def init_outlet_form(self):
         self.outlet_up = QtWidgets.QToolButton()
@@ -701,6 +701,9 @@ class RunScreen(QtWidgets.QMainWindow):
 
     def init_stop_form(self):
         self.all_stop = QtWidgets.QPushButton('STOP')
+
+        self.all_stop.setFixedHeight(50)
+        self.all_stop.setFixedWidth(200)
 
         form_layout = QtWidgets.QFormLayout()
         col = QtWidgets.QVBoxLayout()
