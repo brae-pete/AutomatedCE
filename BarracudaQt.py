@@ -3,9 +3,9 @@ import sys
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
-import qtmodern.styles
-import qtmodern.windows
-import qdarkstyle
+# import qtmodern.styles
+# import qtmodern.windows
+# import qdarkstyle
 import numpy as np
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 import matplotlib.pyplot as plt
