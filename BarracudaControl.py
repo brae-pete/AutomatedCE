@@ -943,7 +943,10 @@ class SequenceScreenController:
 
 class RunScreenController:
     _stop = threading.Event()
-    _update_delay = 0.15
+    _update_delay = 0.25
+
+    _stop.set()
+    _stop.clear()
 
     def __init__(self, screen, hardware, repository):
         self.screen = screen
@@ -955,10 +958,13 @@ class RunScreenController:
 
     def _set_callbacks(self):
         if self.hardware.xy_stage_control:
+            # fixme set callbacks for arrow keys? Create a checkbox in the xy form box
             self.screen.xy_up.released.connect(lambda: self.set_y(step=self.screen.xy_step_size.value()))
             self.screen.xy_down.released.connect(lambda: self.set_y(step=-self.screen.xy_step_size.value()))
             self.screen.xy_right.released.connect(lambda: self.set_x(step=self.screen.xy_step_size.value()))
             self.screen.xy_left.released.connect(lambda: self.set_x(step=-self.screen.xy_step_size.value()))
+            self.screen.xy_x_value.selected.connect(lambda: self._value_display_interact())
+            self.screen.xy_y_value.selected.connect(lambda: self._value_display_interact())
             self.screen.xy_x_value.returnPressed.connect(lambda: self.set_x(x=float(self.screen.xy_x_value.text())))
             self.screen.xy_y_value.returnPressed.connect(lambda: self.set_y(y=float(self.screen.xy_y_value.text())))
             self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
@@ -970,12 +976,14 @@ class RunScreenController:
             self.screen.objective_down.released.connect(lambda: self.set_objective(step=-self.screen.objective_step_size.value()))
             self.screen.objective_value.returnPressed.connect(lambda: self.set_objective(height=float(self.screen.objective_value.text())))
             self.screen.objective_stop.released.connect(lambda: self.stop_objective())
+            self.screen.objective_value.selected.connect(lambda: self._value_display_interact())
 
         if self.hardware.outlet_control:
             self.screen.outlet_up.released.connect(lambda: self.set_outlet(step=self.screen.outlet_step_size.value()))
             self.screen.outlet_down.released.connect(lambda: self.set_outlet(step=-self.screen.outlet_step_size.value()))
             self.screen.outlet_value.returnPressed.connect(lambda: self.set_outlet(height=float(self.screen.outlet_value.text())))
             self.screen.outlet_stop.released.connect(lambda: self.stop_outlet())
+            self.screen.outlet_value.selected.connect(lambda: self._value_display_interact())
 
             self.screen.pressure_value.valueChanged.connect(lambda: self.set_pressure(value=float(self.screen.pressure_value.text())))
             self.screen.pressure_rinse.released.connect(lambda: self.rinse_pressure())
@@ -986,6 +994,7 @@ class RunScreenController:
             self.screen.z_down.released.connect(lambda: self.set_z(step=-self.screen.z_step_size.value()))
             self.screen.z_value.returnPressed.connect(lambda: self.set_z(height=float(self.screen.z_value.text())))
             self.screen.z_stop.released.connect(lambda: self.stop_z_stage())
+            self.screen.z_value.selected.connect(lambda: self._value_display_interact())
 
         if self.hardware.laser_control:
             self.screen.laser_pfn.valueChanged.connect(lambda: self.set_pfn(value=self.screen.laser_pfn.value()))
@@ -1028,10 +1037,20 @@ class RunScreenController:
 
         threading.Thread(target=self._update_stages).start()
 
+    def _value_display_interact(self):
+        if self._stop.is_set():
+            self._stop.clear()
+        else:
+            self._stop.set()
+
     def _update_stages(self):
         while True:
             if self._stop.is_set():
-                return
+                print('stopped')
+                time.sleep(self._update_delay*4)
+                continue
+
+            print('updating')
 
             if self.hardware.xy_stage_control:
                 prev = self.hardware.xy_stage_control.position
@@ -1069,10 +1088,28 @@ class RunScreenController:
         pass
 
     def set_x(self, x=None, step=None):
-        pass
+        if step:
+            self.hardware.xy_stage_control.set_rel_x(step)
+        elif x:
+            self.hardware.xy_stage_control.set_x(x)
+
+        value = self.hardware.xy_stage_control.read_xy()
+        self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+
+        if self._stop.is_set():
+            self._stop.clear()
 
     def set_y(self, y=None, step=None):
-        pass
+        if step:
+            self.hardware.xy_stage_control.set_rel_y(step)
+        elif y:
+            self.hardware.xy_stage_control.set_y(y)
+
+        value = self.hardware.xy_stage_control.read_xy()
+        self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+
+        if self._stop.is_set():
+            self._stop.clear()
 
     def set_z(self, height=None, step=None):
         pass

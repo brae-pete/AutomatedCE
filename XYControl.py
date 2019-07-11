@@ -45,7 +45,7 @@ class XYControl:
     to maintain the outputs for each method."""
     scale = 1000
     x_inversion = 1
-    y_inversion = -1
+    y_inversion = 1
 
     def __init__(self, home=True, lock=-1):
         logging.info("{} IS LOCK {} IS HOME".format(lock, home))
@@ -124,6 +124,39 @@ class XYControl:
         pos = self.read_xy()
         with self.lock:
             self.mmc.setXYPosition(self.stageID, pos[0]*self.scale, y)
+
+    def set_rel_xy(self, xy):
+        # setRelativeXYPosition()
+        if self.home:
+            self.position = xy
+            return
+        pos = xy[:]
+        pos[0] *= self.x_inversion
+        pos[1] *= self.y_inversion
+        pos = [x * self.scale for x in pos]
+        logging.info("{} is XY MOVE".format(pos))
+
+        with self.lock:
+            self.mmc.setRelativeXYPosition(self.stageID, pos[0], pos[1])
+
+    def set_rel_x(self, x):
+        if self.home:
+            self.position = [0, 0]
+            return
+        x = x * self.scale
+        with self.lock:
+            self.mmc.setRelativeXYPosition(self.stageID, x, 0)
+
+    def set_rel_y(self, y):
+        if self.home:
+            self.position = [0, 0]
+            return
+        y = y * self.scale
+        with self.lock:
+            logging.info('y')
+            logging.info(y)
+            logging.info(0)
+            self.mmc.setRelativeXYPosition(self.stageID, 0, y)
 
     def set_origin(self):
         """Redefines current position as Origin. Calls XYControl.read_xy after reset"""

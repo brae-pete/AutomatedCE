@@ -148,8 +148,6 @@ class OpticsFocusZStage:
         except IndexError:
             return self.pos
 
-        logging.info(response)
-
         response = response.strip('\n'.encode())
         response = response.split('\r'.encode())[-1]
 
@@ -167,11 +165,11 @@ class OpticsFocusZStage:
         elif response == b"":
             return self.pos
         else:
-            logging.info(response)
+            # logging.info(response)
             try:
                 position = self.steps_to_mm(int(response[1:]))
                 self.pos = position
-                logging.info("{} POSITION {} RESPONSE".format(position, response[1:]))
+                # logging.info("{} POSITION {} RESPONSE".format(position, response[1:]))
             except ValueError:
                 position = self.pos
         return position

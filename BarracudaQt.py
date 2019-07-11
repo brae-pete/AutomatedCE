@@ -474,8 +474,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.xy_left.setArrowType(QtCore.Qt.LeftArrow)
         self.xy_right = QtWidgets.QToolButton()
         self.xy_right.setArrowType(QtCore.Qt.RightArrow)
-        self.xy_x_value = QtWidgets.QLineEdit()
-        self.xy_y_value = QtWidgets.QLineEdit()
+        self.xy_x_value = ValueDisplay()
+        self.xy_y_value = ValueDisplay()
         self.xy_step_size = QtWidgets.QDoubleSpinBox()
         self.xy_origin = QtWidgets.QPushButton('Origin')
         self.xy_set_origin = QtWidgets.QPushButton('Set Origin')
@@ -528,7 +528,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.objective_up.setArrowType(QtCore.Qt.UpArrow)
         self.objective_down = QtWidgets.QToolButton()
         self.objective_down.setArrowType(QtCore.Qt.DownArrow)
-        self.objective_value = QtWidgets.QLineEdit()
+        self.objective_value = ValueDisplay()
         self.objective_stop = QtWidgets.QPushButton('Stop')
         self.objective_step_size = QtWidgets.QDoubleSpinBox()
 
@@ -557,7 +557,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.outlet_up.setArrowType(QtCore.Qt.UpArrow)
         self.outlet_down = QtWidgets.QToolButton()
         self.outlet_down.setArrowType(QtCore.Qt.DownArrow)
-        self.outlet_value = QtWidgets.QLineEdit()
+        self.outlet_value = ValueDisplay()
         self.outlet_stop = QtWidgets.QPushButton('Stop')
         self.outlet_step_size = QtWidgets.QDoubleSpinBox()
 
@@ -586,7 +586,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.z_up.setArrowType(QtCore.Qt.UpArrow)
         self.z_down = QtWidgets.QToolButton()
         self.z_down.setArrowType(QtCore.Qt.DownArrow)
-        self.z_value = QtWidgets.QLineEdit()
+        self.z_value = ValueDisplay()
         self.z_stop = QtWidgets.QPushButton('Stop')
         self.z_step_size = QtWidgets.QDoubleSpinBox()
 
@@ -1158,6 +1158,20 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
         if not self.joystick:
             super(GraphicsScene, self).mouseReleaseEvent(event)
 
+
+class ValueDisplay(QtWidgets.QLineEdit):
+    selected = QtCore.pyqtSignal()
+
+    def __init__(self):
+        super(ValueDisplay, self).__init__()
+
+    def focusInEvent(self, QFocusEvent):
+        self.selected.emit()
+        super(ValueDisplay, self).focusInEvent(QFocusEvent)
+
+    def focusOutEvent(self, QFocusEvent):
+        self.selected.emit()
+        super(ValueDisplay, self).focusOutEvent(QFocusEvent)
 
 class WidgetContainer(QtWidgets.QWidget):
     def __init__(self):
