@@ -943,7 +943,8 @@ class SequenceScreenController:
 
 class RunScreenController:
     _stop = threading.Event()
-    _update_delay = 0.25
+    _update_delay = 0.125
+    _xy_step_size = 1/1000  # µm
 
     _stop.set()
     _stop.clear()
@@ -1046,11 +1047,8 @@ class RunScreenController:
     def _update_stages(self):
         while True:
             if self._stop.is_set():
-                print('stopped')
-                time.sleep(self._update_delay*4)
+                time.sleep(4*self._update_delay)
                 continue
-
-            print('updating')
 
             if self.hardware.xy_stage_control:
                 prev = self.hardware.xy_stage_control.position
@@ -1089,7 +1087,7 @@ class RunScreenController:
 
     def set_x(self, x=None, step=None):
         if step:
-            self.hardware.xy_stage_control.set_rel_x(step)
+            self.hardware.xy_stage_control.set_rel_x(step*self._xy_step_size)
         elif x:
             self.hardware.xy_stage_control.set_x(x)
 
@@ -1101,7 +1099,7 @@ class RunScreenController:
 
     def set_y(self, y=None, step=None):
         if step:
-            self.hardware.xy_stage_control.set_rel_y(step)
+            self.hardware.xy_stage_control.set_rel_y(step*self._xy_step_size)
         elif y:
             self.hardware.xy_stage_control.set_y(y)
 
@@ -1112,7 +1110,13 @@ class RunScreenController:
             self._stop.clear()
 
     def set_z(self, height=None, step=None):
-        pass
+        if step:
+            self.hardware.z_stage_control.set_rel_z(step)
+        elif height:
+            self.hardware.z_stage_control.set_z(height)
+
+        if self._stop.is_set():
+            self._stop.clear()
 
     def set_objective(self, height=None, step=None):
         pass

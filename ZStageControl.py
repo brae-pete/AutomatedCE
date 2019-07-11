@@ -61,14 +61,10 @@ class ZStageControl:
 
     def set_z(self, set_z, *args):
         """ set_z (absolute position in mm)
-        User requests in mmm absolute distance to go
         returns False if unable to set_z, True if command went through
         """
-        print(args, set_z)
         with self.lock:
-            print("Hey  There")
             if self.home:
-                print("Hi")
                 self.pos = set_z
                 return True
 
@@ -76,9 +72,22 @@ class ZStageControl:
             response = self.stage.get_z()
             if response == type(str):
                 return False
-            logging.info(type(set_z))
-            logging.info(type(self.pos))
+
             set_z = set_z - self.pos
+            self.stage.go_z(set_z)
+        return True
+
+    def set_rel_z(self, set_z):
+        with self.lock:
+            if self.home:
+                self.pos = set_z
+                return True
+
+            # check if stage is busy
+            response = self.stage.get_z()
+            if response == type(str):
+                return False
+
             self.stage.go_z(set_z)
         return True
 
@@ -176,13 +185,13 @@ class OpticsFocusZStage:
 
     def go_z(self, mm_to_travel):
         steps = self.mm_to_steps(mm_to_travel)
-        self.serial.write("X{:+d}\r".format(steps))
+        self.serial.write("X{:+d}\r".format(steps).encode())
 
     def go_home(self):
-        self.serial.write("HX0\r")
+        self.serial.write("HX0\r".encode())
 
     def stop(self):
-        self.serial.write("S\r")
+        self.serial.write("S\r".encode())
 
     def set_speed(self, mm_per_sec):
         if mm_per_sec > 10:
@@ -190,7 +199,7 @@ class OpticsFocusZStage:
         elif mm_per_sec < 0:
             mm_per_sec = 0
         speed = int(round(mm_per_sec / 10 * 255))
-        self.serial.write("V{:d}\r".format(speed))
+        self.serial.write("V{:d}\r".format(speed).encode())
         return
 
     def reset(self):

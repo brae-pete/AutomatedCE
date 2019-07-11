@@ -1173,6 +1173,7 @@ class ValueDisplay(QtWidgets.QLineEdit):
         self.selected.emit()
         super(ValueDisplay, self).focusOutEvent(QFocusEvent)
 
+
 class WidgetContainer(QtWidgets.QWidget):
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
