@@ -140,7 +140,7 @@ class OpticsFocusZStage:
         return steps * pulse_eq
 
     def get_z(self):
-        self.serial.write("?X\r")
+        self.serial.write("?X\r".encode())
         response = self.serial.readlines()
         # logging.info("Z_STAGE RESPONSE {}".format(response))
         try:
@@ -148,28 +148,30 @@ class OpticsFocusZStage:
         except IndexError:
             return self.pos
 
-        response = response.strip('\n')
-        response = response.split('\r')[-1]
+        logging.info(response)
 
-        if response == "ERR5":
+        response = response.strip('\n'.encode())
+        response = response.split('\r'.encode())[-1]
+
+        if response == b"ERR5":
             logging.info("Z Stage cant go lower")
             self.reset()
             return "Err5"
-        elif response == "ERR2":
+        elif response == b"ERR2":
             self.reset()
             return "Err2"
-        elif response == "ERR1":
+        elif response == b"ERR1":
             logging.info("Time out to Z Stage")
             self.reset()
             return "Err1"
-        elif response == "":
+        elif response == b"":
             return self.pos
         else:
-            # logging.info(response)
+            logging.info(response)
             try:
                 position = self.steps_to_mm(int(response[1:]))
                 self.pos = position
-            # logging.info("{} POSITION {} RESPONSE".format(position,response[1:]))
+                logging.info("{} POSITION {} RESPONSE".format(position, response[1:]))
             except ValueError:
                 position = self.pos
         return position
@@ -196,7 +198,7 @@ class OpticsFocusZStage:
     def reset(self):
         self.serial.close()
         self.serial.open()
-        self.serial.write("?R\r")
+        self.serial.write("?R\r".encode())
         response = self.serial.readlines()
         logging.info(response)
 

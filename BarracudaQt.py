@@ -92,7 +92,8 @@ class MainTabBar(QtWidgets.QTabBar):
     def __init__(self):
         QtWidgets.QTabBar.__init__(self)
         if CUSTOM:
-            self.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                self.setStyleSheet(qss.read())
 
 
 class GettingStartedScreen(QtWidgets.QMainWindow):
@@ -237,7 +238,8 @@ class InsertScreen(QtWidgets.QMainWindow):
 
         self.insert_tool_bar.setMovable(True)
         if CUSTOM:
-            self.insert_tool_bar.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                self.insert_tool_bar.setStyleSheet(qss.read())
 
     def init_graphics_view(self):
         self.pixel_map = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
@@ -827,7 +829,8 @@ class AlteredTabWidget(QtWidgets.QTabWidget):
         QtWidgets.QTabWidget.__init__(self, *args, **kwargs)
         self.setTabBar(AlteredTabBar(self))
         if CUSTOM:
-            self.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                self.setStyleSheet(qss.read())
         self.setTabPosition(QtWidgets.QTabWidget.West)
 
 
@@ -1157,7 +1160,8 @@ class WidgetContainer(QtWidgets.QWidget):
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
         if CUSTOM:
-            self.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                self.setStyleSheet(qss.read())
 
 
 # fixme just beams code
@@ -1211,7 +1215,8 @@ class RunPlot(FigureCanvas):
 def wrap_widget(widget):
     wrapper_widget = QtWidgets.QFrame()
     if CUSTOM:
-        wrapper_widget.setStyleSheet(open("style.qss", "r").read())
+        with open("style.qss", "r") as qss:
+            wrapper_widget.setStyleSheet(qss.read())
     wrapper_widget.setObjectName('WRAPPER')
     v_l = QtWidgets.QVBoxLayout()
     h_l = QtWidgets.QHBoxLayout()
@@ -1244,28 +1249,32 @@ class LoadNewMainWidget(AlteredTabWidget):
         pushButton1 = QtWidgets.QPushButton("                   Data")
         pushButton1.setObjectName('MAIN')
         if CUSTOM:
-            pushButton1.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                pushButton1.setStyleSheet(qss.read())
         pushButton1.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "graph.png")))
         pushButton1.setIconSize(QtCore.QSize(48, 48))
 
         pushButton2 = QtWidgets.QPushButton("                   Method")
         pushButton2.setObjectName('MAIN')
         if CUSTOM:
-            pushButton2.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                pushButton2.setStyleSheet(qss.read())
         pushButton2.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "meter.png")))
         pushButton2.setIconSize(QtCore.QSize(48, 48))
 
         pushButton3 = QtWidgets.QPushButton("                   Insert")
         pushButton3.setObjectName('MAIN')
         if CUSTOM:
-            pushButton3.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                pushButton3.setStyleSheet(qss.read())
         pushButton3.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "plastic.png")))
         pushButton3.setIconSize(QtCore.QSize(48, 48))
 
         pushButton4 = QtWidgets.QPushButton("                   Sequence")
         pushButton4.setObjectName('MAIN')
         if CUSTOM:
-            pushButton4.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                pushButton4.setStyleSheet(qss.read())
         pushButton4.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "tick.png")))
         pushButton4.setIconSize(QtCore.QSize(48, 48))
 
@@ -1292,28 +1301,32 @@ class LoadNewMainWidget(AlteredTabWidget):
         pushButton5 = QtWidgets.QPushButton("                   Data")
         pushButton5.setObjectName('MAIN')
         if CUSTOM:
-            pushButton5.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                pushButton5.setStyleSheet(qss.read())
         pushButton5.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "graph.png")))
         pushButton5.setIconSize(QtCore.QSize(48, 48))
 
         pushButton6 = QtWidgets.QPushButton("                   Method")
         pushButton6.setObjectName('MAIN')
         if CUSTOM:
-            pushButton6.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                pushButton6.setStyleSheet(qss.read())
         pushButton6.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "meter.png")))
         pushButton6.setIconSize(QtCore.QSize(48, 48))
 
         pushButton7 = QtWidgets.QPushButton("                   Insert")
         pushButton7.setObjectName('MAIN')
         if CUSTOM:
-            pushButton7.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                pushButton7.setStyleSheet(qss.read())
         pushButton7.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "plastic.png")))
         pushButton7.setIconSize(QtCore.QSize(48, 48))
 
         pushButton8 = QtWidgets.QPushButton("                   Sequence")
         pushButton8.setObjectName('MAIN')
         if CUSTOM:
-            pushButton8.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                pushButton8.setStyleSheet(qss.read())
         pushButton8.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "tick.png")))
         pushButton8.setIconSize(QtCore.QSize(48, 48))
 
@@ -1342,7 +1355,8 @@ class SystemSelectionWidget(AlteredTabWidget):
     def __init__(self):
         AlteredTabWidget.__init__(self)
         if CUSTOM:
-            self.setStyleSheet(open("style.qss", "r").read())
+            with open("style.qss", "r") as qss:
+                self.setStyleSheet(qss.read())
 
         tab1 = QtWidgets.QWidget()
 

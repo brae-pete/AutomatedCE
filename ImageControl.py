@@ -77,7 +77,8 @@ class ImageControl:
                 img = pilImage.fromarray(img)
             return img
 
-    def image_conversion(self,img):
+    @staticmethod
+    def image_conversion(img):
         """ Adjusts the contrast and brightness"""
         equ = cv2.equalizeHist(img)
         return equ

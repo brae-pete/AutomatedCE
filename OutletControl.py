@@ -19,11 +19,14 @@ class OutletControl():
         self.pos = 0
         self.have_arduino = True
         self.arduino = arduino
+
         if arduino == -1:
             self.check = False
             self.arduino = ArduinoBase.ArduinoBase(self.com, self.home)
+
         if lock == -1:
             lock = threading.Lock()
+
         self.lock = lock
         return
 
@@ -43,7 +46,8 @@ class OutletControl():
                 if len(args) > 0:
                     self.pos = args[0]
                 return self.pos
-            self.pos = -self.arduino.read_outlet_z()
+            response = self.arduino.read_outlet_z()
+            self.pos = -response[0]
         return self.pos
 
     def setZ(self, setZ, *args):

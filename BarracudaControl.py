@@ -4,6 +4,7 @@ import os
 import pickle
 import threading
 import random
+import logging
 
 # GUI Framework
 import BarracudaQt
@@ -33,7 +34,7 @@ HOME = False
 # Possible Model Classes
 class BarracudaSystem:
     _z_stage_com = "COM4"
-    _outlet_com = "COM9"
+    _outlet_com = "COM7"
     _daq_dev = "/Dev1/"
     _z_stage_lock = threading.Lock()
     _outlet_lock = threading.Lock()
@@ -51,9 +52,10 @@ class BarracudaSystem:
 
     def start_system(self, live_feed=True):
         # self.z_stage_control = ZStageControl.ZStageControl(self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        # self.outlet_control = OutletControl.OutletControl(self._outlet_com, lock=self._outlet_lock, home=HOME)
-        self.image_control = ImageControl.ImageControl(home=HOME)
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
+        self.outlet_control = OutletControl.OutletControl(self._outlet_com, lock=self._outlet_lock, home=HOME)
+
+        # self.image_control = ImageControl.ImageControl(home=HOME)
+        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
 
         self.start_daq()
@@ -928,6 +930,7 @@ class RunScreenController:
         self.hardware = hardware
         self.repository = repository
 
+        self._init_current_values()
         self._set_callbacks()
 
     def _set_callbacks(self):
@@ -978,6 +981,15 @@ class RunScreenController:
         self.screen.stop_sequence.released.connect(lambda: self.end_sequence())
         self.screen.add_method.released.connect(lambda: self.add_method())
         self.screen.remove_method.released.connect(lambda: self.remove_method())
+
+    def _init_current_values(self):
+        # xy = self.hardware.xy_stage_control.readXY()
+        # logging.info(xy)
+        #
+        z = self.hardware.outlet_control.readZ()
+        logging.info(z)
+
+        # outlet = self.hardware.outlet_control.readZ()
 
     def set_origin(self):
         pass
@@ -1046,6 +1058,11 @@ class RunScreenController:
         self.stop_outlet()
         self.stop_pressure()
 
+        # fixme
+        # self.hardware.xy_stage_control.close()
+        # self.hardware.image_control.close()
+        # sys.exit()
+
     def rinse_pressure(self):
         pass
 
@@ -1072,6 +1089,7 @@ class RunScreenController:
 
     def end_sequence(self):
         pass
+
 
 class DataScreenController:
     def __init__(self, screen, hardware, repository):
