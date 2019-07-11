@@ -35,7 +35,7 @@ def serial_ports():
 ser2 = serial.Serial()
 
 
-def quickTest(com):
+def quick_test(com):
     ser2.timeout = 1
     ser2.port = com
     ser2.open()
@@ -47,4 +47,4 @@ def quickTest(com):
 
 if __name__ == '__main__':
     print(serial_ports())
-    quickTest("COM4")
+    quick_test("COM4")
