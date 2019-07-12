@@ -1219,6 +1219,7 @@ class RunScreenController:
         self.hardware.daq_board_control.change_voltage(0)
 
     def stop_all(self):
+        # fixme, write a nested function in here for each device.
         logging.warning('Emergency stop on all hardware devices.')
         # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
         if self.hardware.laser_control:
@@ -1243,13 +1244,22 @@ class RunScreenController:
         logging.info(open)
 
     def fire_laser(self):
-        pass
+        pfn = self.screen.laser_pfn.value()
+        attenuation = self.screen.laser_attenuation.value()
+
+        set_bool = self.hardware.laser_control.set_parameters(pfn, attenuation, 2)  # fixme, add mode
+
+        if not set_bool:
+            logging.warning('Laser firing canceled.')
+            return
+
+        self.hardware.laser_control.fire()
 
     def voltage_on(self):
         pass
 
     def laser_on(self):
-        self.hardware.laser_control.start_system()
+        self.hardware.laser_control.start()
 
     def add_method(self):
         pass
@@ -1267,7 +1277,8 @@ class RunScreenController:
         pass
 
     def clear_output_window(self):
-        pass
+        self.log_handler.widget.clear()
+        logging.info('System Updates')
 
     def save_output_window(self):
         pass

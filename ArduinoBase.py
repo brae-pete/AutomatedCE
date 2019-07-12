@@ -1,4 +1,4 @@
-import serial
+import serial  # PySerial
 import serial.tools.list_ports
 import random
 import logging
