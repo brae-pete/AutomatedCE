@@ -78,8 +78,8 @@ class ArduinoBase:
         try:
             response = response[-1]
         except IndexError:
-            # logging.info("Index Error Outlet Response: {}".format(response))
-            # logging.info("If error persists, check Serial communication")
+            logging.info("Index Error Outlet Response: {}".format(response))
+            logging.info("If error persists, check Serial communication")
             self.reset()
             time.sleep(2)
             self.check_status()

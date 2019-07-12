@@ -153,9 +153,6 @@ class XYControl:
             return
         y = y * self.scale
         with self.lock:
-            logging.info('y')
-            logging.info(y)
-            logging.info(0)
             self.mmc.setRelativeXYPosition(self.stageID, 0, y)
 
     def set_origin(self):

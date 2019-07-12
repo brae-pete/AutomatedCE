@@ -1,5 +1,6 @@
 import threading
 import ArduinoBase
+import logging
 
 
 class OutletControl:
@@ -63,11 +64,15 @@ class OutletControl:
         return True
 
     def set_rel_z(self, set_z):
+        pos = self.read_z()
+        # logging.info(pos)
+        # logging.info(set_z)
+        # logging.info(-set_z + pos)
         with self.lock:
             if self.home:
                 self.pos = set_z
                 return
-            self.arduino.set_outlet_z(-set_z)
+            self.arduino.set_outlet_z(-(set_z + pos))
         return True
 
     def set_speed(self, speed):

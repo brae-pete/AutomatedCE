@@ -483,6 +483,7 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.xy_step_size.setSuffix(" µm")
         self.xy_step_size.setValue(50)
+        self.xy_step_size.setMaximum(100000)
 
         form_layout = QtWidgets.QFormLayout()
         row_outer = QtWidgets.QHBoxLayout()
@@ -562,7 +563,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.outlet_step_size = QtWidgets.QDoubleSpinBox()
 
         self.outlet_step_size.setSuffix(" mm")
-        self.outlet_step_size.setValue(25)
+        self.outlet_step_size.setValue(1)
 
         form_layout = QtWidgets.QFormLayout()
         form_layout.addWidget(self.outlet_value)
@@ -591,7 +592,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.z_step_size = QtWidgets.QDoubleSpinBox()
 
         self.z_step_size.setSuffix(" mm")
-        self.z_step_size.setValue(25)
+        self.z_step_size.setValue(3)
 
         form_layout = QtWidgets.QFormLayout()
         col_one = QtWidgets.QVBoxLayout()
@@ -611,15 +612,11 @@ class RunScreen(QtWidgets.QMainWindow):
         self.z_stage_form.setLayout(form_layout)
 
     def init_pressure_form(self):
-        self.pressure_value = QtWidgets.QDoubleSpinBox()
         self.pressure_rinse = QtWidgets.QPushButton('Rinse')
         self.pressure_off = QtWidgets.QPushButton('Stop')
 
-        self.pressure_value.setSuffix(" psi")
-
         form_layout = QtWidgets.QFormLayout()
         row_one = QtWidgets.QHBoxLayout()
-        row_one.addWidget(self.pressure_value)
         row_one.addWidget(self.pressure_rinse)
         row_one.addWidget(self.pressure_off)
         form_layout.addRow(row_one)

@@ -2,6 +2,7 @@ import threading
 import ArduinoBase
 import pickle
 import logging
+import dos2unix
 
 
 class ObjectiveControl:
@@ -68,6 +69,7 @@ class ObjectiveControl:
 
     def load_history(self):
         try:
+            dos2unix.dos2unix("ObjectiveHistory.p", "ObjectiveHistory.p")
             with open("ObjectiveHistory.p", "rb") as fin:
                 logging.info(fin)
                 data = pickle.load(fin)
@@ -98,12 +100,22 @@ class ObjectiveControl:
                 return
             go_to = self.inversion*(set_z-self.offset)
             self.arduino.set_objective_z(go_to)
-            logging.warning("set_z:{} offset:{}  pos:{}".format(set_z, self.offset, self.pos))
-            logging.warning(self.inversion*(set_z-self.offset))
+            # logging.warning("set_z:{} offset:{}  pos:{}".format(set_z, self.offset, self.pos))
+            # logging.warning(self.inversion*(set_z-self.offset))
         return True
 
-    def set_rel_z(self):
-        pass
+    def set_rel_z(self, set_z):
+        pos = self.read_z()
+
+        with self.lock:
+            if self.home:
+                self.pos = set_z
+                return
+            go_to = self.inversion * (set_z - self.offset + pos)
+            self.arduino.set_objective_z(go_to)
+            # logging.warning("set_z:{} offset:{}  pos:{}".format(set_z, self.offset, self.pos))
+            # logging.warning(self.inversion * (set_z - self.offset - pos))
+        return True
 
     def stop_z(self):
         """ Stops the objective motor where it is at. """

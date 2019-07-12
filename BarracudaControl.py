@@ -990,7 +990,6 @@ class RunScreenController:
             self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
 
-            self.screen.pressure_value.valueChanged.connect(lambda: self.set_pressure(value=float(self.screen.pressure_value.text())))
             self.screen.pressure_rinse.released.connect(lambda: self.rinse_pressure())
             self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
 
@@ -1044,6 +1043,7 @@ class RunScreenController:
         threading.Thread(target=self._update_stages).start()
 
     def _value_display_interact(self, selected=False):
+        logging.info(selected)
         if selected:
             self._stop.set()
         else:
@@ -1125,9 +1125,12 @@ class RunScreenController:
 
     def set_objective(self, height=None, step=None):
         if step:
-            pass
+            self.hardware.objective_control.set_rel_z(step)
         elif height:
-            pass
+            self.hardware.objective_control.set_z(height)
+
+        if self._stop.is_set():
+            self._stop.clear()
 
     def set_outlet(self, height=None, step=None):
         if step:
@@ -1137,9 +1140,6 @@ class RunScreenController:
 
         if self._stop.is_set():
             self._stop.clear()
-
-    def set_pressure(self, value=None):
-        pass
 
     def set_voltage(self, value=None):
         pass
