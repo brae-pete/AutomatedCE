@@ -22,6 +22,7 @@ import XYControl
 import ZStageControl
 import ObjectiveControl
 import LaserControl
+import PressureControl
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -41,6 +42,7 @@ class BaseSystem:
         self.xy_stage_control = None
         self.daq_board_control = None
         self.laser_control = None
+        self.pressure_control = None
 
     def start_system(self):
         pass
@@ -54,11 +56,13 @@ class BarracudaSystem(BaseSystem):
     _outlet_com = "COM7"
     _objective_com = "COM8"
     _laser_com = "COM6"
+    _pressure_com = "COM7"
     _daq_dev = "/Dev1/"
     _z_stage_lock = threading.Lock()
     _outlet_lock = threading.Lock()
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
+    _pressure_lock = threading.Lock()
 
     xy_stage_size = [112792, 64340]  # Rough size in mm
     xy_stage_upper_left = [112598, -214]  # Reading on stage controller when all the way to left and up (towards wall)
@@ -74,6 +78,7 @@ class BarracudaSystem(BaseSystem):
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
+        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
         self.start_daq()
 
@@ -990,7 +995,7 @@ class RunScreenController:
             self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
 
-            self.screen.pressure_rinse.released.connect(lambda: self.rinse_pressure())
+            self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.rinse_pressure())
             self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
 
         if self.hardware.z_stage_control:
@@ -1190,7 +1195,8 @@ class RunScreenController:
         sys.exit()
 
     def rinse_pressure(self):
-        pass
+        logging.info('Rinse')
+
 
     def fire_laser(self):
         pass
