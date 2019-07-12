@@ -1219,7 +1219,7 @@ class RunScreenController:
         self.hardware.daq_board_control.change_voltage(0)
 
     def stop_all(self):
-        logging.warning('Stopping all hardware devices.')
+        logging.warning('Emergency stop on all hardware devices.')
         # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
         if self.hardware.laser_control:
             self.stop_laser()
@@ -1249,7 +1249,7 @@ class RunScreenController:
         pass
 
     def laser_on(self):
-        pass
+        self.hardware.laser_control.start_system()
 
     def add_method(self):
         pass
