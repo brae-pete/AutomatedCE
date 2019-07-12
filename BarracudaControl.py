@@ -75,10 +75,10 @@ class BarracudaSystem(BaseSystem):
         self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         # self.image_control = ImageControl.ImageControl(home=HOME)
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
+        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
-        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
+        # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
         self.start_daq()
 
@@ -964,7 +964,7 @@ class RunScreenController:
         self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(self.log_handler)
         logging.getLogger().setLevel(logging.DEBUG)
-        logging.info('\t::System Updates::')
+        logging.info('System Updates')
 
         self._start_updating_display()
         self._set_callbacks()
@@ -985,6 +985,8 @@ class RunScreenController:
             self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
             self.screen.xy_origin.released.connect(lambda: self.origin())
             self.screen.xy_stop.released.connect(lambda: self.stop_xy_stage())
+        else:
+            self.screen.enable_xy_stage_form(False)
 
         if self.hardware.objective_control:
             self.screen.objective_up.released.connect(lambda: self.set_objective(step=self.screen.objective_step_size.value()))
@@ -993,6 +995,8 @@ class RunScreenController:
             self.screen.objective_stop.released.connect(lambda: self.stop_objective())
             self.screen.objective_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.objective_value.unselected.connect(lambda: self._value_display_interact(selected=False))
+        else:
+            self.screen.enable_objective_form(False)
 
         if self.hardware.outlet_control:
             self.screen.outlet_up.released.connect(lambda: self.set_outlet(step=self.screen.outlet_step_size.value()))
@@ -1001,6 +1005,8 @@ class RunScreenController:
             self.screen.outlet_stop.released.connect(lambda: self.stop_outlet())
             self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
+        else:
+            self.screen.enable_outlet_form(False)
 
         if self.hardware.pressure_control:
             self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.rinse_pressure(on=True))
@@ -1008,6 +1014,8 @@ class RunScreenController:
             self.screen.pressure_valve_state.positive_selected.connect(lambda: self.pressure_valve(open=True))
             self.screen.pressure_valve_state.negative_selected.connect(lambda: self.pressure_valve(open=False))
             self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
+        else:
+            self.screen.enable_pressure_form(False)
 
         if self.hardware.z_stage_control:
             self.screen.z_up.released.connect(lambda: self.set_z(step=self.screen.z_step_size.value()))
@@ -1016,6 +1024,8 @@ class RunScreenController:
             self.screen.z_stop.released.connect(lambda: self.stop_z_stage())
             self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.z_value.unselected.connect(lambda: self._value_display_interact(selected=False))
+        else:
+            self.screen.enable_z_stage_form(False)
 
         if self.hardware.laser_control:
             self.screen.laser_pfn.valueChanged.connect(lambda: self.set_pfn(value=self.screen.laser_pfn.value()))
@@ -1024,11 +1034,15 @@ class RunScreenController:
             self.screen.laser_fire.released.connect(lambda: self.fire_laser())
             self.screen.laser_standby.released.connect(lambda: self.laser_on())
             self.screen.laser_off.released.connect(lambda: self.stop_laser())
+        else:
+            self.screen.enable_laser_form(False)
 
         if self.hardware.daq_board_control:
             self.screen.voltage_value.valueChanged.connect(lambda: self.set_voltage(value=self.screen.voltage_value.value()))
             self.screen.voltage_on.released.connect(lambda: self.voltage_on())
             self.screen.voltage_off.released.connect(lambda: self.stop_voltage())
+        else:
+            self.screen.enable_voltage_form(False)
 
         self.screen.all_stop.released.connect(lambda: self.stop_all())
 
@@ -1160,46 +1174,63 @@ class RunScreenController:
     def set_voltage(self, value=None):
         pass
 
-    def set_pfn(self, value=None):
-        pass
+    def set_pfn(self, value):
+        self.hardware.laser_control.set_pfn(value)
 
-    def set_attenuation(self, value=None):
-        pass
+    def set_attenuation(self, value):
+        self.hardware.laser_control.set_attenuation(value)
 
-    def set_burst(self, count=None):
-        pass
+    def set_burst(self, count):
+        self.hardware.laser_control.set_burst(count)
 
     def stop_xy_stage(self):
         logging.warning('Stopping XY stage.')
+        self.hardware.xy_stage_control.stop()
 
     def stop_outlet(self):
         logging.warning('Stopping outlet motor.')
+        self.hardware.outlet_control.stop()
+        self.hardware.outlet_control.reset()
 
     def stop_objective(self):
         logging.warning('Stopping objective motor.')
+        self.hardware.objective_control.stop_z()
+        self.hardware.objective_control.reset()
 
     def stop_z_stage(self):
         logging.warning('Stopping Z stage.')
+        self.hardware.z_stage_control.stop()
+        self.hardware.z_stage_control.reset()
 
     def stop_pressure(self):
         logging.warning('Stopping pressure.')
+        self.hardware.pressure_control.stopRinsePressure()
 
     def stop_laser(self):
         logging.warning('Stopping laser.')
+        self.hardware.laser_control.stop()
 
     def stop_voltage(self):
         logging.warning('Stopping voltage.')
+        self.hardware.daq_board_control.change_voltage(0)
 
     def stop_all(self):
         logging.warning('Stopping all hardware devices.')
         # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
-        self.stop_laser()
-        self.stop_voltage()
-        self.stop_xy_stage()
-        self.stop_objective()
-        self.stop_z_stage()
-        self.stop_outlet()
-        self.stop_pressure()
+        if self.hardware.laser_control:
+            self.stop_laser()
+        if self.hardware.daq_board_control:
+            self.stop_voltage()
+        if self.hardware.xy_stage_control:
+            self.stop_xy_stage()
+        if self.hardware.objective_control:
+            self.stop_objective()
+        if self.hardware.z_stage_control:
+            self.stop_z_stage()
+        if self.hardware.outlet_control:
+            self.stop_outlet()
+        if self.hardware.pressure_control:
+            self.stop_pressure()
 
     def rinse_pressure(self, on=False):
         logging.info(on)

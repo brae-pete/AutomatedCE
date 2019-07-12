@@ -41,7 +41,6 @@ else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
 CONFIG_FILE = os.path.join(CONFIG_FOLDER, "PriorXY.cfg")
 
 logging.basicConfig(level=logging.DEBUG)
-logging.debug("This will be logged")
 
 total_width = 160
 total_height = 110
@@ -167,9 +166,9 @@ class XYControl:
 
     def set_origin(self):
         """Redefines current position as Origin. Calls XYControl.read_xy after reset"""
-        print("Home is ", self.home)
+        logging.info("Home is ", self.home)
         if self.home:
-            print("Set Origin as 0,0")
+            logging.info("Set Origin as 0,0")
             self.position = [0, 0]
             self.read_xy()
             return
@@ -180,7 +179,7 @@ class XYControl:
     def close(self):
         """Releases any communication ports that may be used"""
         if self.home:
-            print('XY Stage Released')
+            logging.info('XY Stage Released')
             return
         with self.lock:
             self.mmc.reset()
@@ -189,10 +188,17 @@ class XYControl:
         """ Resets the device in case of a communication error elsewhere """
         self.close()
         if self.home:
-            print("Device Re-Loaded")
+            logging.info("Device Re-Loaded")
             return
         with self.lock:
             self.mmc.loadSystemConfiguration(CONFIG_FILE)
+
+    def stop(self):
+        if self.home:
+            logging.info("Stopping Device")
+            return
+        with self.lock:
+            self.mmc.stop(self.stageID)
 
 
 if __name__ == '__main__':

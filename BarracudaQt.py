@@ -617,6 +617,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.pressure_rinse_state = SwitchButton(w1='On', w2='Off')
         self.pressure_valve_state = SwitchButton(w1='Open', w2='Closed', width=80)
 
+
         form_layout = QtWidgets.QFormLayout()
         row_one = QtWidgets.QHBoxLayout()
         row_one.addWidget(QtWidgets.QLabel('Rinse'))
@@ -633,7 +634,6 @@ class RunScreen(QtWidgets.QMainWindow):
     def init_laser_form(self):
         self.laser_pfn = QtWidgets.QSpinBox()
         self.laser_attenuation = QtWidgets.QSpinBox()
-        # self.laser_energy = QtWidgets.QSpinBox()
         self.laser_burst_count = QtWidgets.QSpinBox()
         self.laser_fire = QtWidgets.QPushButton('Fire')
         self.laser_off = QtWidgets.QPushButton('Stop')
@@ -645,7 +645,6 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_pfn.setFixedWidth(40)
         self.laser_attenuation.setFixedWidth(40)
         self.laser_burst_count.setFixedWidth(40)
-        # self.laser_off.setFixedWidth(60)
 
         self.laser_on_check.stateChanged.connect(lambda: self.enable_button(self.laser_standby, self.laser_on_check))
         self.laser_fire_check.stateChanged.connect(lambda: self.enable_button(self.laser_fire, self.laser_fire_check))
@@ -790,6 +789,61 @@ class RunScreen(QtWidgets.QMainWindow):
         live_feed_layour2.addWidget(self.image_view2)
 
         return live_feed_layour2
+
+    def enable_xy_stage_form(self, enabled):
+        self.xy_up.setEnabled(enabled)
+        self.xy_down.setEnabled(enabled)
+        self.xy_left.setEnabled(enabled)
+        self.xy_right.setEnabled(enabled)
+        self.xy_x_value.setEnabled(enabled)
+        self.xy_y_value.setEnabled(enabled)
+        self.xy_step_size.setEnabled(enabled)
+        self.xy_origin.setEnabled(enabled)
+        self.xy_set_origin.setEnabled(enabled)
+        self.xy_stop.setEnabled(enabled)
+
+    def enable_objective_form(self, enabled):
+        self.objective_up.setEnabled(enabled)
+        self.objective_down.setEnabled(enabled)
+        self.objective_value.setEnabled(enabled)
+        self.objective_stop.setEnabled(enabled)
+        self.objective_step_size.setEnabled(enabled)
+
+    def enable_outlet_form(self, enabled):
+        self.outlet_up.setEnabled(enabled)
+        self.outlet_down.setEnabled(enabled)
+        self.outlet_value.setEnabled(enabled)
+        self.outlet_stop.setEnabled(enabled)
+        self.outlet_step_size.setEnabled(enabled)
+
+    def enable_z_stage_form(self, enabled):
+        self.z_up.setEnabled(enabled)
+        self.z_down.setEnabled(enabled)
+        self.z_value.setEnabled(enabled)
+        self.z_stop.setEnabled(enabled)
+        self.z_step_size.setEnabled(enabled)
+
+    def enable_pressure_form(self, enabled):
+        self.pressure_off.setEnabled(enabled)
+        self.pressure_rinse_state.setEnabled(enabled)
+        self.pressure_valve_state.setEnabled(enabled)
+
+    def enable_laser_form(self, enabled):
+        self.laser_pfn.setEnabled(enabled)
+        self.laser_attenuation.setEnabled(enabled)
+        self.laser_burst_count.setEnabled(enabled)
+        self.laser_fire.setEnabled(enabled)
+        self.laser_off.setEnabled(enabled)
+        self.laser_timer.setEnabled(enabled)
+        self.laser_standby.setEnabled(enabled)
+        self.laser_on_check.setEnabled(enabled)
+        self.laser_fire_check.setEnabled(enabled)
+
+    def enable_voltage_form(self, enabled):
+        self.voltage_value.setEnabled(enabled)
+        self.voltage_off.setEnabled(enabled)
+        self.voltage_on.setEnabled(enabled)
+        self.voltage_on_check.setEnabled(enabled)
 
     @staticmethod
     def enable_button(button, checkbox):

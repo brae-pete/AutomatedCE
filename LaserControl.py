@@ -12,6 +12,7 @@ class Laser:
         self.serial.baudrate = baudrate
         self.serial.stopbits = stopbits
         self.serial.port = com
+
         if not home:
             self.serial.open()
 
@@ -56,103 +57,103 @@ class Laser:
         return response
 
     def check_status(self):
-        print('** LASER SYSTEM STATUS **\n')
+        logging.info('** LASER SYSTEM STATUS **\n')
         self.serial.write(self.commands['SYSTEM_STATUS']())
         response = self.read_buffer()
         if response == 'ok':
-            print('\t System OK!')
+            logging.info('\t System OK!')
             return
 
         response = '{:024b}'.format(int(response))
 
         is_not = 'not ' if response[23] == 1 else ''
-        print('\tThe coolant flow interlock is {}satisfied.'.format(is_not))
+        logging.info('\tThe coolant flow interlock is {}satisfied.'.format(is_not))
 
         is_not = '' if response[22] == 1 else 'not '
-        print('\tThe laser has {}overheated.'.format(is_not))
+        logging.info('\tThe laser has {}overheated.'.format(is_not))
 
         is_not = 'not ' if response[21] == 1 else ''
-        print('\tThe external interlock is {}satisfied.'.format(is_not))
+        logging.info('\tThe external interlock is {}satisfied.'.format(is_not))
 
         is_not = 'not ' if response[20] == 1 else ''
-        print('\tThe workpiece interlock is {}satisfied.'.format(is_not))
+        logging.info('\tThe workpiece interlock is {}satisfied.'.format(is_not))
 
         is_not = '' if response[19] == 1 else 'not '
-        print('\tThe laser power supply is {}enabled'.format(is_not))
+        logging.info('\tThe laser power supply is {}enabled'.format(is_not))
 
         is_not = '' if response[18] == 1 else 'not '
-        print('\tThe laser is {}firing.'.format(is_not))
+        logging.info('\tThe laser is {}firing.'.format(is_not))
 
         is_not = '' if response[17] == 1 else 'not '
-        print('\tThe laser is {}in its startup state.'.format(is_not))
+        logging.info('\tThe laser is {}in its startup state.'.format(is_not))
 
         is_not = '' if response[16] == 1 else 'not '
-        print('\tThe laser is {}in RS232 Mode'.format(is_not))
+        logging.info('\tThe laser is {}in RS232 Mode'.format(is_not))
 
         is_not = '' if response[15] == 1 else 'not '
-        print('\tThe Q-Switch is {}set to external trigger mode.'.format(is_not))
+        logging.info('\tThe Q-Switch is {}set to external trigger mode.'.format(is_not))
 
         is_not = '' if response[14] == 1 else 'not '
-        print('\tThe flashlamp is {}set to external trigger mode.'.format(is_not))
+        logging.info('\tThe flashlamp is {}set to external trigger mode.'.format(is_not))
 
         is_not = '' if response[13] == 1 else 'not '
-        print('\tThe laser is {}in single-shot mode.'.format(is_not))
+        logging.info('\tThe laser is {}in single-shot mode.'.format(is_not))
 
         is_not = '' if response[12] == 1 else 'not '
-        print('\tThe laser is {}in continuous fire mode.'.format(is_not))
+        logging.info('\tThe laser is {}in continuous fire mode.'.format(is_not))
 
         is_not = '' if response[11] == 1 else 'not '
-        print('\tThe laser is {}in burst fire mode.'.format(is_not))
+        logging.info('\tThe laser is {}in burst fire mode.'.format(is_not))
 
         is_not = 'not ' if response[10] == 1 else ''
-        print('\tThe Q-Switch is {}enabled.'.format(is_not))
+        logging.info('\tThe Q-Switch is {}enabled.'.format(is_not))
 
         is_not = '' if response[9] == 1 else 'not '
-        print('\tThe laser is {}in fixed repetition rate mode.'.format(is_not))
+        logging.info('\tThe laser is {}in fixed repetition rate mode.'.format(is_not))
 
         is_not = '' if response[8] == 1 else 'not '
-        print('\tThe laser is {}firing in warm-up mode.'.format(is_not))
+        logging.info('\tThe laser is {}firing in warm-up mode.'.format(is_not))
 
         is_not = 'not' if response[7] == 1 else ''
-        print('\tThe closed loop control system can{} meet current energy target.'.format(is_not))
+        logging.info('\tThe closed loop control system can{} meet current energy target.'.format(is_not))
 
-        # print('Unused Bit: {}'.format(response[6]))
+        # print('Unused Bit: {}'.format(response[6]))  # Bit at [6] is unused according to manufacturer documentation.
 
         is_not = '' if response[5] == 1 else 'not '
-        print('\tThe laser is {}initializing the position of one or more motor-driven accessories.'.format(is_not))
+        logging.info('\tThe laser is {}initializing the position of one or more motor-driven accessories.'.format(is_not))
 
         is_not = '' if response[4] == 1 else 'not '
-        print('\tThe coolant level is {}low.'.format(is_not))
+        logging.info('\tThe coolant level is {}low.'.format(is_not))
 
         is_not = 'An accessory motor' if response[3] == 1 else 'No accessory motor'
-        print('\t{} is moving.'.format(is_not))
+        logging.info('\t{} is moving.'.format(is_not))
 
         is_not = '' if response[2] == 1 else 'not '
-        print('\tThe laser is {}OK to start.'.format(is_not))
+        logging.info('\tThe laser is {}OK to start.'.format(is_not))
 
         is_not = '' if response[1] == 1 else 'not'
-        print('\tThe laser can{} be fired.'.format(is_not))
+        logging.info('\tThe laser can{} be fired.'.format(is_not))
 
         is_not = '' if response[0] == 1 else 'not '
-        print('\tA reset fault has {}occurred.\n'.format(is_not))
+        logging.info('\tA reset fault has {}occurred.\n'.format(is_not))
 
     def check_parameters(self):
-        print('** LASER SETTINGS **\n')
+        logging.info('** LASER SETTINGS **\n')
         self.serial.write(self.commands['WAVELENGTH']('?'))
         response = self.read_buffer()
-        print('\tWavelength set to: {}'.format(response))
+        logging.info('\tWavelength set to: {}'.format(response))
 
         self.serial.write(self.commands['ATTENUATION']('?'))
         response = self.read_buffer()
-        print('\tAttenuation set to: {}'.format(response))
+        logging.info('\tAttenuation set to: {}'.format(response))
 
         self.serial.write(self.commands['BURST_COUNT']('?'))
         response = self.read_buffer()
-        print('\tBurst Count set to: {}'.format(response))
+        logging.info('\tBurst Count set to: {}'.format(response))
 
         self.serial.write(self.commands['LASER_MODE']('?'))
         response = self.read_buffer()
-        print('\tLaser Mode set to: {}'.format(response))
+        logging.info('\tLaser Mode set to: {}'.format(response))
 
         # self.serial.write(self.commands['PULSE_MODE']('?')) # fixme unrecognized command?
         # response = self.read_buffer()
@@ -160,11 +161,20 @@ class Laser:
 
         self.serial.write(self.commands['PFN_VOLTAGE']('?'))
         response = self.read_buffer()
-        print('\tPFN Voltage set to: {}'.format(response))
+        logging.info('\tPFN Voltage set to: {}'.format(response))
 
         self.serial.write(self.commands['ACCESSORY_CONFIGURATION']('?'))
         response = self.read_buffer()
-        print('\tConfiguration: {0:08b}\n'.format(int(response)))
+        logging.info('\tConfiguration: {0:08b}\n'.format(int(response)))
+
+    def set_pfn(self, value):
+        pass
+
+    def set_attenuation(self, value):
+        pass
+
+    def set_burst(self, value):
+        pass
 
     def poll_status(self):
         # You must periodically (once every 2 seconds) send either LASER_STATUS or SYSTEM_STATUS command to poll the
@@ -216,3 +226,6 @@ class Laser:
             print('Check system status for problems. Cannot start laser.')
 
         self.serial.write(self.commands['LASER_ON']())
+
+    def stop(self):
+        pass
