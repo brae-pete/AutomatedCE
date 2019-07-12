@@ -1,7 +1,10 @@
+import logging
+
 import serial
 
 
 class Laser:
+    _safety_pfn_limit = 95
 
     def __init__(self, com="COM6", baudrate=9600, stopbits=1, timeout=0.5, home=False):
         self.serial = serial.Serial()
@@ -173,15 +176,20 @@ class Laser:
         return response
 
     def set_parameters(self, pfn, attenuation, mode):
-        if len(pfn) != 3:
+        # These limits are defined by the manufacturers
+        LEN_INPUT = 3
+        MAX_ATTENUATION = 255
+        LASER_MODES = ['0', '1', '2']  # Continuous, Single, Burst
+
+        if len(pfn) != LEN_INPUT or int(pfn) > self._safety_pfn_limit:
             return False
         self.serial.write(self.commands['PFN_VOLTAGE'](pfn))
 
-        if len(attenuation) != 3:
+        if len(attenuation) != LEN_INPUT or int(attenuation) > MAX_ATTENUATION:
             return False
         self.serial.write(self.commands['ATTENUATION'](attenuation))
 
-        if mode not in ['0', '1', '2']:
+        if mode not in LASER_MODES:
             return False
         self.serial.write(self.commands['LASER_MODE'](mode))
 
@@ -191,7 +199,10 @@ class Laser:
         self.serial.write(self.commands['SERIAL_MODE']('?'))
         response = self.read_buffer()
         if response != 'ok':
-            print('Serial mode is not enabled.')
+            logging.info('Enabling serial mode for laser.')
+            self.serial.write(self.commands['SERIAL_MODE']('1'))
+            response = self.read_buffer()
+            logging.info('Laser Response is {}'.format(response))
 
         self.serial.write(self.commands['SYSTEM_STATUS']())
         response = self.serial.readlines()

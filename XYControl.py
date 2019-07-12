@@ -9,7 +9,16 @@ if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
 prev_dir = os.getcwd()
 os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
 
-import MMCorePy
+MMCOREPY_FATAL = False
+
+try:
+    import MMCorePy
+except ImportError:
+    logging.error('Can not import MMCorePy.')
+    if MMCOREPY_FATAL:
+        sys.exit()
+else:
+    logging.info('MMCorePy successfully imported.')
 
 os.chdir(prev_dir)
 
@@ -53,12 +62,13 @@ class XYControl:
         if lock == -1:
             lock = threading.Lock()
         self.lock = lock
-        self.mmc = MMCorePy.CMMCore()
         self.home = home
         self.stageID = 'XYStage'
         self.position = [0, 0]
 
-        self.load_config()
+        if not home:
+            self.mmc = MMCorePy.CMMCore()
+            self.load_config()
 
     def load_config(self):
         """ starts MMC object, [config file] [home]

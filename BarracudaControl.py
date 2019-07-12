@@ -29,7 +29,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 # os.chdir(prev_dir)
 
-HOME = False
+HOME = True
 
 
 # Possible Model Classes
@@ -958,6 +958,11 @@ class RunScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
+        self.log_handler = BarracudaQt.QPlainTextEditLogger(self.screen.output_window)
+
+        logging.getLogger().addHandler(self.log_handler)
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.info('\t::System Updates::')
 
         self._start_updating_display()
         self._set_callbacks()
@@ -995,7 +1000,10 @@ class RunScreenController:
             self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
 
-            self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.rinse_pressure())
+            self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.rinse_pressure(on=True))
+            self.screen.pressure_rinse_state.negative_selected.connect(lambda: self.rinse_pressure(on=False))
+            self.screen.pressure_valve_state.positive_selected.connect(lambda: self.pressure_valve(open=True))
+            self.screen.pressure_valve_state.negative_selected.connect(lambda: self.pressure_valve(open=False))
             self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
 
         if self.hardware.z_stage_control:
@@ -1159,27 +1167,28 @@ class RunScreenController:
         pass
 
     def stop_xy_stage(self):
-        pass
+        logging.warning('WARNING::Stopping XY stage.')
 
     def stop_outlet(self):
-        pass
+        logging.warning('WARNING::Stopping outlet motor.')
 
     def stop_objective(self):
-        pass
+        logging.warning('WARNING::Stopping objective motor.')
 
     def stop_z_stage(self):
-        pass
+        logging.warning('WARNING::Stopping Z stage.')
 
     def stop_pressure(self):
-        pass
+        logging.warning('WARNING::Stopping pressure.')
 
     def stop_laser(self):
-        pass
+        logging.warning('WARNING::Stopping laser.')
 
     def stop_voltage(self):
-        pass
+        logging.warning('WARNING::Stopping voltage.')
 
     def stop_all(self):
+        logging.warning('WARNING::Stopping all hardware devices.')
         # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
         self.stop_laser()
         self.stop_voltage()
@@ -1189,14 +1198,11 @@ class RunScreenController:
         self.stop_outlet()
         self.stop_pressure()
 
-        # fixme
-        self.hardware.xy_stage_control.close()
-        # self.hardware.image_control.close()
-        sys.exit()
+    def rinse_pressure(self, on=False):
+        logging.info(on)
 
-    def rinse_pressure(self):
-        logging.info('Rinse')
-
+    def pressure_valve(self, open=False):
+        logging.info(open)
 
     def fire_laser(self):
         pass

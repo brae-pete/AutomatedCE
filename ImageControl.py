@@ -11,7 +11,16 @@ if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
 prev_dir = os.getcwd()
 os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
 
-import MMCorePy
+MMCOREPY_FATAL = False
+
+try:
+    import MMCorePy
+except ImportError:
+    logging.error('Can not import MMCorePy.')
+    if MMCOREPY_FATAL:
+        sys.exit()
+else:
+    logging.info('MMCorePy successfully imported.')
 
 os.chdir(prev_dir)
 

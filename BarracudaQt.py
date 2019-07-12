@@ -1,6 +1,7 @@
 # Standard library modules
 import sys
 import os
+import logging
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -644,6 +645,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_pfn.setFixedWidth(40)
         self.laser_attenuation.setFixedWidth(40)
         self.laser_burst_count.setFixedWidth(40)
+        # self.laser_off.setFixedWidth(60)
 
         self.laser_on_check.stateChanged.connect(lambda: self.enable_button(self.laser_standby, self.laser_on_check))
         self.laser_fire_check.stateChanged.connect(lambda: self.enable_button(self.laser_fire, self.laser_fire_check))
@@ -727,8 +729,11 @@ class RunScreen(QtWidgets.QMainWindow):
         self.sequence_display = QtWidgets.QTableView()
         self.add_method = QtWidgets.QPushButton('+')
         self.remove_method = QtWidgets.QPushButton('-')
+        self.output_window = QtWidgets.QPlainTextEdit()
 
         self.sequence_display.setFixedWidth(500)
+        # self.output_window.setFixedWidth(250)
+        self.output_window.appendPlainText('::System Updates::')
 
         main_layout = QtWidgets.QHBoxLayout()
         col = QtWidgets.QVBoxLayout()
@@ -743,6 +748,7 @@ class RunScreen(QtWidgets.QMainWindow):
         row.addStretch()
         col.addLayout(row)
         main_layout.addLayout(col)
+        main_layout.addWidget(self.output_window)
 
         self.run_control_panel = QtWidgets.QDockWidget()
         self.run_control_panel.setTitleBarWidget(QtWidgets.QWidget())
@@ -1373,6 +1379,21 @@ class Background(QtWidgets.QWidget):
             qp.setBrush(lg)
             qp.drawRoundedRect(1, 1, s.width() - 2, s.height() - 2, 8, 8)
         qp.end()
+
+
+class QPlainTextEditLogger(logging.Handler):
+    def __init__(self, parent):
+        super().__init__()
+
+        self.widget = QtWidgets.QPlainTextEdit(parent)
+        self.widget.setMinimumWidth(self.widget.parent().frameGeometry().width())
+        self.widget.setStyleSheet("background-color: rgb(230, 230, 230);")
+
+        self.widget.setReadOnly(True)
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.widget.appendPlainText(msg)
 
 
 # fixme just beams code
