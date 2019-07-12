@@ -729,9 +729,10 @@ class RunScreen(QtWidgets.QMainWindow):
         self.add_method = QtWidgets.QPushButton('+')
         self.remove_method = QtWidgets.QPushButton('-')
         self.output_window = QtWidgets.QPlainTextEdit()
+        self.clear_output = QtWidgets.QPushButton('Clear')
+        self.save_output = QtWidgets.QPushButton('Save')
 
         self.sequence_display.setFixedWidth(500)
-        # self.output_window.setFixedWidth(250)
         self.output_window.appendPlainText('::System Updates::')
 
         main_layout = QtWidgets.QHBoxLayout()
@@ -747,7 +748,15 @@ class RunScreen(QtWidgets.QMainWindow):
         row.addStretch()
         col.addLayout(row)
         main_layout.addLayout(col)
-        main_layout.addWidget(self.output_window)
+
+        col = QtWidgets.QVBoxLayout()
+        col.addWidget(self.output_window)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.clear_output)
+        row.addWidget(self.save_output)
+        row.addStretch()
+        col.addLayout(row)
+        main_layout.addLayout(col)
 
         self.run_control_panel = QtWidgets.QDockWidget()
         self.run_control_panel.setTitleBarWidget(QtWidgets.QWidget())
@@ -2618,3 +2627,37 @@ class ErrorMessageUI(QtWidgets.QDialog):
 
         self.exec_()
 
+
+class PermissionsMessageUI(QtWidgets.QDialog):
+    def __init__(self, permissions_message=None, pos_function=None, neg_function=None):
+        super(PermissionsMessageUI, self).__init__()
+        self.setWindowTitle('Permission')
+        message = QtWidgets.QLabel(permissions_message)
+        self.pos_button = QtWidgets.QPushButton('Okay')
+        self.neg_button = QtWidgets.QPushButton('Cancel')
+        self.setMinimumWidth(300)
+        self.setMinimumWidth(80)
+        self.pos_button.setFixedWidth(80)
+        self.neg_button.setFixedWidth(80)
+
+        if pos_function:
+            self.pos_button.released.connect(lambda: pos_function())
+
+        if neg_function:
+            self.neg_button.released.connect(lambda: neg_function())
+
+        self.neg_button.released.connect(lambda: self.close())
+        self.pos_button.released.connect(lambda: self.close())
+
+        col = QtWidgets.QVBoxLayout()
+        col.addWidget(message)
+        col.setAlignment(message, QtCore.Qt.AlignCenter)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.pos_button)
+        row.addWidget(self.neg_button)
+        row.setAlignment(self.pos_button, QtCore.Qt.AlignRight)
+        row.setAlignment(self.neg_button, QtCore.Qt.AlignLeft)
+        col.addLayout(row)
+        self.setLayout(col)
+
+        self.exec_()

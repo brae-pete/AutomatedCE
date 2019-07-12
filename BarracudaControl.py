@@ -1051,6 +1051,8 @@ class RunScreenController:
         self.screen.stop_sequence.released.connect(lambda: self.end_sequence())
         self.screen.add_method.released.connect(lambda: self.add_method())
         self.screen.remove_method.released.connect(lambda: self.remove_method())
+        self.screen.clear_output.released.connect(lambda: self.clear_output_window())
+        self.screen.save_output.released.connect(lambda: self.save_output_window())
 
     def _start_updating_display(self):
         if self.hardware.xy_stage_control:
@@ -1115,10 +1117,12 @@ class RunScreenController:
                 time.sleep(self._update_delay)
 
     def set_origin(self):
-        pass
+        message = 'Are you sure you want to set the origin to your current position? This cannot be undone.'
+        pos_function = self.hardware.xy_stage_control.set_origin()
+        BarracudaQt.PermissionsMessageUI(permissions_message=message, pos_function=pos_function)
 
     def origin(self):
-        pass
+        self.hardware.xy_stage_control.origin()
 
     def set_x(self, x=None, step=None):
         if step:
@@ -1171,8 +1175,8 @@ class RunScreenController:
         if self._stop.is_set():
             self._stop.clear()
 
-    def set_voltage(self, value=None):
-        pass
+    def set_voltage(self, value):
+        self.hardware.daq_board_control.change_voltage(value)
 
     def set_pfn(self, value):
         self.hardware.laser_control.set_pfn(value)
@@ -1260,6 +1264,12 @@ class RunScreenController:
         pass
 
     def end_sequence(self):
+        pass
+
+    def clear_output_window(self):
+        pass
+
+    def save_output_window(self):
         pass
 
 

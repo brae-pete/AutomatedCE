@@ -166,7 +166,7 @@ class XYControl:
 
     def set_origin(self):
         """Redefines current position as Origin. Calls XYControl.read_xy after reset"""
-        logging.info("Home is ", self.home)
+        logging.info("Home is {}".format(self.home))
         if self.home:
             logging.info("Set Origin as 0,0")
             self.position = [0, 0]
@@ -175,6 +175,14 @@ class XYControl:
         with self.lock:
             self.mmc.setOriginXY(self.stageID)
         self.read_xy()
+
+    def origin(self):
+        logging.info("Returning to origin.")
+        if self.home:
+            logging.info("At Home")
+            return
+        with self.lock:
+            self.mmc.home(self.stageID)
 
     def close(self):
         """Releases any communication ports that may be used"""
