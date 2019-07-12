@@ -621,6 +621,7 @@ class RunScreen(QtWidgets.QMainWindow):
         row_one.addWidget(QtWidgets.QLabel('Rinse'))
         row_one.addWidget(self.pressure_rinse_state)
         row_one.addStretch()
+
         row_one.addWidget(QtWidgets.QLabel('Valve'))
         row_one.addWidget(self.pressure_valve_state)
         row_one.addWidget(self.pressure_off)
