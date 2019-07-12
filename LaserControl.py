@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import serial
 
@@ -180,7 +181,13 @@ class Laser:
 
         self.serial.write(self.commands['PFN_VOLTAGE'](value))
         response = self.read_buffer()
-        logging.info('Set PFN to {}. Laser Response: {}'.format(value, response))
+
+        if response != 'ok':
+            logging.warning('Failed to set PFN. Laser Response : {}'.format(response))
+            return False
+        else:
+            logging.info('Successfully set PFN to {}'.format(value))
+            return True
 
     def set_attenuation(self, value):
         try:
@@ -195,7 +202,13 @@ class Laser:
 
         self.serial.write(self.commands['ATTENUATION'](value))
         response = self.read_buffer()
-        logging.info('Set Attenuation to {}. Laser Response: {}'.format(value, response))
+
+        if response != 'ok':
+            logging.warning('Failed to set attenuation. Laser Response: {}'.format(response))
+            return False
+        else:
+            logging.info('Successfully set attenuation to {}'.format(value))
+            return True
 
     def set_burst(self, value):
         try:
@@ -210,7 +223,34 @@ class Laser:
 
         self.serial.write(self.commands['BURST_COUNT'](value))
         response = self.read_buffer()
-        logging.info('Set Burst to {}. Laser Response: {}'.format(value, response))
+
+        if response != 'ok':
+            logging.warning('Failed to set burst count. Laser Response: {}'.format(response))
+            return False
+        else:
+            logging.info('Successfully set burst count to {}'.format(value))
+            return True
+
+    def set_mode(self, value):
+        try:
+            int(value)
+        except ValueError:
+            logging.error('Invalid mode provided - {}. Must be either 0, 1 or 2'.format(value))
+            return False
+
+        if int(value) not in [0, 1, 2]:
+            logging.error('Invalid mode provided - {}. Must be either 0, 1 or 2'.format(value))
+            return False
+
+        self.serial.write(self.commands['LASER_MODE'](value))
+        response = self.read_buffer()
+
+        if response != 'ok':
+            logging.warning('Failed to set mode. Laser Response: {}'.format(response))
+            return False
+        else:
+            logging.info('Successfully set mode to {}'.format(value))
+            return True
 
     def poll_status(self):
         # You must periodically (once every 2 seconds) send either LASER_STATUS or SYSTEM_STATUS command to poll the
@@ -222,22 +262,17 @@ class Laser:
         return response
 
     def set_parameters(self, pfn, attenuation, mode):
-        # These limits are defined by the manufacturers
-        LEN_INPUT = 3
-        MAX_ATTENUATION = 255
-        LASER_MODES = ['0', '1', '2']  # Continuous, Single, Burst
-
-        if len(pfn) != LEN_INPUT or int(pfn) > self._safety_pfn_limit:
+        parameter_set = self.set_pfn(pfn)
+        if not parameter_set:
             return False
-        self.serial.write(self.commands['PFN_VOLTAGE'](pfn))
 
-        if len(attenuation) != LEN_INPUT or int(attenuation) > MAX_ATTENUATION:
+        parameter_set = self.set_attenuation(attenuation)
+        if not parameter_set:
             return False
-        self.serial.write(self.commands['ATTENUATION'](attenuation))
 
-        if mode not in LASER_MODES:
+        parameter_set = self.set_mode(mode)
+        if not parameter_set:
             return False
-        self.serial.write(self.commands['LASER_MODE'](mode))
 
         return True                 
 
@@ -259,9 +294,33 @@ class Laser:
         if response[0] == 1 or response[3] == 1 or response[4] == 1 or response[5] == 1 or response[7] == 1 or \
             response[8] == 1 or response[17] == 1 or response[18] == 1 or response[20] == 1 or response[21] == 1 or \
                 response[22] == 1 or response[23] == 1:
-            print('Check system status for problems. Cannot start laser.')
+            logging.warning('Check system status for problems. Laser Response: {:024b}'.format(response))
+            return False
 
         self.serial.write(self.commands['LASER_ON']())
+        logging.info('Laser on standby for 10 minutes.')
+        return True
 
     def stop(self):
-        pass
+        self.serial.write(self.commands['STOP_FIRING']())
+        response = self.read_buffer()
+
+        if response != 'ok':
+            logging.warning('Failed to stop laser firing. Turning off laser.')
+            bool_state = self.off()
+            return bool_state
+
+        logging.info('Laser firing stopped.')
+        return True
+
+    def off(self):
+        self.serial.write(self.commands['LASER_OFF']())
+
+        response = self.read_buffer()
+
+        if response != 'ok':
+            logging.fatal('Failed to turn off laser. Manually shut down laser immediately! (Turn the key)')
+            return False
+
+        logging.info('Laser turned off.')
+        return True
