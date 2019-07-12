@@ -287,7 +287,7 @@ class InsertScreenController:
 
         self.screen.image_frame.joystick = False  # Returns image frame to mouse functionality.
 
-    def add_row(self, well_location, label_saved=None):
+    def add_row(self, well_location, label_saved=None, pixels=True):
         """ Adds a row to the table with the well label and location. """
         row_count = self.screen.insert_table.rowCount()
         self.screen.insert_table.insertRow(row_count)
@@ -299,7 +299,10 @@ class InsertScreenController:
             label.setText('Well_{}'.format(row_count))  # Default well label is 'Well_[row_number]'
         else:
             label.setText(label_saved)
-        location.setText('({:.0f}, {:.0f})'.format(well_location[0]/self._um2pix, well_location[1]/self._um2pix))
+        if pixels:
+            location.setText('({:.0f}, {:.0f})'.format(well_location[0]/self._um2pix, well_location[1]/self._um2pix))
+        else:
+            location.setText('({:.0f}, {:.0f})'.format(well_location[0], well_location[1]))
 
         self.screen.insert_table.setItem(row_count, 0, label)
         self.screen.insert_table.setItem(row_count, 1, location)
