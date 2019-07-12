@@ -958,8 +958,10 @@ class RunScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
-        self.log_handler = BarracudaQt.QPlainTextEditLogger(self.screen.output_window)
 
+        # Set up logging window in the run screen.
+        self.log_handler = BarracudaQt.QPlainTextEditLogger(self.screen.output_window)
+        self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(self.log_handler)
         logging.getLogger().setLevel(logging.DEBUG)
         logging.info('\t::System Updates::')
@@ -1000,6 +1002,7 @@ class RunScreenController:
             self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
 
+        if self.hardware.pressure_control:
             self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.rinse_pressure(on=True))
             self.screen.pressure_rinse_state.negative_selected.connect(lambda: self.rinse_pressure(on=False))
             self.screen.pressure_valve_state.positive_selected.connect(lambda: self.pressure_valve(open=True))
@@ -1167,28 +1170,28 @@ class RunScreenController:
         pass
 
     def stop_xy_stage(self):
-        logging.warning('WARNING::Stopping XY stage.')
+        logging.warning('Stopping XY stage.')
 
     def stop_outlet(self):
-        logging.warning('WARNING::Stopping outlet motor.')
+        logging.warning('Stopping outlet motor.')
 
     def stop_objective(self):
-        logging.warning('WARNING::Stopping objective motor.')
+        logging.warning('Stopping objective motor.')
 
     def stop_z_stage(self):
-        logging.warning('WARNING::Stopping Z stage.')
+        logging.warning('Stopping Z stage.')
 
     def stop_pressure(self):
-        logging.warning('WARNING::Stopping pressure.')
+        logging.warning('Stopping pressure.')
 
     def stop_laser(self):
-        logging.warning('WARNING::Stopping laser.')
+        logging.warning('Stopping laser.')
 
     def stop_voltage(self):
-        logging.warning('WARNING::Stopping voltage.')
+        logging.warning('Stopping voltage.')
 
     def stop_all(self):
-        logging.warning('WARNING::Stopping all hardware devices.')
+        logging.warning('Stopping all hardware devices.')
         # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
         self.stop_laser()
         self.stop_voltage()

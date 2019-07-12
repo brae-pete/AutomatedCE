@@ -196,8 +196,11 @@ class Laser:
         return True                 
 
     def start_system(self):
+        logging.warning('Starting laser system.')
+
         self.serial.write(self.commands['SERIAL_MODE']('?'))
         response = self.read_buffer()
+
         if response != 'ok':
             logging.info('Enabling serial mode for laser.')
             self.serial.write(self.commands['SERIAL_MODE']('1'))
