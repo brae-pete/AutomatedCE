@@ -71,9 +71,9 @@ class BarracudaSystem(BaseSystem):
         super(BarracudaSystem, self).__init__()
 
     def start_system(self, live_feed=True):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
+        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         # self.image_control = ImageControl.ImageControl(home=HOME)
         # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)

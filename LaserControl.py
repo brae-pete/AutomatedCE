@@ -168,13 +168,49 @@ class Laser:
         logging.info('\tConfiguration: {0:08b}\n'.format(int(response)))
 
     def set_pfn(self, value):
-        pass
+        try:
+            int(value)
+        except ValueError:
+            logging.error('Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
+            return False
+
+        if len(str(value)) != 3 or 0 > int(value) or int(value) > self._safety_pfn_limit:  # fixme (len)
+            logging.error('Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
+            return False
+
+        self.serial.write(self.commands['PFN_VOLTAGE'](value))
+        response = self.read_buffer()
+        logging.info('Set PFN to {}. Laser Response: {}'.format(value, response))
 
     def set_attenuation(self, value):
-        pass
+        try:
+            int(value)
+        except ValueError:
+            logging.error('Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
+            return False
+
+        if len(str(value)) != 3 or 0 > int(value) or int(value) > 255:  # fixme (len)
+            logging.error('Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
+            return False
+
+        self.serial.write(self.commands['ATTENUATION'](value))
+        response = self.read_buffer()
+        logging.info('Set Attenuation to {}. Laser Response: {}'.format(value, response))
 
     def set_burst(self, value):
-        pass
+        try:
+            int(value)
+        except ValueError:
+            logging.error('Invalid Burst value provided - {}. Must be integer between 0001 and 4000'.format(value))
+            return False
+
+        if len(str(value)) != 3 or 1 > int(value) or int(value) > 4000:  # fixme (len)
+            logging.error('Invalid Burst value provided - {}. Must be integer between 0001 and 4000'.format(value))
+            return False
+
+        self.serial.write(self.commands['BURST_COUNT'](value))
+        response = self.read_buffer()
+        logging.info('Set Burst to {}. Laser Response: {}'.format(value, response))
 
     def poll_status(self):
         # You must periodically (once every 2 seconds) send either LASER_STATUS or SYSTEM_STATUS command to poll the
