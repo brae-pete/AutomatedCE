@@ -755,12 +755,13 @@ class RunScreen(QtWidgets.QMainWindow):
         main_layout.addLayout(col)
 
         col = QtWidgets.QVBoxLayout()
+        # col.addWidget(self.output_window)
+        # row = QtWidgets.QHBoxLayout()
+        # row.addWidget(self.clear_output)
+        # row.addWidget(self.save_output)
+        # row.addStretch()
+        # col.addLayout(row)
         col.addWidget(self.output_window)
-        row = QtWidgets.QHBoxLayout()
-        row.addWidget(self.clear_output)
-        row.addWidget(self.save_output)
-        row.addStretch()
-        col.addLayout(row)
         main_layout.addLayout(col)
 
         self.run_control_panel = QtWidgets.QDockWidget()
@@ -1473,6 +1474,7 @@ class QPlainTextEditLogger(logging.Handler):
 
         self.widget = QtWidgets.QPlainTextEdit(parent)
         self.widget.setMinimumWidth(self.widget.parent().frameGeometry().width())
+        # self.widget.setFixedHeight(self.widget.parent().frameGeometry().height())
         self.widget.setStyleSheet("background-color: rgb(230, 230, 230);")
 
         self.widget.setReadOnly(True)
@@ -1502,8 +1504,6 @@ class MicroscopeView(QtWidgets.QWidget):
 class PlotPanel(QtWidgets.QWidget):
     def __init__(self):
         super(PlotPanel, self).__init__()
-        self.init_center_UI()
-
         self.setWindowTitle("Graphing Area")
 
         self.canvas = RunPlot()

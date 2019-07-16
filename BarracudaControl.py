@@ -73,7 +73,7 @@ class BarracudaSystem(BaseSystem):
         super(BarracudaSystem, self).__init__()
 
     def start_system(self):
-        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
         # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         # self.image_control = ImageControl.ImageControl(home=HOME)
@@ -997,6 +997,7 @@ class RunScreenController:
     _update_delay = 0.125
     _xy_step_size = 1/1000  # µm
     _live_feed = True
+    _pause_point = None
 
     _stop.set()
     _stop.clear()
@@ -1006,7 +1007,7 @@ class RunScreenController:
         self.hardware = hardware
         self.repository = repository
 
-        self.methods =[]
+        self.methods = []
         self.insert = None
 
         # Set up logging window in the run screen.
@@ -1014,6 +1015,31 @@ class RunScreenController:
         self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(self.log_handler)
         logging.getLogger().setLevel(logging.INFO)
+        logging.info('System Updates')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
+        logging.info('\n')
         logging.info('System Updates')
 
         self._add_row("", "")
@@ -1195,6 +1221,7 @@ class RunScreenController:
 
         self._live_feed = live
 
+    # Hardware Control Functions
     def set_origin(self):
         message = 'Are you sure you want to set the origin to your current position? This cannot be undone.'
         pos_function = self.hardware.xy_stage_control.set_origin()
@@ -1298,25 +1325,25 @@ class RunScreenController:
         self.hardware.daq_board_control.change_voltage(0)
 
     def stop_all(self):
-        # fixme, write a nested function in here for each device.
-        logging.warning('Emergency stop on all hardware devices.')
-        # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
-        if self.hardware.laser_control:
-            self.stop_laser()
-        if self.hardware.daq_board_control:
-            self.stop_voltage()
-        if self.hardware.xy_stage_control:
-            self.stop_xy_stage()
-        if self.hardware.objective_control:
-            self.stop_objective()
-        if self.hardware.z_stage_control:
-            self.stop_z_stage()
-        if self.hardware.outlet_control:
-            self.stop_outlet()
-        if self.hardware.pressure_control:
-            self.stop_pressure()
-        if self.hardware.image_control:
-            self.hardware.image_control.close()
+        # # fixme, write a nested function in here for each device.
+        # logging.warning('Emergency stop on all hardware devices.')
+        # # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
+        # if self.hardware.laser_control:
+        #     self.stop_laser()
+        # if self.hardware.daq_board_control:
+        #     self.stop_voltage()
+        # if self.hardware.xy_stage_control:
+        #     self.stop_xy_stage()
+        # if self.hardware.objective_control:
+        #     self.stop_objective()
+        # if self.hardware.z_stage_control:
+        #     self.stop_z_stage()
+        # if self.hardware.outlet_control:
+        #     self.stop_outlet()
+        # if self.hardware.pressure_control:
+        #     self.stop_pressure()
+        # if self.hardware.image_control:
+        #     self.hardware.image_control.close()
         sys.exit()
 
     def rinse_pressure(self, off):
@@ -1343,6 +1370,11 @@ class RunScreenController:
     def laser_on(self):
         self.hardware.laser_control.start()
 
+    def check_system(self):
+        logging.info('Checking system status ...')
+        return True
+
+    # Sequence Table Functions
     def add_method(self):
         """ Prompts the user for and loads a method file. """
         open_file_path = QtWidgets.QFileDialog.getOpenFileNames(self.screen, 'Choose previous session',
@@ -1376,8 +1408,8 @@ class RunScreenController:
                 self._add_row(open_file_path, data.steps[0]['Summary'])
 
     def remove_method(self):
-        current_row = self.screen.method_table.currentRow()
-        self.screen.method_table.removeRow(current_row)
+        current_row = self.screen.sequence_display.currentRow()
+        self.screen.sequence_display.removeRow(current_row)
         self.methods.pop(current_row)
 
     def _add_row(self, method_file, summary):
@@ -1403,15 +1435,55 @@ class RunScreenController:
         add_button.released.connect(lambda: self.add_method())
         self.screen.sequence_display.setCellWidget(row_count, 0, add_button)
 
+    # Run Control Functions
     def start_sequence(self):
-        pass
+        logging.info('Starting run ...')
+        # self.run_thread = QtCore.QThread()
+        # self.run_thread.started.connect(self.run)
+        # self.run_thread.finished.connect(self.run_thread.deleteLater)
+        # self.run_thread.start()
+        # threading.Thread(target=self.run).start()
+        self.runt = RunThread()
+        self.runt.start()
 
     def pause_sequence(self):
-        pass
+        logging.info('Pausing run ...')
 
     def end_sequence(self):
-        pass
+        logging.info('Stopping run ...')
 
+    def run(self):
+        if not self.check_system():
+            logging.error('Unable to start run.')
+
+        if self._pause_point:
+            pass
+
+        for method in self.methods:
+            self.run_method(method)
+
+    def run_method(self, method):
+        steps = {'Inject': self.inject,
+                 'Separate': self.separate,
+                 'Rinse': self.rinse}
+
+        for step in method.steps:
+            time.sleep(2)
+            try:
+                steps[step['Type']](step)
+            except KeyError:
+                continue
+
+    def separate(self, step):
+        logging.info('Separating : {}'.format(step['Summary']))
+
+    def inject(self, step):
+        logging.info('Injecting : {}'.format(step['Summary']))
+
+    def rinse(self, step):
+        logging.info('Rinsing : {}'.format(step['Summary']))
+
+    # Output Terminal Functions
     def clear_output_window(self):
         self.log_handler.widget.clear()
         logging.info('System Updates')
@@ -1432,6 +1504,23 @@ class SystemScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
+
+
+class RunThread(QtCore.QThread):
+    def __init__(self):
+        QtCore.QThread.__init__(self)
+
+    def run(self):
+        logging.info('1')
+        time.sleep(1)
+        logging.info('2')
+        time.sleep(1)
+        logging.info('3')
+        time.sleep(1)
+        logging.info('4')
+        time.sleep(1)
+        logging.info('5')
+        time.sleep(1)
 
 
 pc = ProgramController()
