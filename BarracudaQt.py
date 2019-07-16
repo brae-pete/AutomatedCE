@@ -773,28 +773,39 @@ class RunScreen(QtWidgets.QMainWindow):
         self.live_feed_panel.setTitleBarWidget(QtWidgets.QWidget())
         temper_wid = QtWidgets.QWidget()
         temp_layout = QtWidgets.QHBoxLayout()
-        temp_layout.addLayout(self.init_graphics_view())
+        temp_layout.addLayout(self.init_insert_view())
         temp_layout.addLayout(self.init_graphics_view2())
         temper_wid.setLayout(temp_layout)
         temper_wid = wrap_widget(temper_wid)
         self.live_feed_panel.setWidget(temper_wid)
 
-    def init_graphics_view(self):
-        self.pixel_map = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
-        self.live_insert = GraphicsScene()
-        self.live_insert.addPixmap(self.pixel_map)
-        self.image_view = QtWidgets.QGraphicsView(self.live_insert)
-        live_feed_layout = QtWidgets.QHBoxLayout()
+    def init_insert_view(self):
+        self.live_option = SwitchButton(w1='Live', w2='Insert', width=80)
+        # self.pixel_map = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
+        # self.live_insert = GraphicsScene()
+        # self.live_insert.addPixmap(self.pixel_map)
+        # self.image_view = QtWidgets.QGraphicsView(self.live_insert)
+        self.image_view = MicroscopeView()
+        self.image_view.setImage(image=QtGui.QImage("C:\KivyBarracuda\BarracudaQt\BarracudaQt\zStack_100000_-5.94.png"))
+
+        live_feed_layout = QtWidgets.QVBoxLayout()
+        live_feed_layout.addWidget(self.live_option)
         live_feed_layout.addWidget(self.image_view)
 
         return live_feed_layout
 
+    def init_live_feed(self):
+        self.live_feed = MicroscopeView()
+
     def init_graphics_view2(self):
+        self.save_plot = QtWidgets.QPushButton('Save')
+
         self.pixel_map2 = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
         self.live_insert2 = GraphicsScene()
         self.live_insert2.addPixmap(self.pixel_map2)
         self.image_view2 = QtWidgets.QGraphicsView(self.live_insert2)
-        live_feed_layour2 = QtWidgets.QHBoxLayout()
+        live_feed_layour2 = QtWidgets.QVBoxLayout()
+        live_feed_layour2.addWidget(self.save_plot)
         live_feed_layour2.addWidget(self.image_view2)
 
         return live_feed_layour2
@@ -853,6 +864,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.voltage_off.setEnabled(enabled)
         self.voltage_on.setEnabled(enabled)
         self.voltage_on_check.setEnabled(enabled)
+
+    def enable_live_feed(self, enabled):
+        self.live_option.setEnabled(enabled)
 
     @staticmethod
     def enable_button(button, checkbox):
@@ -1458,6 +1472,22 @@ class QPlainTextEditLogger(logging.Handler):
         msg = self.format(record)
         self.widget.appendPlainText(msg)
 
+
+class MicroscopeView(QtWidgets.QWidget):
+    update_feed = QtCore.pyqtSignal()
+    def __init__(self):
+        super(MicroscopeView, self).__init__()
+        self.image = QtGui.QImage()
+
+    def paintEvent(self, _):
+        painter = QtGui.QPainter(self)
+        painter.drawImage(0, 0, self.image)
+        self.setMinimumWidth(self.image.width())
+
+    @QtCore.pyqtSlot(QtGui.QImage)
+    def setImage(self, image):
+        self.image = image
+        self.update()
 
 # fixme just beams code
 class PlotPanel(QtWidgets.QDockWidget):

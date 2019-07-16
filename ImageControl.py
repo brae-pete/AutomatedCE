@@ -63,6 +63,10 @@ class ImageControl:
     def close(self):
         self.mmc.unloadAllDevices()
 
+    def stop_video_feed(self):
+        if self.mmc.isSequenceRunning():
+            self.mmc.stopSequenceAcquisition()
+
     def get_single_image(self):
         """Snaps single image, returns image"""
         self.mmc.snapImage()
@@ -72,18 +76,23 @@ class ImageControl:
     def start_video_feed(self):
         self.mmc.startContinuousSequenceAcquisition(1)
 
-    def get_recent_image(self):
+    def get_recent_image(self, size=None):
         """Returns most recent image from the camera"""
         if self.home:
             time.sleep(0.05)
         time.sleep(0.05)
+
+        if not size:
+            size = 128, 128
+
         if self.mmc.getRemainingImageCount() > 0:
             img = self.mmc.getLastImage()
-            img = self.image_conversion(img)
+            # img = self.image_conversion(np.float32(img))
             try:
                 img = pilImage.fromarray(img, 'L')
             except:  # fixme, pin down the exceptions we want to include here, don't use broad.
                 img = pilImage.fromarray(img)
+            img.thumbnail(size)
             return img
 
     @staticmethod

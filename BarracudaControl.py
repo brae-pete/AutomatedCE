@@ -29,7 +29,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 # os.chdir(prev_dir)
 
-HOME = True
+HOME = False
 
 
 # Possible Model Classes
@@ -63,6 +63,7 @@ class BarracudaSystem(BaseSystem):
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
     _pressure_lock = threading.Lock()
+    _camera_lock = threading.Lock()
 
     xy_stage_size = [112792, 64340]  # Rough size in mm
     xy_stage_upper_left = [112598, -214]  # Reading on stage controller when all the way to left and up (towards wall)
@@ -70,26 +71,31 @@ class BarracudaSystem(BaseSystem):
     def __init__(self):
         super(BarracudaSystem, self).__init__()
 
-    def start_system(self, live_feed=True):
-        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        # self.image_control = ImageControl.ImageControl(home=HOME)
-        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
+    def start_system(self):
+        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
+        self.image_control = ImageControl.ImageControl(home=HOME)
+        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
         # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
         self.start_daq()
 
-        if live_feed:
-            self.start_image()
-
     def start_daq(self):
         pass
 
-    def start_image(self):
-        pass
+    def get_image(self):
+        with self._camera_lock:
+            image = self.image_control.get_recent_image(size=(512, 384))
+
+            if image is None:
+                return None
+
+            image.save("recentImg.png")
+
+        return image
 
 
 class FinchSystem(BaseSystem):
@@ -861,6 +867,7 @@ class MethodScreenController:
                 data['Summary'] = self.screen.insert_table.item(n, 7).text()
                 data['Value'] = self.screen.insert_table.item(n, 3).text()
                 data['Duration'] = self.screen.insert_table.item(n, 4).text()
+                data['Insert'] = self.insert
                 n += 1
 
         self.method = Method(steps=self._form_data)
@@ -953,6 +960,7 @@ class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
     _xy_step_size = 1/1000  # µm
+    _live_feed = True
 
     _stop.set()
     _stop.clear()
@@ -961,6 +969,9 @@ class RunScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
+
+        self.methods =[]
+        self.insert = None
 
         # Set up logging window in the run screen.
         self.log_handler = BarracudaQt.QPlainTextEditLogger(self.screen.output_window)
@@ -1047,6 +1058,12 @@ class RunScreenController:
         else:
             self.screen.enable_voltage_form(False)
 
+        if self.hardware.image_control:
+            self.screen.live_option.positive_selected.connect(lambda: self._switch_feed(True))
+            self.screen.live_option.negative_selected.connect(lambda: self._switch_feed(False))
+        else:
+            self.screen.enable_live_feed(False)
+
         self.screen.all_stop.released.connect(lambda: self.stop_all())
 
         self.screen.start_sequence.released.connect(lambda: self.start_sequence())
@@ -1076,6 +1093,7 @@ class RunScreenController:
             self.screen.objective_value.setText("{:.3f}".format(float(value)))
 
         threading.Thread(target=self._update_stages).start()
+        threading.Thread(target=self._update_live_feed).start()
 
     def _value_display_interact(self, selected=False):
         logging.info(selected)
@@ -1118,6 +1136,29 @@ class RunScreenController:
                 if value != prev:
                     self.screen.outlet_value.setText("{:.3f}".format(float(value)))
                 time.sleep(self._update_delay)
+
+    def _update_live_feed(self):
+        while True:
+            if self._live_feed:
+                image = self.hardware.get_image()
+
+                if image is None:
+                    continue
+
+                self.screen.image_view.setImage(QtGui.QImage("recentImg.png"))
+            else:
+                pass
+
+    def _update_plot(self):
+        pass
+
+    def _switch_feed(self, live):
+        if not live:
+            self.hardware.image_control.stop_video_feed()
+        else:
+            self.hardware.image_control.start_video_feed()
+
+        self._live_feed = live
 
     def set_origin(self):
         message = 'Are you sure you want to set the origin to your current position? This cannot be undone.'
@@ -1239,6 +1280,9 @@ class RunScreenController:
             self.stop_outlet()
         if self.hardware.pressure_control:
             self.stop_pressure()
+        if self.hardware.image_control:
+            self.hardware.image_control.close()
+        sys.exit()
 
     def rinse_pressure(self, on=False):
         logging.info(on)
@@ -1265,7 +1309,34 @@ class RunScreenController:
         self.hardware.laser_control.start()
 
     def add_method(self):
-        pass
+        """ Prompts the user for and loads a method file. """
+        open_file_path = QtWidgets.QFileDialog.getOpenFileNames(self.screen, 'Choose previous session',
+                                                                os.getcwd(), 'METHOD(*.met)')
+        if open_file_path[0]:
+            open_file_path = open_file_path[0][0]
+        else:
+            return
+
+        if os.path.splitext(open_file_path)[1] != '.met':
+            message = 'Invalid file chosen.'
+            BarracudaQt.ErrorMessageUI(message)
+            return
+
+        self.screen.file_name_save.setText(open_file_path)
+
+        with open(open_file_path, 'rb') as open_file:
+            try:
+                data = pickle.load(open_file)
+            except pickle.UnpicklingError:
+                message = 'Could not read in data from {}.'.format(open_file_path)
+                BarracudaQt.ErrorMessageUI(message)
+            else:
+                self.methods = data  # fixme
+
+                if self.insert:
+                    if self.insert.wells != data['Insert'].wells:
+                        BarracudaQt.ErrorMessageUI('hi')
+                self.insert = data['Insert']
 
     def remove_method(self):
         pass
