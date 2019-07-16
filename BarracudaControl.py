@@ -75,7 +75,7 @@ class BarracudaSystem(BaseSystem):
         self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
         self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        self.image_control = ImageControl.ImageControl(home=HOME)
+        # self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
@@ -134,9 +134,10 @@ class Insert:
 
 
 class Method:
-    def __init__(self, label=None, steps=None, ID=None):
+    def __init__(self, insert, steps, label=None, ID=None):
         self.ID = ID
         self.steps = steps
+        self.insert = insert
         self.label = label
 
 
@@ -431,7 +432,7 @@ class InsertScreenController:
             new_well = Well(label=label, location=location, bounding_box=bounding_box, shape=shape)
             wells.append(new_well)
 
-        self.insert = Insert(wells=wells)
+        self.insert = Insert(wells=wells, label='Default')
 
 
 class MethodScreenController:
@@ -867,10 +868,9 @@ class MethodScreenController:
                 data['Summary'] = self.screen.insert_table.item(n, 7).text()
                 data['Value'] = self.screen.insert_table.item(n, 3).text()
                 data['Duration'] = self.screen.insert_table.item(n, 4).text()
-                data['Insert'] = self.insert
                 n += 1
 
-        self.method = Method(steps=self._form_data)
+        self.method = Method(steps=self._form_data, insert=self.insert)
 
 
 class SequenceScreenController:
@@ -980,6 +980,7 @@ class RunScreenController:
         logging.getLogger().setLevel(logging.DEBUG)
         logging.info('System Updates')
 
+        self._add_row("", "")
         self._start_updating_display()
         self._set_callbacks()
 
@@ -1069,8 +1070,6 @@ class RunScreenController:
         self.screen.start_sequence.released.connect(lambda: self.start_sequence())
         self.screen.pause_sequence.released.connect(lambda: self.pause_sequence())
         self.screen.stop_sequence.released.connect(lambda: self.end_sequence())
-        self.screen.add_method.released.connect(lambda: self.add_method())
-        self.screen.remove_method.released.connect(lambda: self.remove_method())
         self.screen.clear_output.released.connect(lambda: self.clear_output_window())
         self.screen.save_output.released.connect(lambda: self.save_output_window())
 
@@ -1139,7 +1138,7 @@ class RunScreenController:
 
     def _update_live_feed(self):
         while True:
-            if self._live_feed:
+            if self._live_feed and self.hardware.image_control:
                 image = self.hardware.get_image()
 
                 if image is None:
@@ -1322,8 +1321,6 @@ class RunScreenController:
             BarracudaQt.ErrorMessageUI(message)
             return
 
-        self.screen.file_name_save.setText(open_file_path)
-
         with open(open_file_path, 'rb') as open_file:
             try:
                 data = pickle.load(open_file)
@@ -1331,14 +1328,46 @@ class RunScreenController:
                 message = 'Could not read in data from {}.'.format(open_file_path)
                 BarracudaQt.ErrorMessageUI(message)
             else:
-                self.methods = data  # fixme
-
                 if self.insert:
-                    if self.insert.wells != data['Insert'].wells:
-                        BarracudaQt.ErrorMessageUI('hi')
-                self.insert = data['Insert']
+                    if self.insert.label != data.insert.label and self.insert.wells != data.insert.wells:
+                        BarracudaQt.ErrorMessageUI('The insert for this method does not match the insert for previously'
+                                                   ' loaded methods.')
+                        return
+                else:
+                    self.insert = data.insert
+
+                self.methods.append(data)
+                self._add_row(open_file_path, data.steps[0]['Summary'])
 
     def remove_method(self):
+        pass
+
+    def _add_row(self, method_file, summary):
+        row_count = self.screen.sequence_display.rowCount()
+        self.screen.sequence_display.insertRow(row_count)
+
+        if row_count > 0:
+            remove_button = QtWidgets.QPushButton('-')
+            remove_button.setFixedWidth(38)
+            remove_button.released.connect(lambda: self.remove_method())
+            self.screen.sequence_display.setCellWidget(row_count - 1, 0, remove_button)
+
+            method_file_name = QtWidgets.QTableWidgetItem()
+            method_file_name.setText(method_file)
+            self.screen.sequence_display.setItem(row_count - 1, 1, method_file_name)
+
+            method_summary = QtWidgets.QTableWidgetItem()
+            method_summary.setText(summary)
+            self.screen.sequence_display.setItem(row_count - 1, 2, method_summary)
+
+        add_button = QtWidgets.QPushButton('+')
+        add_button.setFixedWidth(38)
+        add_button.released.connect(lambda: self.add_method())
+        self.screen.sequence_display.setCellWidget(row_count, 0, add_button)
+
+
+
+    def _remove_row(self):
         pass
 
     def start_sequence(self):
