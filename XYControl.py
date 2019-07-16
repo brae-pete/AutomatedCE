@@ -51,7 +51,7 @@ travel_height = 70
 class XYControl:
     """ Basic XY Control class. If you switch hardware so that it no longer uses MMC. You only need
     to maintain the outputs for each method."""
-    scale = 1000
+    scale = 1
     x_inversion = 1
     y_inversion = 1
 

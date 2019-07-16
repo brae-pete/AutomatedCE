@@ -66,15 +66,16 @@ class BarracudaSystem(BaseSystem):
     _camera_lock = threading.Lock()
 
     xy_stage_size = [112792, 64340]  # Rough size in mm
-    xy_stage_upper_left = [112598, -214]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_upper_left = [112598, -2959]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_inversion = [-1, -1]
 
     def __init__(self):
         super(BarracudaSystem, self).__init__()
 
     def start_system(self):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
+        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         # self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
@@ -224,7 +225,10 @@ class InsertScreenController:
 
         self._um2pix = 1 / 200
         self._mm2pix = 2
+        self._stage_offset = self.hardware.xy_stage_upper_left
+        self._stage_inversion = self.hardware.xy_stage_inversion
         self._initial = True
+        self._initial_point = None
 
         self.screen.image_view.setSceneRect(0, 0, self.hardware.xy_stage_size[0]*self._um2pix,
                                             self.hardware.xy_stage_size[1]*self._um2pix)
@@ -251,7 +255,9 @@ class InsertScreenController:
         if location:  # This check is necessary in case the last well is deleted.
             # Convert from the '({}, {})' format to [f, f]
             try:
-                location = [float(x)*self._um2pix for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
+                location = [float(x) for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
+                location = [(location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
+                            (location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
             except ValueError:  # The user changed the table contents to an invalid coordinate
                 BarracudaQt.ErrorMessageUI(error_message='Well location is invalid.')
             else:
@@ -260,9 +266,10 @@ class InsertScreenController:
     def joystick(self):
         """ Prompts shapes to be created in the view via the joystick method. """
         # The event we are sending holds the current coordinates of the stage and converts them to pixel
-        event = self.hardware.xy_stage_control.readXY()
-        event[0] *= self._um2pix
-        event[1] *= self._um2pix
+        event_location = self.hardware.xy_stage_control.read_xy()
+        event = [(event_location[0] * self._um2pix * self._stage_inversion[0]) + (self._stage_offset[0] * self._um2pix),
+                 (event_location[1] * self._um2pix * self._stage_inversion[1]) - (self._stage_offset[1] * self._um2pix)]
+        logging.info(event)
 
         # If the user is trying to create and array or circle but hasn't specified radius, simply throw error.
         if not self.screen.circle_radius_input.text() and self.screen.image_frame.draw_shape != 'RECT':
@@ -276,6 +283,8 @@ class InsertScreenController:
             event.append(float(self.screen.circle_radius_input.text()) * self._mm2pix)
             event.append(float(self.screen.num_circles_horizontal_input.text()))
             event.append(float(self.screen.num_circles_vertical_input.text()))
+
+        self.add_wells(event_location)
 
         self.screen.image_frame.joystick = True  # So the image frame in the view handles the events appropriately.
 
@@ -294,7 +303,34 @@ class InsertScreenController:
 
         self.screen.image_frame.joystick = False  # Returns image frame to mouse functionality.
 
-    def add_row(self, well_location, label_saved=None, pixels=True):
+    def add_wells(self, location):
+        if self.screen.image_frame.draw_shape == 'CIRCLE':
+            self._add_row(location, pixels=False)
+
+        elif self.screen.image_frame.draw_shape == 'RECT':
+            if self._initial:
+                self._initial_point = location
+            else:
+                location = [self._initial_point[0] + (location[0] - self._initial_point[0])/2,
+                            self._initial_point[1] + (location[1] - self._initial_point[1])/2]
+                self._add_row(location, pixels=False)
+
+        elif self.screen.image_frame.draw_shape == 'ARRAY':
+            if self._initial:
+                self._initial_point = location
+            else:
+                x = self._initial_point[0]
+                y = self._initial_point[1]
+                dx = (location[0] - self._initial_point[0])/int(self.screen.num_circles_horizontal_input.text())
+                dy = (location[1] - self._initial_point[1])/int(self.screen.num_circles_vertical_input.text())
+                for _ in range(int(self.screen.num_circles_horizontal_input.text())):
+                    for _ in range(int(self.screen.num_circles_vertical_input.text())):
+                        y += dy
+                        self._add_row([x, y], pixels=False)
+                    y = self._initial_point[1]
+                    x += dx
+
+    def _add_row(self, well_location, label_saved=None, pixels=True):
         """ Adds a row to the table with the well label and location. """
         row_count = self.screen.insert_table.rowCount()
         self.screen.insert_table.insertRow(row_count)
@@ -316,8 +352,8 @@ class InsertScreenController:
 
     def remove_item(self, location):
         """ Removes row from table based on well location. """
-        location[0] /= self._um2pix
-        location[1] /= self._um2pix
+        location[0] = (location[0] / self._um2pix - self._stage_offset[0]) / self._stage_inversion[0]
+        location[1] = (location[1] / self._um2pix + self._stage_offset[1]) / self._stage_inversion[1]
         location = '({:.0f}, {:.0f})'.format(location[0], location[1])
 
         for row_index in range(self.screen.insert_table.rowCount()):
@@ -1283,11 +1319,11 @@ class RunScreenController:
             self.hardware.image_control.close()
         sys.exit()
 
-    def rinse_pressure(self, on=False):
-        logging.info(on)
+    def rinse_pressure(self, off):
+        logging.info(off)
 
-    def pressure_valve(self, open=False):
-        logging.info(open)
+    def pressure_valve(self, closed):
+        logging.info(closed)
 
     def fire_laser(self):
         pfn = self.screen.laser_pfn.value()
@@ -1340,7 +1376,9 @@ class RunScreenController:
                 self._add_row(open_file_path, data.steps[0]['Summary'])
 
     def remove_method(self):
-        pass
+        current_row = self.screen.method_table.currentRow()
+        self.screen.method_table.removeRow(current_row)
+        self.methods.pop(current_row)
 
     def _add_row(self, method_file, summary):
         row_count = self.screen.sequence_display.rowCount()
@@ -1364,11 +1402,6 @@ class RunScreenController:
         add_button.setFixedWidth(38)
         add_button.released.connect(lambda: self.add_method())
         self.screen.sequence_display.setCellWidget(row_count, 0, add_button)
-
-
-
-    def _remove_row(self):
-        pass
 
     def start_sequence(self):
         pass

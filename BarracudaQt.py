@@ -804,11 +804,9 @@ class RunScreen(QtWidgets.QMainWindow):
 
     def init_graphics_view2(self):
         self.save_plot = QtWidgets.QPushButton('Save')
+        self.save_plot.setFixedWidth(60)
 
-        self.pixel_map2 = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
-        self.live_insert2 = GraphicsScene()
-        self.live_insert2.addPixmap(self.pixel_map2)
-        self.image_view2 = QtWidgets.QGraphicsView(self.live_insert2)
+        self.image_view2 = PlotPanel()
         live_feed_layour2 = QtWidgets.QVBoxLayout()
         live_feed_layour2.addWidget(self.save_plot)
         live_feed_layour2.addWidget(self.image_view2)
@@ -1036,7 +1034,9 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
 
     def highlight_item(self, location):
         if not self._clearing:
+            logging.debug('Highlighting at {}'.format(location))
             if self._highlighted_location:
+                logging.debug('There is an item highlighted at {}'.format(self._highlighted_location))
                 highlighted_item = self.itemAt(self._highlighted_location[0],
                                                self._highlighted_location[1],
                                                QtGui.QTransform())
@@ -1056,13 +1056,18 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                     self._current_rect_item.setRect(r)
                     self._current_rect_item = None
 
-            self._highlighted_location = location
-
-            highlighted_item = self.itemAt(self._highlighted_location[0],
-                                           self._highlighted_location[1],
+            highlighted_item = self.itemAt(location[0],
+                                           location[1],
                                            QtGui.QTransform())
+            for item in self.items():
+                logging.debug(item.boundingRect())
+
+            logging.debug(highlighted_item)
 
             if type(highlighted_item) != QtWidgets.QGraphicsPixmapItem:
+                self._highlighted_location = location
+
+                logging.debug('The type is not a pixmap.')
                 r = list(highlighted_item.boundingRect().getRect())
                 r = QtCore.QRectF(r[0] + 1, r[1] + 1, r[2] - 2, r[3] - 2)
                 if type(highlighted_item) == QtWidgets.QGraphicsRectItem:
@@ -1077,6 +1082,8 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                 self.addItem(self._current_rect_item)
                 self._current_rect_item.setRect(r)
                 self._current_rect_item = None
+            else:
+                highlighted_item.setZValue(-200)
 
     def draw_rect(self, event):
         if not self.joystick:
@@ -1097,6 +1104,7 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
             self._start = QtCore.QPointF(event[0], event[1])
             r = QtCore.QRectF(self._start, self._start)
             self._current_rect_item.setRect(r)
+        self._current_rect_item.setZValue(200)
 
     def draw_circle(self, event):
         if not self.joystick:
@@ -1114,15 +1122,17 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
             self._current_ellipse_item.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, False)
             self._current_ellipse_item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
             self.addItem(self._current_ellipse_item)
-            r = QtCore.QRectF(event[0], event[1], event[2]*2, event[2]*2)
+            r = QtCore.QRectF(event[0]-event[2], event[1]-event[2], event[2]*2, event[2]*2)
+            logging.debug(r)
             self._current_ellipse_item.setRect(r)
             # self._current_ellipse_item = None
+        self._current_ellipse_item.setZValue(200)
 
     def draw_array(self, event):
         marked_area = list(self._current_rect_item.boundingRect().getRect())
         if not self.joystick:
             pass
-            print('Cannot drag out an array yet.')
+            logging.info('Cannot drag out an array yet.')
         else:
             radius = event[2]
             x = marked_area[0]
@@ -1141,8 +1151,9 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                     self._current_ellipse_item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
                     self.addItem(self._current_ellipse_item)
                     self._current_ellipse_item.setRect(r)
+                    self._current_ellipse_item.setZValue(200)
                     self._current_ellipse_item = None
-                    self.controller.add_row([x, y])
+                    # self.controller.add_row([x, y])
                     y += dy
                 y = marked_area[1]
                 x += dx
@@ -1235,13 +1246,6 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                 self._current_rect_item = None
         except AttributeError:
             pass
-
-        if self._current_ellipse_item:
-            marked_area = list(self._current_ellipse_item.boundingRect().getRect())
-            self.controller.add_row([marked_area[0]+.5*marked_area[2], marked_area[1] + .5*marked_area[3]])
-        elif self._current_rect_item:
-            marked_area = list(self._current_rect_item.boundingRect().getRect())
-            self.controller.add_row([marked_area[0] + .5 * marked_area[2], marked_area[1] + .5 * marked_area[3]])
 
         self._current_rect_item = None
         self._current_ellipse_item = None
@@ -1494,8 +1498,8 @@ class MicroscopeView(QtWidgets.QWidget):
         self.image = image
         self.update()
 
-# fixme just beams code
-class PlotPanel(QtWidgets.QDockWidget):
+
+class PlotPanel(QtWidgets.QWidget):
     def __init__(self):
         super(PlotPanel, self).__init__()
 
@@ -1505,41 +1509,32 @@ class PlotPanel(QtWidgets.QDockWidget):
 
     def init_center_UI(self):
         self.setWindowTitle("Graphing Area")
-        tempWidget = QtWidgets.QWidget()
 
-        self.canvas_one = RunPlot()
-        self.canvas_two = RunPlot()
+        self.canvas = RunPlot()
         self.linestyle = 'None'
 
         hbox = QtWidgets.QHBoxLayout()
-        hbox.addWidget(self.canvas_one)
-        hbox.addWidget(self.canvas_two)
-        tempWidget.setLayout(hbox)
+        hbox.addWidget(self.canvas)
 
-        self.setWidget(tempWidget)
+        self.setLayout(hbox)
 
 
-# fixme just beams code
 class RunPlot(FigureCanvas):
     def __init__(self, dpi=100):
         fig = plt.figure(dpi=dpi)
-        self.axes_time = fig.add_subplot(211)
-        self.axes_freq = fig.add_subplot(212)
+        self.axes_rfu = fig.add_subplot(111)
+        self.axes_current = self.axes_rfu.twinx()
         self.set_style()
         FigureCanvas.__init__(self, fig)
 
     def set_style(self):
         title_font_size = 12
-        self.axes_time.spines['right'].set_visible(False)
-        self.axes_time.spines['top'].set_visible(False)
-        self.axes_time.set_xlabel("Time (" + chr(956) + "s)", fontsize=title_font_size)
-        self.axes_time.set_ylabel("Asymmetry", fontsize=title_font_size)
+        # self.axes_rfu.spines['top'].set_visible(False)
+        self.axes_rfu.set_xlabel("Time (" + chr(956) + "s)", fontsize=title_font_size)
+        self.axes_rfu.set_ylabel("RFU (kV)", fontsize=title_font_size)
 
-        self.axes_freq.spines['right'].set_visible(False)
-        self.axes_freq.spines['top'].set_visible(False)
-        self.axes_freq.set_xlabel("Frequency (MHz)", fontsize=title_font_size)
-        self.axes_freq.set_ylabel("Magnitude", fontsize=title_font_size)
-        self.axes_freq.legend(loc='upper right')
+        self.axes_current.set_ylabel("Current (mA)", fontsize=title_font_size)
+        self.axes_current.legend(loc='upper right')
 
 
 def wrap_widget(widget):
