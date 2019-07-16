@@ -1013,7 +1013,7 @@ class RunScreenController:
         self.log_handler = BarracudaQt.QPlainTextEditLogger(self.screen.output_window)
         self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(self.log_handler)
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger().setLevel(logging.INFO)
         logging.info('System Updates')
 
         self._add_row("", "")

@@ -734,10 +734,10 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.sequence_display.setColumnCount(3)
         self.sequence_display.setColumnWidth(0, 30)
-        self.sequence_display.setColumnWidth(1, 270)
-        self.sequence_display.setColumnWidth(2, 200)
+        self.sequence_display.setColumnWidth(1, 370)
+        self.sequence_display.setColumnWidth(2, 160)
         self.sequence_display.setHorizontalHeaderLabels(['', 'Method', 'Summary'])
-        self.sequence_display.setFixedWidth(500)
+        self.sequence_display.setFixedWidth(600)
         self.output_window.appendPlainText('::System Updates::')
 
         main_layout = QtWidgets.QHBoxLayout()
@@ -791,7 +791,7 @@ class RunScreen(QtWidgets.QMainWindow):
         # self.live_insert.addPixmap(self.pixel_map)
         # self.image_view = QtWidgets.QGraphicsView(self.live_insert)
         self.image_view = MicroscopeView()
-        self.image_view.setImage(image=QtGui.QImage("C:\KivyBarracuda\BarracudaQt\BarracudaQt\zStack_100000_-5.94.png"))
+        self.image_view.setImage(image=QtGui.QImage(r"C:\KivyBarracuda\BarracudaQt\BarracudaQt\recentImg.png"))
 
         live_feed_layout = QtWidgets.QVBoxLayout()
         live_feed_layout.addWidget(self.live_option)
@@ -1502,12 +1502,8 @@ class MicroscopeView(QtWidgets.QWidget):
 class PlotPanel(QtWidgets.QWidget):
     def __init__(self):
         super(PlotPanel, self).__init__()
-
         self.init_center_UI()
 
-        plt.ion()
-
-    def init_center_UI(self):
         self.setWindowTitle("Graphing Area")
 
         self.canvas = RunPlot()
@@ -1518,10 +1514,12 @@ class PlotPanel(QtWidgets.QWidget):
 
         self.setLayout(hbox)
 
+        plt.ion()
+
 
 class RunPlot(FigureCanvas):
-    def __init__(self, dpi=100):
-        fig = plt.figure(dpi=dpi)
+    def __init__(self):
+        fig = plt.figure()
         self.axes_rfu = fig.add_subplot(111)
         self.axes_current = self.axes_rfu.twinx()
         self.set_style()
@@ -1530,7 +1528,7 @@ class RunPlot(FigureCanvas):
     def set_style(self):
         title_font_size = 12
         # self.axes_rfu.spines['top'].set_visible(False)
-        self.axes_rfu.set_xlabel("Time (" + chr(956) + "s)", fontsize=title_font_size)
+        self.axes_rfu.set_xlabel("Time (µs)", fontsize=title_font_size)
         self.axes_rfu.set_ylabel("RFU (kV)", fontsize=title_font_size)
 
         self.axes_current.set_ylabel("Current (mA)", fontsize=title_font_size)
