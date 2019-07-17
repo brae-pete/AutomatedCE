@@ -29,7 +29,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 # os.chdir(prev_dir)
 
-HOME = False
+HOME = True
 
 
 # Possible Model Classes
@@ -73,11 +73,11 @@ class BarracudaSystem(BaseSystem):
         super(BarracudaSystem, self).__init__()
 
     def start_system(self):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
         # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         # self.image_control = ImageControl.ImageControl(home=HOME)
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
+        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
         # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
@@ -1015,31 +1015,8 @@ class RunScreenController:
         self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(self.log_handler)
         logging.getLogger().setLevel(logging.INFO)
-        logging.info('System Updates')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
-        logging.info('\n')
+        logging.info('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
+
         logging.info('System Updates')
 
         self._add_row("", "")
@@ -1048,7 +1025,6 @@ class RunScreenController:
 
     def _set_callbacks(self):
         if self.hardware.xy_stage_control:
-            # fixme set callbacks for arrow keys? Create a checkbox in the xy form box
             self.screen.xy_up.released.connect(lambda: self.set_y(step=self.screen.xy_step_size.value()))
             self.screen.xy_down.released.connect(lambda: self.set_y(step=-self.screen.xy_step_size.value()))
             self.screen.xy_right.released.connect(lambda: self.set_x(step=self.screen.xy_step_size.value()))
@@ -1086,10 +1062,10 @@ class RunScreenController:
             self.screen.enable_outlet_form(False)
 
         if self.hardware.pressure_control:
-            self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.rinse_pressure(on=True))
-            self.screen.pressure_rinse_state.negative_selected.connect(lambda: self.rinse_pressure(on=False))
-            self.screen.pressure_valve_state.positive_selected.connect(lambda: self.pressure_valve(open=True))
-            self.screen.pressure_valve_state.negative_selected.connect(lambda: self.pressure_valve(open=False))
+            self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.rinse_pressure(off=False))
+            self.screen.pressure_rinse_state.negative_selected.connect(lambda: self.rinse_pressure(off=True))
+            self.screen.pressure_valve_state.positive_selected.connect(lambda: self.pressure_valve(closed=False))
+            self.screen.pressure_valve_state.negative_selected.connect(lambda: self.pressure_valve(closed=True))
             self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
         else:
             self.screen.enable_pressure_form(False)
@@ -1438,13 +1414,18 @@ class RunScreenController:
     # Run Control Functions
     def start_sequence(self):
         logging.info('Starting run ...')
+        # Using a QThread (no inheritance)
         # self.run_thread = QtCore.QThread()
         # self.run_thread.started.connect(self.run)
         # self.run_thread.finished.connect(self.run_thread.deleteLater)
         # self.run_thread.start()
-        # threading.Thread(target=self.run).start()
-        self.runt = RunThread()
-        self.runt.start()
+
+        # Regular thread from threading library
+        threading.Thread(target=self.run).start()
+
+        # Using a QThread (inheritance)
+        # self.runt = RunThread()
+        # self.runt.start()
 
     def pause_sequence(self):
         logging.info('Pausing run ...')
@@ -1507,7 +1488,7 @@ class SystemScreenController:
 
 
 class RunThread(QtCore.QThread):
-    def __init__(self):
+    def __init__(self, hardware, method):
         QtCore.QThread.__init__(self)
 
     def run(self):
