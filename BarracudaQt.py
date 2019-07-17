@@ -2689,3 +2689,8 @@ class PermissionsMessageUI(QtWidgets.QDialog):
         self.setLayout(col)
 
         self.exec_()
+
+
+class InputMessageUI(QtWidgets.QDialog):
+    def __init__(self, message=None):
+        print(message)

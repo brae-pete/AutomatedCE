@@ -133,6 +133,21 @@ class Insert:
         self.wells = wells
         self.label = label
 
+    def __str__(self):
+        separator = ','
+        wells = ['{}'.format(str(well)) for well in self.wells]
+        logging.info(wells)
+        return_wells = separator.join(wells)
+        logging.info(return_wells)
+        return return_wells
+
+    def get_well_xy(self, label):
+        for well in self.wells:
+            if well.label == label:
+                return well.location
+        else:
+            return None
+
 
 class Method:
     def __init__(self, insert, steps, label=None, ID=None):
@@ -997,7 +1012,10 @@ class RunScreenController:
     _update_delay = 0.125
     _xy_step_size = 1/1000  # µm
     _live_feed = True
-    _pause_point = None
+    _pause_thread_flag = False
+    _clearance_height = 10
+    _run_thread = None
+    _stop_thread_flag = False
 
     _stop.set()
     _stop.clear()
@@ -1413,56 +1431,87 @@ class RunScreenController:
 
     # Run Control Functions
     def start_sequence(self):
+        if self._pause_thread_flag:
+            logging.info('Continuing run ...')
+            self._pause_thread_flag = False
+            return
+
         logging.info('Starting run ...')
-        # Using a QThread (no inheritance)
-        # self.run_thread = QtCore.QThread()
-        # self.run_thread.started.connect(self.run)
-        # self.run_thread.finished.connect(self.run_thread.deleteLater)
-        # self.run_thread.start()
-
-        # Regular thread from threading library
-        threading.Thread(target=self.run).start()
-
-        # Using a QThread (inheritance)
-        # self.runt = RunThread()
-        # self.runt.start()
+        self._run_thread = threading.Thread(target=self.run).start()
 
     def pause_sequence(self):
         logging.info('Pausing run ...')
+        self._pause_thread_flag = True
 
     def end_sequence(self):
         logging.info('Stopping run ...')
+        self._run_thread.stop()
 
     def run(self):
         if not self.check_system():
             logging.error('Unable to start run.')
 
-        if self._pause_point:
-            pass
-
         for method in self.methods:
-            self.run_method(method)
+            run_state = self.run_method(method)
+            if not run_state:
+                self.end_sequence()
+                return False
+
+        return True
 
     def run_method(self, method):
-        steps = {'Inject': self.inject,
-                 'Separate': self.separate,
-                 'Rinse': self.rinse}
-
         for step in method.steps:
-            time.sleep(2)
-            try:
-                steps[step['Type']](step)
-            except KeyError:
-                continue
+            if 'Type' in step.keys():
 
-    def separate(self, step):
-        logging.info('Separating : {}'.format(step['Summary']))
+                logging.info(step)
+                logging.info(1)
 
-    def inject(self, step):
-        logging.info('Injecting : {}'.format(step['Summary']))
+                logging.info('{} Step: {}'.format(step['Type'], step['Summary']))
+                time.sleep(2)
 
-    def rinse(self, step):
-        logging.info('Rinsing : {}'.format(step['Summary']))
+                while self._pause_thread_flag:
+                    continue
+                if self._stop_thread_flag:
+                    return False
+
+                logging.info('Raising inlet {}mm'.format(self._clearance_height))
+                time.sleep(2)
+
+                while self._pause_thread_flag:
+                    continue
+                if self._stop_thread_flag:
+                    return False
+
+                logging.info('Lowering outlet {}mm'.format(self._clearance_height))
+                time.sleep(2)
+
+                while self._pause_thread_flag:
+                    continue
+                if self._stop_thread_flag:
+                    return False
+
+                inlet_location = self.insert.get_well_xy(step['Inlet'])
+                if inlet_location is None:
+                    logging.error('Inlet not found in insert.')
+                    return False
+
+                logging.info('Moving stage to ({}, {})'.format(inlet_location[0], inlet_location[1]))
+                time.sleep(2)
+
+                while self._pause_thread_flag:
+                    continue
+                if self._stop_thread_flag:
+                    return False
+
+                logging.info('Lowering inlet {}mm'.format(self._clearance_height))
+                time.sleep(2)
+
+                while self._pause_thread_flag:
+                    continue
+                if self._stop_thread_flag:
+                    return False
+
+        return True
 
     # Output Terminal Functions
     def clear_output_window(self):
