@@ -24,11 +24,11 @@ class PressureControl:
     def open(self, *args):
         self.arduino.open()
 
-    def applyRinsePressure(self):
+    def apply_rinse_pressure(self):
         with self.lock:
             self.state = self.arduino.applyPressure()
 
-    def stopRinsePressure(self):
+    def stop_rinse_pressure(self):
         """Only need to open release valve momentarily, this reduces heat build up on the MOSFET"""
         # with self.lock:
         #    self.state= self.arduino.openValves()
@@ -37,4 +37,12 @@ class PressureControl:
             self.state = self.arduino.removePressure()
             logging.info("Released Pressure")
             time.sleep(0.5)
+
+    def open_valve(self):
+        with self.lock:
+            self.state = self.arduino.openValves()
+
+    def close_valve(self):
+        with self.lock:
+            self.state = self.arduino.closeValves()
 

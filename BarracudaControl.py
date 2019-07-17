@@ -77,7 +77,7 @@ class BarracudaSystem(BaseSystem):
         # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         # self.image_control = ImageControl.ImageControl(home=HOME)
-        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
+        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
         # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
@@ -449,7 +449,7 @@ class InsertScreenController:
 
                 for well in self.insert.wells:
                     self.screen.image_frame.add_shape(well.shape, well.bound_box)
-                    self.add_row(well.location, well.label)
+                    self._add_row(well.location, well.label)
 
     def save_insert(self):
         if not self.screen.file_name.text():
@@ -1011,7 +1011,7 @@ class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
     _xy_step_size = 1/1000  # µm
-    _live_feed = True
+    _live_feed = False
     _pause_thread_flag = False
     _clearance_height = 10
     _run_thread = None
@@ -1027,6 +1027,10 @@ class RunScreenController:
 
         self.methods = []
         self.insert = None
+        self._um2pix = 1 / 200
+        self._mm2pix = 2
+        self._stage_offset = self.hardware.xy_stage_upper_left
+        self._stage_inversion = self.hardware.xy_stage_inversion
 
         # Set up logging window in the run screen.
         self.log_handler = BarracudaQt.QPlainTextEditLogger(self.screen.output_window)
@@ -1147,8 +1151,8 @@ class RunScreenController:
             value = self.hardware.objective_control.read_z()
             self.screen.objective_value.setText("{:.3f}".format(float(value)))
 
-        threading.Thread(target=self._update_stages).start()
-        threading.Thread(target=self._update_live_feed).start()
+        threading.Thread(target=self._update_stages).start()  # fixme Make both of these QThreads
+        threading.Thread(target=self._update_live_feed).start()  # fixme
 
     def _value_display_interact(self, selected=False):
         logging.info(selected)
@@ -1200,9 +1204,14 @@ class RunScreenController:
                 if image is None:
                     continue
 
-                self.screen.image_view.setImage(QtGui.QImage("recentImg.png"))
+                self.screen.update_pixmap(camera=True)
             else:
-                pass
+                event_location = self.hardware.xy_stage_control.read_xy()
+                event = [(event_location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
+                         (event_location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
+
+                self.screen.live_feed_scene.draw_crosshairs(event)
+                time.sleep(.25)
 
     def _update_plot(self):
         pass
@@ -1210,10 +1219,18 @@ class RunScreenController:
     def _switch_feed(self, live):
         if not live:
             self.hardware.image_control.stop_video_feed()
+            self.screen.update_pixmap(camera=False)
+            self._load_insert()
         else:
             self.hardware.image_control.start_video_feed()
 
         self._live_feed = live
+
+    def _load_insert(self):
+        if self.insert:
+            for well in self.insert.wells:
+                logging.info(well)
+                self.screen.live_feed_scene.add_shape(well.shape, well.bound_box)
 
     # Hardware Control Functions
     def set_origin(self):
@@ -1248,10 +1265,19 @@ class RunScreenController:
         if self._stop.is_set():
             self._stop.clear()
 
+    def set_xy(self, xy):
+        logging.info('Moving XY stage to ({}, {})'.format(xy[0], xy[1]))
+        self.hardware.xy_stage_control.set_xy(xy)
+
+        value = self.hardware.xy_stage_control.read_xy()
+        self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+
     def set_z(self, height=None, step=None):
         if step:
+            logging.info('Moving inlet {}mm'.format(step))
             self.hardware.z_stage_control.set_rel_z(step)
         elif height:
+            logging.info('Moving inlet to {}mm'.format(height))
             self.hardware.z_stage_control.set_z(height)
 
         if self._stop.is_set():
@@ -1268,8 +1294,10 @@ class RunScreenController:
 
     def set_outlet(self, height=None, step=None):
         if step:
+            logging.info('Moving outlet {}mm'.format(step))
             self.hardware.outlet_control.set_rel_z(step)
         elif height:
+            logging.info('Moving outlet to {}mm'.format(height))
             self.hardware.outlet_control.set_z(height)
 
         if self._stop.is_set():
@@ -1391,12 +1419,19 @@ class RunScreenController:
                 BarracudaQt.ErrorMessageUI(message)
             else:
                 if self.insert:
+                    logging.info('insertloaded')
                     if self.insert.label != data.insert.label and self.insert.wells != data.insert.wells:
                         BarracudaQt.ErrorMessageUI('The insert for this method does not match the insert for previously'
                                                    ' loaded methods.')
                         return
                 else:
+                    logging.info('insertnotyetloaded')
                     self.insert = data.insert
+                    if not self._live_feed:
+                        logging.info('loadingthisjunk')
+                        self._load_insert()
+
+                logging.info(self.insert)
 
                 self.methods.append(data)
                 self._add_row(open_file_path, data.steps[0]['Summary'])
@@ -1444,8 +1479,7 @@ class RunScreenController:
         self._pause_thread_flag = True
 
     def end_sequence(self):
-        logging.info('Stopping run ...')
-        self._run_thread.stop()
+        self._stop_thread_flag = True
 
     def run(self):
         if not self.check_system():
@@ -1454,64 +1488,55 @@ class RunScreenController:
         for method in self.methods:
             run_state = self.run_method(method)
             if not run_state:
-                self.end_sequence()
+                logging.info('Stopping run ...')
+                self._stop_thread_flag = False
                 return False
-
         return True
 
     def run_method(self, method):
+        def check_flags():
+            while self._pause_thread_flag:
+                continue
+            if self._stop_thread_flag:
+                return False
+
         for step in method.steps:
             if 'Type' in step.keys():
-
-                logging.info(step)
-                logging.info(1)
-
                 logging.info('{} Step: {}'.format(step['Type'], step['Summary']))
+                check_flags()
+
+                inlet_travel = self._clearance_height
+                self.set_z(step=inlet_travel)
                 time.sleep(2)
+                check_flags()
 
-                while self._pause_thread_flag:
-                    continue
-                if self._stop_thread_flag:
-                    return False
-
-                logging.info('Raising inlet {}mm'.format(self._clearance_height))
+                outlet_travel = self._clearance_height
+                self.set_outlet(step=outlet_travel)
                 time.sleep(2)
-
-                while self._pause_thread_flag:
-                    continue
-                if self._stop_thread_flag:
-                    return False
-
-                logging.info('Lowering outlet {}mm'.format(self._clearance_height))
-                time.sleep(2)
-
-                while self._pause_thread_flag:
-                    continue
-                if self._stop_thread_flag:
-                    return False
+                check_flags()
 
                 inlet_location = self.insert.get_well_xy(step['Inlet'])
                 if inlet_location is None:
-                    logging.error('Inlet not found in insert.')
+                    logging.error('Inlet not found in insert. Inlet and Insert given below.')
+                    logging.error('INLET LABEL : {}'.format(step['Inlet']))
+                    logging.error('INSERT WELLS : {}'.format(self.insert))
                     return False
-
-                logging.info('Moving stage to ({}, {})'.format(inlet_location[0], inlet_location[1]))
+                self.set_xy(inlet_location)
                 time.sleep(2)
+                check_flags()
 
-                while self._pause_thread_flag:
-                    continue
-                if self._stop_thread_flag:
-                    return False
-
-                logging.info('Lowering inlet {}mm'.format(self._clearance_height))
+                self.set_z(step=-inlet_travel)
                 time.sleep(2)
+                check_flags()
 
-                while self._pause_thread_flag:
-                    continue
-                if self._stop_thread_flag:
-                    return False
+                if step['Type'] == 'Separate':
+                    pass
+                elif step['Type'] == 'Rinse':
+                    pass
+                elif step['Type'] == 'Inject':
+                    pass
 
-        return True
+            return True
 
     # Output Terminal Functions
     def clear_output_window(self):

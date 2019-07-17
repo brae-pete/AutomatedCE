@@ -357,7 +357,6 @@ class MethodScreen(QtWidgets.QMainWindow):
     def init_table(self):
         self.insert_table.setRowCount(0)
         self.insert_table.setColumnCount(8)
-        # self.insert_table.column(8).setMinimumWidth(200)
         self.insert_table.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.insert_table.setHorizontalHeaderLabels(["", 'Time (min)', 'Event', 'Value', 'Duration',
                                                      'Inlet Vial', 'Outlet Vial', 'Summary'])
@@ -779,40 +778,60 @@ class RunScreen(QtWidgets.QMainWindow):
         self.live_feed_panel.setTitleBarWidget(QtWidgets.QWidget())
         temper_wid = QtWidgets.QWidget()
         temp_layout = QtWidgets.QHBoxLayout()
-        temp_layout.addLayout(self.init_insert_view())
-        temp_layout.addLayout(self.init_graphics_view2())
+        temp_layout.addWidget(self.init_insert_view())
+        temp_layout.addWidget(self.init_plot_view())
         temper_wid.setLayout(temp_layout)
-        temper_wid = wrap_widget(temper_wid)
+        # temper_wid = wrap_widget(temper_wid)
         self.live_feed_panel.setWidget(temper_wid)
 
     def init_insert_view(self):
         self.live_option = SwitchButton(w1='Live', w2='Insert', width=80)
-        # self.pixel_map = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
-        # self.live_insert = GraphicsScene()
-        # self.live_insert.addPixmap(self.pixel_map)
-        # self.image_view = QtWidgets.QGraphicsView(self.live_insert)
-        self.image_view = MicroscopeView()
-        self.image_view.setImage(image=QtGui.QImage(r"C:\KivyBarracuda\BarracudaQt\BarracudaQt\recentImg.png"))
+        self.live_feed_scene = GraphicsScene()
+        self.live_feed_view = QtWidgets.QGraphicsView()
+        self.live_feed_pixmap = QtWidgets.QGraphicsPixmapItem()
+        live_feed_window = QtWidgets.QMainWindow()
 
-        live_feed_layout = QtWidgets.QVBoxLayout()
-        live_feed_layout.addWidget(self.live_option)
-        live_feed_layout.addWidget(self.image_view)
+        live_feed_control = QtWidgets.QDockWidget()
+        control_widget = QtWidgets.QWidget()
+        control_layout = QtWidgets.QHBoxLayout()
+        control_layout.addWidget(self.live_option)
+        control_layout.addStretch()
+        control_widget.setLayout(control_layout)
+        live_feed_control.setWidget(control_widget)
 
-        return live_feed_layout
+        self.live_feed_pixmap.setPixmap(QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror_cropped.png")))
+        self.live_feed_scene.addItem(self.live_feed_pixmap)
+        self.live_feed_view.setScene(self.live_feed_scene)
+        live_feed_window.setCentralWidget(self.live_feed_view)
+        live_feed_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_feed_control)
+        live_feed_control.setTitleBarWidget(QtWidgets.QWidget())
+        live_feed_window = wrap_widget(live_feed_window)
+        live_feed_window.setFixedWidth(600)
+        # self.live_feed_view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        # self.live_feed_view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
-    def init_live_feed(self):
-        self.live_feed = MicroscopeView()
+        return live_feed_window
 
-    def init_graphics_view2(self):
+    def init_plot_view(self):
         self.save_plot = QtWidgets.QPushButton('Save')
+        self.plot_panel = PlotPanel()
+        live_plot_window = QtWidgets.QMainWindow()
+
+        live_plot_control = QtWidgets.QDockWidget()
+        control_widget = QtWidgets.QWidget()
+        control_layout = QtWidgets.QHBoxLayout()
+        control_layout.addWidget(self.save_plot)
+        control_layout.addStretch()
+        control_widget.setLayout(control_layout)
+        live_plot_control.setWidget(control_widget)
+
         self.save_plot.setFixedWidth(60)
+        live_plot_window.setCentralWidget(self.plot_panel)
+        # live_plot_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_plot_control)  # fixme when you want to add buttons
+        live_plot_control.setTitleBarWidget(QtWidgets.QWidget())
+        live_plot_window = wrap_widget(live_plot_window)
 
-        self.image_view2 = PlotPanel()
-        live_feed_layour2 = QtWidgets.QVBoxLayout()
-        live_feed_layour2.addWidget(self.save_plot)
-        live_feed_layour2.addWidget(self.image_view2)
-
-        return live_feed_layour2
+        return live_plot_window
 
     def enable_xy_stage_form(self, enabled):
         self.xy_up.setEnabled(enabled)
@@ -875,6 +894,12 @@ class RunScreen(QtWidgets.QMainWindow):
     @staticmethod
     def enable_button(button, checkbox):
         button.setEnabled(checkbox.isChecked())
+
+    def update_pixmap(self, camera=False):
+        if camera:
+            self.live_feed_pixmap.setPixmap(QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror_cropped.png")))
+        else:
+            self.live_feed_pixmap.setPixmap('recentImg.png')
 
 
 class DataScreen(QtWidgets.QMainWindow):
@@ -992,6 +1017,10 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
         self._start = QtCore.QPointF()
         self._current_rect_item = None
         self._current_ellipse_item = None
+        self._top_hair = None
+        self._bottom_hair = None
+        self._left_hair = None
+        self._right_hair = None
         self._highlighted_location = None
         self._highlight_pen = QtGui.QPen(QtCore.Qt.cyan, 2, QtCore.Qt.SolidLine)
 
@@ -1161,6 +1190,49 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
 
     def draw_line(self, event):
         pass
+
+    def draw_crosshairs(self, event):
+        crosshair_width = 2
+        crosshair_length = 12
+        center_radius = 4
+
+        self.remove_crosshairs()
+
+        top_hair_rect = QtCore.QRectF(event[0] - crosshair_width/2, event[1] - center_radius - crosshair_length,
+                                      crosshair_width, crosshair_length)
+        left_hair_rect = QtCore.QRectF(event[0] - center_radius - crosshair_length, event[1] - crosshair_width/2,
+                                       crosshair_length, crosshair_width)
+        right_hair_rect = QtCore.QRectF(event[0] + crosshair_width/2 + center_radius, event[1] - crosshair_width/2,
+                                        crosshair_length, crosshair_width)
+        bottom_hair_rect = QtCore.QRectF(event[0] - crosshair_width/2, event[1] + crosshair_width/2 + center_radius,
+                                         crosshair_width, crosshair_length)
+
+        self._top_hair = QtWidgets.QGraphicsRectItem()
+        self._top_hair.setBrush(QtCore.Qt.yellow)
+        self.addItem(self._top_hair)
+        self._top_hair.setRect(top_hair_rect)
+
+        self._bottom_hair = QtWidgets.QGraphicsRectItem()
+        self._bottom_hair.setBrush(QtCore.Qt.yellow)
+        self.addItem(self._bottom_hair)
+        self._bottom_hair.setRect(bottom_hair_rect)
+
+        self._left_hair = QtWidgets.QGraphicsRectItem()
+        self._left_hair.setBrush(QtCore.Qt.yellow)
+        self.addItem(self._left_hair)
+        self._left_hair.setRect(left_hair_rect)
+
+        self._right_hair = QtWidgets.QGraphicsRectItem()
+        self._right_hair.setBrush(QtCore.Qt.yellow)
+        self.addItem(self._right_hair)
+        self._right_hair.setRect(right_hair_rect)
+
+    def remove_crosshairs(self):
+        if self._top_hair:
+            self.removeItem(self._top_hair)
+            self.removeItem(self._bottom_hair)
+            self.removeItem(self._left_hair)
+            self.removeItem(self._right_hair)
 
     def remove_object(self, event):
         self._clearing = True
@@ -1520,6 +1592,7 @@ class PlotPanel(QtWidgets.QWidget):
 class RunPlot(FigureCanvas):
     def __init__(self):
         fig = plt.figure()
+        fig.set_facecolor('#F6F6F6')
         self.axes_rfu = fig.add_subplot(111)
         self.axes_current = self.axes_rfu.twinx()
         self.set_style()
@@ -1530,9 +1603,11 @@ class RunPlot(FigureCanvas):
         # self.axes_rfu.spines['top'].set_visible(False)
         self.axes_rfu.set_xlabel("Time (µs)", fontsize=title_font_size)
         self.axes_rfu.set_ylabel("RFU (kV)", fontsize=title_font_size)
+        self.axes_rfu.set_facecolor('#FFFFFF')
 
         self.axes_current.set_ylabel("Current (mA)", fontsize=title_font_size)
         self.axes_current.legend(loc='upper right')
+        self.axes_current.set_facecolor('#FFFFFF')
 
 
 def wrap_widget(widget):
