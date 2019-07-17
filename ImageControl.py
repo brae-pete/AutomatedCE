@@ -64,8 +64,9 @@ class ImageControl:
         self.mmc.unloadAllDevices()
 
     def stop_video_feed(self):
-        if self.mmc.isSequenceRunning():
-            self.mmc.stopSequenceAcquisition()
+        if not self.home:
+            if self.mmc.isSequenceRunning():
+                self.mmc.stopSequenceAcquisition()
 
     def get_single_image(self):
         """Snaps single image, returns image"""
@@ -74,12 +75,14 @@ class ImageControl:
         return image
 
     def start_video_feed(self):
-        self.mmc.startContinuousSequenceAcquisition(1)
+        if not self.home:
+            self.mmc.startContinuousSequenceAcquisition(1)
 
     def get_recent_image(self, size=None):
         """Returns most recent image from the camera"""
         if self.home:
             time.sleep(0.05)
+            return True
         time.sleep(0.05)
 
         if not size:

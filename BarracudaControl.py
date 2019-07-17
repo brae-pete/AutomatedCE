@@ -76,7 +76,7 @@ class BarracudaSystem(BaseSystem):
         # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
         # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        # self.image_control = ImageControl.ImageControl(home=HOME)
+        self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
@@ -94,7 +94,8 @@ class BarracudaSystem(BaseSystem):
             if image is None:
                 return None
 
-            image.save("recentImg.png")
+            if not HOME:
+                image.save("recentImg.png")
 
         return image
 
@@ -1151,8 +1152,16 @@ class RunScreenController:
             value = self.hardware.objective_control.read_z()
             self.screen.objective_value.setText("{:.3f}".format(float(value)))
 
-        threading.Thread(target=self._update_stages).start()  # fixme Make both of these QThreads
-        threading.Thread(target=self._update_live_feed).start()  # fixme
+        self.update_display_thread = QtCore.QThread()
+        self.update_display_thread.started.connect(self._update_live_feed)
+        self.update_display_thread.finished.connect(self.update_display_thread.deleteLater)
+        #
+        # self.update_display_thread.start()
+        # Have a regular python thread do the hard work up to creating the pixmap item and have the main thread
+        # be the one to actually set that pixmap item to the graphics view. It's the only way to update the view.
+
+        threading.Thread(target=self._update_stages, daemon=True).start()
+        threading.Thread(target=self._update_live_feed, daemon=True).start()
 
     def _value_display_interact(self, selected=False):
         logging.info(selected)
@@ -1203,15 +1212,18 @@ class RunScreenController:
 
                 if image is None:
                     continue
-
+                logging.info('updating')
                 self.screen.update_pixmap(camera=True)
+                time.sleep(2)
+                self.screen.update_pixmap(camera=False)
+                time.sleep(2)
             else:
-                event_location = self.hardware.xy_stage_control.read_xy()
-                event = [(event_location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
-                         (event_location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
+                # event_location = self.hardware.xy_stage_control.read_xy()
+                # event = [(event_location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
+                #          (event_location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
 
-                self.screen.live_feed_scene.draw_crosshairs(event)
-                time.sleep(.25)
+                # self.screen.live_feed_scene.draw_crosshairs(event)
+                time.sleep(2)
 
     def _update_plot(self):
         pass

@@ -799,8 +799,11 @@ class RunScreen(QtWidgets.QMainWindow):
         control_widget.setLayout(control_layout)
         live_feed_control.setWidget(control_widget)
 
-        self.live_feed_pixmap.setPixmap(QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror_cropped.png")))
-        self.live_feed_scene.addItem(self.live_feed_pixmap)
+        self.live_feed_pixmap = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror_cropped.png"))
+        self.x = self.live_feed_scene.addPixmap(self.live_feed_pixmap)
+        print('pointer below')
+        print(self.x)
+        print('pointer above')
         self.live_feed_view.setScene(self.live_feed_scene)
         live_feed_window.setCentralWidget(self.live_feed_view)
         live_feed_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_feed_control)
@@ -896,10 +899,12 @@ class RunScreen(QtWidgets.QMainWindow):
         button.setEnabled(checkbox.isChecked())
 
     def update_pixmap(self, camera=False):
-        if camera:
-            self.live_feed_pixmap.setPixmap(QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror_cropped.png")))
+        if not camera:
+            print('Updating to insert view')
+            self.x.setPixmap(QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror_cropped.png")))
         else:
-            self.live_feed_pixmap.setPixmap('recentImg.png')
+            print('Updating to microscope view')
+            self.x.setPixmap(QtGui.QPixmap('recentImg.png'))
 
 
 class DataScreen(QtWidgets.QMainWindow):
