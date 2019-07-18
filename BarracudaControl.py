@@ -26,6 +26,7 @@ import PressureControl
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
+import numpy as np
 
 # os.chdir(prev_dir)
 
@@ -79,7 +80,7 @@ class BarracudaSystem(BaseSystem):
         self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
-        # self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
+        self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
         # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
         self.start_daq()
@@ -618,6 +619,7 @@ class MethodScreenController:
 
     def set_step_conditions(self, dialog, dialog_data):
         """ Sets table values based on form data from dialog. """
+        logging.info(dialog_data)
         current_row = self.screen.insert_table.currentRow()
 
         data = {'Type': dialog}
@@ -626,7 +628,6 @@ class MethodScreenController:
         try:
             self._form_data[current_row] = data
         except IndexError:
-            print('here?')
             self._form_data.extend([{}])
             self._form_data[current_row] = data
 
@@ -1021,6 +1022,8 @@ class RunScreenController:
     _clearance_height = 10
     _run_thread = None
     _stop_thread_flag = False
+    _plot_data = False
+    _laser_on_time = 600  # seconds
 
     _stop.set()
     _stop.clear()
@@ -1032,6 +1035,7 @@ class RunScreenController:
 
         self.methods = []
         self.insert = None
+        self.injection_wait = 4.5
         self._um2pix = 1 / 300
         self._mm2pix = self._um2pix * 1000
         self._stage_offset = self.hardware.xy_stage_upper_left
@@ -1164,6 +1168,7 @@ class RunScreenController:
 
         threading.Thread(target=self._update_stages, daemon=True).start()
         threading.Thread(target=self._update_live_feed, daemon=True).start()
+        threading.Thread(target=self._update_plot, daemon=True).start()
 
     def _value_display_interact(self, selected=False):
         logging.info(selected)
@@ -1218,16 +1223,34 @@ class RunScreenController:
 
                 self.screen.feed_updated.emit()
                 time.sleep(.25)
-            else:
+            elif self.hardware.xy_stage_control:
                 event_location = self.hardware.xy_stage_control.read_xy()
                 self._event = [(event_location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
                                (event_location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
 
                 self.screen.xy_updated.emit()
                 time.sleep(.25)
+            else:
+                break
 
     def _update_plot(self):
-        pass
+        while True:
+            rfu = self.hardware.daq_board_control.data['ai3']
+            kv = self.hardware.daq_board_control.data['ai1']
+            ua = self.hardware.daq_board_control.data['ai2']
+
+            if self._plot_data:
+                logging.info('Graphing data.')
+                threading.Thread(target=self.screen.update_plots, args=(rfu, ua)).start()
+
+            if len(kv) > 4:
+                try:
+                    kv = np.mean(kv[-4:-1])
+                    ua = np.mean(ua[-4:-1])
+                except IndexError:
+                    return
+
+            time.sleep(.25)
 
     def _switch_feed(self, live):
         if not live:
@@ -1409,6 +1432,20 @@ class RunScreenController:
 
     def laser_on(self):
         self.hardware.laser_control.start()
+        start_time = time.time()
+        threading.Thread(target=self.laser_poll, args=(start_time,)).start()
+
+    def laser_poll(self, start_time):
+        while True:
+            time_on = time.time() - start_time
+            if time_on < self._laser_on_time:
+                self.screen.laser_timer.setText('{:.1f}s'.format(self._laser_on_time - time_on))
+                response = self.hardware.laser_control.poll_status()
+                logging.info(response)
+                time.sleep(1)
+            else:
+                logging.info('10 Minutes have passed, turning off laser.')
+                break
 
     def check_system(self):
         logging.info('Checking system status ...')
@@ -1448,8 +1485,6 @@ class RunScreenController:
                     if not self._live_feed:
                         logging.info('loadingthisjunk')
                         self._load_insert()
-
-                logging.info(self.insert)
 
                 self.methods.append(data)
                 self._add_row(open_file_path, data.steps[0]['Summary'])
@@ -1518,10 +1553,12 @@ class RunScreenController:
             if self._stop_thread_flag:
                 return False
 
+        previous_step = None
         for step in method.steps:
             if 'Type' in step.keys():
                 logging.info('{} Step: {}'.format(step['Type'], step['Summary']))
                 check_flags()
+                step_start = time.time()
 
                 inlet_travel = self._clearance_height
                 self.set_z(step=inlet_travel)
@@ -1543,17 +1580,66 @@ class RunScreenController:
                 time.sleep(2)
                 check_flags()
 
+                if previous_step == 'Inject' and time.time() - step_start < self.injection_wait:
+                    time.sleep(abs(self.injection_wait-(time.time() - step_start)))
+                    check_flags()
+
                 self.set_z(step=-inlet_travel)
                 time.sleep(2)
                 check_flags()
 
-                if step['Type'] == 'Separate':
-                    pass
-                elif step['Type'] == 'Rinse':
-                    pass
-                elif step['Type'] == 'Inject':
-                    pass
+                voltage_level = 0
+                pressure_state = False
+                start_time = step['Time']
 
+                if step['Type'] == 'Separate':
+                    self.hardware.daq_board_control.max_time = 600000
+                    self.hardware.daq_board_control.start_read_task()
+
+                    if step['SeparationTypeVoltageRadio']():
+                        voltage_level = float(step['ValuesVoltageEdit']())
+                    elif step['SeparationTypeCurrentRadio']():
+                        logging.error('Unsupported: Separation with current')
+                        return False
+                    elif step['SeparationTypePowerRadio']():
+                        logging.error('Unsupported: Separation with power')
+                        return False
+                    elif step['SeparationTypePressureRadio']():
+                        logging.error('Unsupported: Separation with pressure')
+                        return False
+                    elif step['SeparationTypeVacuumRadio']():
+                        logging.error('Unsupported: Separation with vacuum')
+                        return False
+
+                    if step['SeparationTypeWithPressureCheck']():
+                        pressure_state = True
+                    elif step['SeparationTypeWithVacuumCheck']():
+                        logging.error('Unsupported: Separation with vacuum.')
+                        return False
+
+                elif step['Type'] == 'Rinse':
+                    if step['PressureTypePressureRadio']():
+                        pressure_state = True
+                    elif step['PressureTypeVacuumRadio']():
+                        return False
+
+                elif step['Type'] == 'Inject':
+                    if step['InjectionTypeVoltageRadio']():
+                        return False
+                    elif step['InjectionTypeVacuumRadio']():
+                        return False
+
+                self.hardware.daq_board_control.change_voltage(voltage_level)
+                if pressure_state:
+                    self.hardware.pressure_control.apply_rinse_pressure()
+                time.sleep(start_time)
+
+                self.hardware.daq_board_control.change_voltage(0)
+                threading.Thread(target=self.hardware.pressure_control.stop_rinse_pressure).start()
+
+                logging.info('Step completed.')
+
+                previous_step = step['Type']
             return True
 
     # Output Terminal Functions

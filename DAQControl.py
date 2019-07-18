@@ -1,7 +1,7 @@
 from nidaqmx.constants import Edge
 import nidaqmx
 import numpy as np
-# import logging
+import logging
 import time
 import threading
 
@@ -59,6 +59,7 @@ class DAQBoard:
     def change_voltage(self, voltage):
         """ voltage in kV, used to adjust analog output (divided voltage-conversion factor"""
         # Convert kV to daq V
+        logging.warning('Changing voltage to {}kV'.format(voltage))
         voltage = float(voltage) / self.voltage_conversion
         diff = float(voltage) - self.voltage
         if diff == 0:
@@ -75,11 +76,11 @@ class DAQBoard:
         """When changing voltages, ramp up the voltage output"""
         # Create a ramp from the current voltage to the set voltage
 
-        print(diff, voltage, self.voltage)
+        logging.info(diff, voltage, self.voltage)
         ramp_time = abs(float(diff) / self.voltage_ramp)
-        print(ramp_time)
+        logging.info(ramp_time)
         samples = round(ramp_time * self.output_freq)
-        print(samples)
+        logging.info(samples)
         self.samples = samples = np.linspace(self.voltage, voltage, samples)
         return samples
 

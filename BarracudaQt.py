@@ -643,6 +643,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_standby = QtWidgets.QPushButton('Standby')
         self.laser_on_check = QtWidgets.QCheckBox()
         self.laser_fire_check = QtWidgets.QCheckBox()
+        self.laser_timer = QtWidgets.QLineEdit()
 
         self.laser_pfn.setFixedWidth(40)
         self.laser_attenuation.setFixedWidth(40)
@@ -653,6 +654,8 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.laser_fire.setEnabled(False)
         self.laser_standby.setEnabled(False)
+        self.laser_timer.setReadOnly(True)
+        self.laser_timer.setText('{}s'.format(600))
 
         form_layout = QtWidgets.QFormLayout()
         col_one = QtWidgets.QVBoxLayout()
@@ -663,7 +666,7 @@ class RunScreen(QtWidgets.QMainWindow):
         row_one.addStretch()
         row_one.addWidget(self.laser_fire_check)
         row_one.addWidget(self.laser_fire)
-        row_one.addSpacing(15)
+        row_one.addWidget(self.laser_timer)
         col_one.addLayout(row_one)
         row_two = QtWidgets.QHBoxLayout()
         row_two.addStretch()
@@ -911,7 +914,6 @@ class RunScreen(QtWidgets.QMainWindow):
     @staticmethod
     def update_pixmap(camera=False):
         if not camera:
-            logging.info('Opening grid image.')
             return QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
         else:
             return QtGui.QPixmap('recentImg.png')
@@ -924,6 +926,11 @@ class RunScreen(QtWidgets.QMainWindow):
         for item in self.live_feed_scene.items():
             if item != self.feed_pointer:
                 self.live_feed_scene.removeItem(item)
+
+    def update_plots(self, rfu, current):
+        self.plot_panel.canvas.update_rfu(rfu)
+        self.plot_panel.canvas.update_current(current)
+        self.plot_panel.canvas.draw()
 
 
 class DataScreen(QtWidgets.QMainWindow):
@@ -1612,8 +1619,6 @@ class PlotPanel(QtWidgets.QWidget):
 
         self.setLayout(hbox)
 
-        plt.ion()
-
 
 class RunPlot(FigureCanvas):
     def __init__(self):
@@ -1634,6 +1639,14 @@ class RunPlot(FigureCanvas):
         self.axes_current.set_ylabel("Current (mA)", fontsize=title_font_size)
         self.axes_current.legend(loc='upper right')
         self.axes_current.set_facecolor('#FFFFFF')
+
+    def update_rfu(self, rfu):
+        self.axes_rfu.clear()
+        self.axes_rfu.plot(rfu, linewidth=3)
+
+    def update_current(self, current):
+        self.axes_current.clear()
+        self.axes_current.plot(current, linewidth=3, color="C2")
 
 
 def wrap_widget(widget):
