@@ -74,19 +74,20 @@ class BarracudaSystem(BaseSystem):
         super(BarracudaSystem, self).__init__()
 
     def start_system(self):
-        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
+        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
-        # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
+        self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
-        # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
+        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
         self.start_daq()
 
     def start_daq(self):
-        pass
+        self.daq_board_control.max_time = 600000
+        self.daq_board_control.start_read_task()
 
     def get_image(self):
         with self._camera_lock:
@@ -1247,6 +1248,7 @@ class RunScreenController:
                 try:
                     kv = np.mean(kv[-4:-1])
                     ua = np.mean(ua[-4:-1])
+                    # logging.info('Voltage = {}, Current = {}'.format(kv, ua))
                 except IndexError:
                     return
 
@@ -1416,8 +1418,8 @@ class RunScreenController:
         logging.info(closed)
 
     def fire_laser(self):
-        pfn = self.screen.laser_pfn.value()
-        attenuation = self.screen.laser_attenuation.value()
+        pfn = '{:03d}'.format(self.screen.laser_pfn.value())
+        attenuation = '{:03d}'.format(self.screen.laser_attenuation.value())
 
         set_bool = self.hardware.laser_control.set_parameters(pfn, attenuation, 2)  # fixme, add mode
 
@@ -1433,7 +1435,7 @@ class RunScreenController:
     def laser_on(self):
         self.hardware.laser_control.start()
         start_time = time.time()
-        threading.Thread(target=self.laser_poll, args=(start_time,)).start()
+        threading.Thread(target=self.laser_poll, args=(start_time,), daemon=True).start()
 
     def laser_poll(self, start_time):
         while True:
@@ -1441,7 +1443,7 @@ class RunScreenController:
             if time_on < self._laser_on_time:
                 self.screen.laser_timer.setText('{:.1f}s'.format(self._laser_on_time - time_on))
                 response = self.hardware.laser_control.poll_status()
-                logging.info(response)
+                logging.info('Poll status: {}'.format(response))
                 time.sleep(1)
             else:
                 logging.info('10 Minutes have passed, turning off laser.')
@@ -1593,8 +1595,7 @@ class RunScreenController:
                 start_time = step['Time']
 
                 if step['Type'] == 'Separate':
-                    self.hardware.daq_board_control.max_time = 600000
-                    self.hardware.daq_board_control.start_read_task()
+                    self.hardware.start_daq()
 
                     if step['SeparationTypeVoltageRadio']():
                         voltage_level = float(step['ValuesVoltageEdit']())

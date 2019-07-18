@@ -58,7 +58,10 @@ class Laser:
 
     def _read_buffer(self):
         response = self.serial.readlines()
-        response = response[0].rsplit('\r'.encode())[0]
+        logging.error(response)
+        if response:
+            response = response[0].rsplit('\r'.encode())[0].decode()
+        logging.error(response)
         return response
 
     def check_status(self):
@@ -176,11 +179,14 @@ class Laser:
         try:
             int(value)
         except ValueError:
-            logging.error('Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
+            logging.error('VE:Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
             return False
 
         if len(str(value)) != 3 or 0 > int(value) or int(value) > self._safety_pfn_limit:  # fixme (len)
-            logging.error('Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
+            logging.info(len(str(value)) != 3)
+            logging.info(0 > int(value))
+            logging.info(int(value) > self._safety_pfn_limit)
+            logging.error('VL:Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
             return False
 
         self.serial.write(self.commands['PFN_VOLTAGE'](value).encode())
@@ -197,11 +203,11 @@ class Laser:
         try:
             int(value)
         except ValueError:
-            logging.error('Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
+            logging.error('VE:Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
             return False
 
         if len(str(value)) != 3 or 0 > int(value) or int(value) > 255:  # fixme (len)
-            logging.error('Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
+            logging.error('VL:Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
             return False
 
         self.serial.write(self.commands['ATTENUATION'](value).encode())

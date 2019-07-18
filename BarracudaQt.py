@@ -656,6 +656,10 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_standby.setEnabled(False)
         self.laser_timer.setReadOnly(True)
         self.laser_timer.setText('{}s'.format(600))
+        self.laser_pfn.setMaximum(255)
+        self.laser_pfn.setValue(20)
+        self.laser_attenuation.setMaximum(255)
+        self.laser_attenuation.setValue(137)
 
         form_layout = QtWidgets.QFormLayout()
         col_one = QtWidgets.QVBoxLayout()

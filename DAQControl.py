@@ -20,25 +20,21 @@ class DAQBoard:
 
     def __init__(self, dev='/Dev1/', stop=None):
         self.dev = dev
-        self.data = {'chan1': [], 'chan2': [], 'chan3': []}
-        self.samples = None
-        self.task = None
-        self.run = None
-        self.output_task = None
-
+        self.data = {'ai3': [], 'ai2': [], 'ai1': []}
         if stop is None:
             stop = threading.Event()
         self.stop = stop
 
-    def callback(self):
+    def callback(self, *args):
         """Add data to the data variable every so many samples"""
+        # logging.info(args)
         try:
             samples = self.task.read(number_of_samples_per_channel=self.samples_per_chain)
         except nidaqmx.errors.DaqError:
             return
-        self.data['chan3'].extend([x*self.voltage_conversion for x in samples[0]])
-        self.data['chan1'].extend([x*self.voltage_conversion for x in samples[1]])
-        self.data['chan2'].extend([x*self.voltage_conversion for x in samples[2]])
+        self.data['ai1'].extend([x*self.voltage_conversion for x in samples[0]])
+        self.data['ai2'].extend([x*self.voltage_conversion for x in samples[1]])
+        self.data['ai3'].extend([x*self.voltage_conversion for x in samples[2]])
         return 0
 
     def sample_config(self, task):
@@ -46,7 +42,7 @@ class DAQBoard:
         """
         chan = self.dev + self.clock_channel
         task.co_channels.add_co_pulse_chan_freq(chan, freq=self.freq)
-        task.timing.cfg_implicit_timing(samples_per_chain=self.samples_per_chain,
+        task.timing.cfg_implicit_timing(samps_per_chan=self.samples_per_chain,
                                         sample_mode=self.mode)
         return task
 
@@ -59,17 +55,16 @@ class DAQBoard:
     def change_voltage(self, voltage):
         """ voltage in kV, used to adjust analog output (divided voltage-conversion factor"""
         # Convert kV to daq V
-        logging.warning('Changing voltage to {}kV'.format(voltage))
         voltage = float(voltage) / self.voltage_conversion
         diff = float(voltage) - self.voltage
         if diff == 0:
-            self.output_task.write(0)
+            self.outputTask.write(0)
             self.voltage = voltage
             return
         # Get samples to send DAQ
         samples = self.get_voltage_ramp(voltage, diff)
         # Reset current voltage
-        self.output_task.write(samples)
+        self.outputTask.write(samples)
         self.voltage = voltage
 
     def get_voltage_ramp(self, voltage, diff):
@@ -82,39 +77,36 @@ class DAQBoard:
         samples = round(ramp_time * self.output_freq)
         logging.info(samples)
         self.samples = samples = np.linspace(self.voltage, voltage, samples)
+
         return samples
 
     def analog_in_config(self, task, chan='ai3'):
         """Set up the analog read channels here"""
-        chan = self.dev + chan
-        task.ai_channels.add_ai_voltage_chan(chan)
         chan = self.dev + 'ai1'
         task.ai_channels.add_ai_voltage_chan(chan)
         chan = self.dev + 'ai2'
+        task.ai_channels.add_ai_voltage_chan(chan)
+        chan = self.dev + 'ai3'
         task.ai_channels.add_ai_voltage_chan(chan)
 
         s_terminal = self.dev + self.sample_terminal
         task.timing.cfg_samp_clk_timing(self.freq, source=s_terminal,
                                         active_edge=Edge.FALLING,
-                                        samples_per_chain=self.samples_per_chain,
+                                        samps_per_chan=self.samples_per_chain,
                                         sample_mode=self.mode)
         task.register_every_n_samples_acquired_into_buffer_event(
             self.samples_per_chain, self.callback)
+
         return task
 
     def start_read_task(self):
         """Starts thread to start the Reading Task"""
-        # Reset DAQ if running
         if not self.stop.is_set():
             self.stop.set()
             time.sleep(0.2)
-
-        # Reset Data
-        self.data = {'chan1': [], 'chan2': [], 'chan3': []}
-
-        # Create new stop event, start read task
+        self.data = {'ai1': [], 'ai2': [], 'ai3': []}
         self.stop = threading.Event()
-        threading.Thread(target=self.read_task()).start()
+        threading.Thread(target=self.read_task, daemon=True).start()
         time.sleep(0.2)
 
     def read_task(self):
