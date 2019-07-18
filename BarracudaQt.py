@@ -403,6 +403,9 @@ class SequenceScreen(QtWidgets.QMainWindow):
 
 
 class RunScreen(QtWidgets.QMainWindow):
+    feed_updated = QtCore.pyqtSignal()
+    xy_updated = QtCore.pyqtSignal()
+
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
         self.init_run_control()
@@ -772,24 +775,35 @@ class RunScreen(QtWidgets.QMainWindow):
         self.run_control_panel.setWidget(temper_wid)
 
     def init_live_display(self):
-        self.live_insert = GraphicsScene()
-
         self.live_feed_panel = QtWidgets.QDockWidget()
         self.live_feed_panel.setTitleBarWidget(QtWidgets.QWidget())
         temper_wid = QtWidgets.QWidget()
         temp_layout = QtWidgets.QHBoxLayout()
-        temp_layout.addWidget(self.init_insert_view())
-        temp_layout.addWidget(self.init_plot_view())
+        # temp_layout.addStretch()
+        feed_layout = QtWidgets.QVBoxLayout()
+        feed_layout.addStretch()
+        feed_layout.addWidget(self.init_insert_view())
+        feed_layout.addStretch()
+        temp_layout.addLayout(feed_layout)
+        feed_layout = QtWidgets.QVBoxLayout()
+        feed_layout.addStretch()
+        feed_layout.addWidget(self.init_plot_view())
+        feed_layout.addStretch()
+        temp_layout.addLayout(feed_layout)
+        # temp_layout.addStretch()
         temper_wid.setLayout(temp_layout)
-        # temper_wid = wrap_widget(temper_wid)
         self.live_feed_panel.setWidget(temper_wid)
 
     def init_insert_view(self):
         self.live_option = SwitchButton(w1='Live', w2='Insert', width=80)
         self.live_feed_scene = GraphicsScene()
+        self.live_feed_scene.setSceneRect(0, 0, 512, 384)
         self.live_feed_view = QtWidgets.QGraphicsView()
         self.live_feed_pixmap = QtWidgets.QGraphicsPixmapItem()
         live_feed_window = QtWidgets.QMainWindow()
+
+        # self.live_feed_view.setFixedWidth(584)
+        # self.live_feed_view.setFixedHeight(312)
 
         live_feed_control = QtWidgets.QDockWidget()
         control_widget = QtWidgets.QWidget()
@@ -799,19 +813,15 @@ class RunScreen(QtWidgets.QMainWindow):
         control_widget.setLayout(control_layout)
         live_feed_control.setWidget(control_widget)
 
-        self.live_feed_pixmap = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror_cropped.png"))
-        self.x = self.live_feed_scene.addPixmap(self.live_feed_pixmap)
-        print('pointer below')
-        print(self.x)
-        print('pointer above')
+        self.live_feed_pixmap = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
+        self.feed_pointer = self.live_feed_scene.addPixmap(self.live_feed_pixmap)
         self.live_feed_view.setScene(self.live_feed_scene)
         live_feed_window.setCentralWidget(self.live_feed_view)
         live_feed_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_feed_control)
         live_feed_control.setTitleBarWidget(QtWidgets.QWidget())
         live_feed_window = wrap_widget(live_feed_window)
-        live_feed_window.setFixedWidth(600)
-        # self.live_feed_view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        # self.live_feed_view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.live_feed_view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.live_feed_view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
         return live_feed_window
 
@@ -898,13 +908,22 @@ class RunScreen(QtWidgets.QMainWindow):
     def enable_button(button, checkbox):
         button.setEnabled(checkbox.isChecked())
 
-    def update_pixmap(self, camera=False):
+    @staticmethod
+    def update_pixmap(camera=False):
         if not camera:
-            print('Updating to insert view')
-            self.x.setPixmap(QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror_cropped.png")))
+            logging.info('Opening grid image.')
+            return QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
         else:
-            print('Updating to microscope view')
-            self.x.setPixmap(QtGui.QPixmap('recentImg.png'))
+            return QtGui.QPixmap('recentImg.png')
+
+    def clear_feed_scene(self):
+        for item in self.live_feed_scene.items():
+            if item != self.feed_pointer:
+                self.live_feed_scene.removeItem(item)
+
+        for item in self.live_feed_scene.items():
+            if item != self.feed_pointer:
+                self.live_feed_scene.removeItem(item)
 
 
 class DataScreen(QtWidgets.QMainWindow):
@@ -1055,8 +1074,10 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
         self.highlight_item(location)
 
     def get_bounding_rect(self, location):
+        logging.info(location)
         highlighted_item = self.itemAt(location[0], location[1], QtGui.QTransform())
         if highlighted_item and type(highlighted_item) != QtWidgets.QGraphicsPixmapItem:
+            logging.info(highlighted_item.boundingRect().getRect())
             return highlighted_item.boundingRect().getRect()
 
     def get_shape(self, location):

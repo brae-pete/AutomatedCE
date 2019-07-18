@@ -29,7 +29,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 # os.chdir(prev_dir)
 
-HOME = True
+HOME = False
 
 
 # Possible Model Classes
@@ -239,15 +239,14 @@ class InsertScreenController:
         self.hardware = hardware
         self.repository = repository
 
-        self._um2pix = 1 / 200
-        self._mm2pix = 2
+        self._um2pix = 1 / 300
+        self._mm2pix = 3
         self._stage_offset = self.hardware.xy_stage_upper_left
         self._stage_inversion = self.hardware.xy_stage_inversion
         self._initial = True
         self._initial_point = None
 
-        self.screen.image_view.setSceneRect(0, 0, self.hardware.xy_stage_size[0]*self._um2pix,
-                                            self.hardware.xy_stage_size[1]*self._um2pix)
+        self.screen.image_view.setSceneRect(0, 0, 584, 312)
         self.screen.image_frame.controller = self
         self.insert = None
         self._set_callbacks()
@@ -271,9 +270,9 @@ class InsertScreenController:
         if location:  # This check is necessary in case the last well is deleted.
             # Convert from the '({}, {})' format to [f, f]
             try:
-                location = [float(x) for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
-                location = [(location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
-                            (location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
+                event_location = [float(x) for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
+                location = [(event_location[0] * self._um2pix * self._stage_inversion[0]) + (self._stage_offset[0] * self._um2pix),
+                            (event_location[1] * self._um2pix * self._stage_inversion[1]) - (self._stage_offset[1] * self._um2pix)]
             except ValueError:  # The user changed the table contents to an invalid coordinate
                 BarracudaQt.ErrorMessageUI(error_message='Well location is invalid.')
             else:
@@ -450,12 +449,12 @@ class InsertScreenController:
 
                 for well in self.insert.wells:
                     self.screen.image_frame.add_shape(well.shape, well.bound_box)
-                    self._add_row(well.location, well.label)
+                    self._add_row(well.location, well.label, pixels=False)
 
     def save_insert(self):
         if not self.screen.file_name.text():
             saved_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Specify file',
-                                                                    os.getcwd(), 'METHOD(*.met)')[0]
+                                                                    os.getcwd(), 'INSERT(*.ins)')[0]
             if not saved_file_path:
                 return
         else:
@@ -476,12 +475,15 @@ class InsertScreenController:
         for row_index in range(row_count):
             location = self.screen.insert_table.item(row_index, 1)
 
-            location = [float(x) * self._um2pix for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
-            label = self.screen.insert_table.item(row_index, 0).text()
-            bounding_box = self.screen.image_frame.get_bounding_rect(location)
-            shape = self.screen.image_frame.get_shape(location)
+            event_location = [float(x) for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
+            pixel_location = [(event_location[0] * self._um2pix * self._stage_inversion[0]) + (self._stage_offset[0] * self._um2pix),
+                              (event_location[1] * self._um2pix * self._stage_inversion[1]) - (self._stage_offset[1] * self._um2pix)]
 
-            new_well = Well(label=label, location=location, bounding_box=bounding_box, shape=shape)
+            label = self.screen.insert_table.item(row_index, 0).text()
+            bounding_box = self.screen.image_frame.get_bounding_rect(pixel_location)
+            shape = self.screen.image_frame.get_shape(pixel_location)
+
+            new_well = Well(label=label, location=event_location, bounding_box=bounding_box, shape=shape)
             wells.append(new_well)
 
         self.insert = Insert(wells=wells, label='Default')
@@ -493,16 +495,17 @@ class MethodScreenController:
         self.hardware = hardware
         self.repository = repository
 
-        self._um2pix = 1 / 200
-        self._mm2pix = 2
+        self._um2pix = 1 / 300
+        self._mm2pix = 3
+        self._stage_offset = self.hardware.xy_stage_upper_left
+        self._stage_inversion = self.hardware.xy_stage_inversion
         self._selecting = False
         self._step_well = None
         self._form_data = []
         self._populating_table = False
         self._well_labels = ['None']
 
-        self.screen.image_view.setSceneRect(0, 0, self.hardware.xy_stage_size[0] * self._um2pix,
-                                            self.hardware.xy_stage_size[1] * self._um2pix)
+        self.screen.image_view.setSceneRect(0, 0, 584, 312)
         self.screen.image_frame.controller = self
 
         self.dialogs = {'Separate': BarracudaQt.SeparateDialog,
@@ -766,6 +769,7 @@ class MethodScreenController:
                 #     self.screen.insert_table.removeRow(self.screen.insert_table.rowCount()-1)
 
                 for well in self.insert.wells:  # Loads the new shapes onto the frame
+                    logging.info(well.bound_box)
                     self.screen.image_frame.add_shape(well.shape, well.bound_box)
 
                 well_labels = ['None', 'Select']
@@ -1028,10 +1032,14 @@ class RunScreenController:
 
         self.methods = []
         self.insert = None
-        self._um2pix = 1 / 200
-        self._mm2pix = 2
+        self._um2pix = 1 / 300
+        self._mm2pix = self._um2pix * 1000
         self._stage_offset = self.hardware.xy_stage_upper_left
         self._stage_inversion = self.hardware.xy_stage_inversion
+        self._new_pixmap = None
+        self._event = None
+
+        self.screen.live_feed_scene.setSceneRect(0, 0, 512, 384)
 
         # Set up logging window in the run screen.
         self.log_handler = BarracudaQt.QPlainTextEditLogger(self.screen.output_window)
@@ -1133,6 +1141,8 @@ class RunScreenController:
         self.screen.stop_sequence.released.connect(lambda: self.end_sequence())
         self.screen.clear_output.released.connect(lambda: self.clear_output_window())
         self.screen.save_output.released.connect(lambda: self.save_output_window())
+        self.screen.feed_updated.connect(lambda: self.screen.feed_pointer.setPixmap(self._new_pixmap))
+        self.screen.xy_updated.connect(lambda: self.screen.live_feed_scene.draw_crosshairs(self._event))
 
     def _start_updating_display(self):
         if self.hardware.xy_stage_control:
@@ -1151,14 +1161,6 @@ class RunScreenController:
         if self.hardware.objective_control:
             value = self.hardware.objective_control.read_z()
             self.screen.objective_value.setText("{:.3f}".format(float(value)))
-
-        self.update_display_thread = QtCore.QThread()
-        self.update_display_thread.started.connect(self._update_live_feed)
-        self.update_display_thread.finished.connect(self.update_display_thread.deleteLater)
-        #
-        # self.update_display_thread.start()
-        # Have a regular python thread do the hard work up to creating the pixmap item and have the main thread
-        # be the one to actually set that pixmap item to the graphics view. It's the only way to update the view.
 
         threading.Thread(target=self._update_stages, daemon=True).start()
         threading.Thread(target=self._update_live_feed, daemon=True).start()
@@ -1212,28 +1214,31 @@ class RunScreenController:
 
                 if image is None:
                     continue
-                logging.info('updating')
-                self.screen.update_pixmap(camera=True)
-                time.sleep(2)
-                self.screen.update_pixmap(camera=False)
-                time.sleep(2)
-            else:
-                # event_location = self.hardware.xy_stage_control.read_xy()
-                # event = [(event_location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
-                #          (event_location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
+                self._new_pixmap = self.screen.update_pixmap(camera=True)
 
-                # self.screen.live_feed_scene.draw_crosshairs(event)
-                time.sleep(2)
+                self.screen.feed_updated.emit()
+                time.sleep(.25)
+            else:
+                event_location = self.hardware.xy_stage_control.read_xy()
+                self._event = [(event_location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
+                               (event_location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
+
+                self.screen.xy_updated.emit()
+                time.sleep(.25)
 
     def _update_plot(self):
         pass
 
     def _switch_feed(self, live):
         if not live:
+            logging.info('Switching to insert view.')
             self.hardware.image_control.stop_video_feed()
-            self.screen.update_pixmap(camera=False)
+            self._new_pixmap = self.screen.update_pixmap(camera=False)
+            self.screen.feed_updated.emit()
             self._load_insert()
         else:
+            logging.info('Switching to live feed.')
+            self.screen.clear_feed_scene()
             self.hardware.image_control.start_video_feed()
 
         self._live_feed = live
@@ -1378,6 +1383,7 @@ class RunScreenController:
         #     self.stop_pressure()
         # if self.hardware.image_control:
         #     self.hardware.image_control.close()
+        self.hardware.image_control.close()
         sys.exit()
 
     def rinse_pressure(self, off):
