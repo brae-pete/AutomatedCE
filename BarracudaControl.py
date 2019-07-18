@@ -1023,6 +1023,7 @@ class RunScreenController:
     _pause_thread_flag = False
     _clearance_height = 10
     _run_thread = None
+    _laser_poll_flag = False
     _stop_thread_flag = False
     _plot_data = False
     _laser_on_time = 600  # seconds
@@ -1123,8 +1124,9 @@ class RunScreenController:
             self.screen.laser_burst_count.valueChanged.connect(lambda: self.set_burst(count=self.screen.laser_burst_count.value()))
             self.screen.laser_fire.released.connect(lambda: self.fire_laser())
             self.screen.laser_standby.released.connect(lambda: self.laser_on())
-            self.screen.laser_stop.released.connect(lambda: self.hardware.laser_control.stop())
-            self.screen.laser_off.released.connect(lambda: self.hardware.laser_control.off())
+            self.screen.laser_stop.released.connect(lambda: self.stop_fire())
+            self.screen.laser_off.released.connect(lambda: self.stop_laser())
+            self.screen.laser_check.released.connect(lambda: self.hardware.laser_control.check_status())
         else:
             self.screen.enable_laser_form(False)
 
@@ -1383,7 +1385,8 @@ class RunScreenController:
         self.hardware.pressure_control.stopRinsePressure()
 
     def stop_laser(self):
-        self.hardware.laser_control.stop()
+        self.hardware.laser_control.off()
+        self._laser_poll_flag = False
 
     def stop_voltage(self):
         logging.warning('Stopping voltage.')
@@ -1419,16 +1422,19 @@ class RunScreenController:
         logging.info(closed)
 
     def fire_laser(self):
-        pfn = '{:03d}'.format(self.screen.laser_pfn.value())
-        attenuation = '{:03d}'.format(self.screen.laser_attenuation.value())
+        def fire():
+            pfn = '{:03d}'.format(self.screen.laser_pfn.value())
+            attenuation = '{:03d}'.format(self.screen.laser_attenuation.value())
 
-        set_bool = self.hardware.laser_control.set_parameters(pfn, attenuation, 2)  # fixme, add mode
+            set_bool = self.hardware.laser_control.set_parameters(pfn, attenuation, 2)  # fixme, add mode
 
-        if not set_bool:
-            logging.warning('Laser firing canceled.')
-            return
+            if not set_bool:
+                logging.warning('Laser firing canceled.')
+                return
 
-        self.hardware.laser_control.fire()
+            self.hardware.laser_control.fire()
+
+        threading.Thread(target=fire, daemon=True).start()  # Separate thread because it takes a few seconds.
 
     def voltage_on(self):
         pass
@@ -1436,19 +1442,26 @@ class RunScreenController:
     def laser_on(self):
         self.hardware.laser_control.start()
         start_time = time.time()
-        threading.Thread(target=self.laser_poll, args=(start_time,), daemon=True).start()
+        self._laser_poll_thread = threading.Thread(target=self.laser_poll, args=(start_time,), daemon=True).start()
 
     def laser_poll(self, start_time):
+        self._laser_poll_flag = True
         while True:
-            time_on = time.time() - start_time
-            if time_on < self._laser_on_time:
-                self.screen.laser_timer.setText('{:.1f}s'.format(self._laser_on_time - time_on))
-                response = self.hardware.laser_control.poll_status()
-                logging.info('Poll status: {}'.format(response))
-                time.sleep(1)
+            if self._laser_poll_flag:
+                time_on = time.time() - start_time
+                if time_on < self._laser_on_time:
+                    self.screen.laser_timer.setText('{:.1f}s'.format(self._laser_on_time - time_on))
+                    response = self.hardware.laser_control.poll_status()
+                    logging.info('Poll status: {}'.format(response))
+                    time.sleep(1)
+                else:
+                    logging.info('10 Minutes have passed, turning off laser.')
+                    break
             else:
-                logging.info('10 Minutes have passed, turning off laser.')
                 break
+
+    def stop_fire(self):
+        self.hardware.laser_control.stop()
 
     def check_system(self):
         logging.info('Checking system status ...')

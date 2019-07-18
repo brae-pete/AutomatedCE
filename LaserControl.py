@@ -76,7 +76,11 @@ class Laser:
             logging.info('\t System OK!')
             return
 
-        response = '{:024b}'.format(int(response))
+        try:
+            response = '{:024b}'.format(int(response))
+        except ValueError:
+            logging.error('Cannot check status right now.')
+            return
 
         is_not = 'not ' if response[23] == 1 else ''
         logging.info('\tThe coolant flow interlock is {}satisfied.'.format(is_not))

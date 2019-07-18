@@ -645,6 +645,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_fire_check = QtWidgets.QCheckBox()
         self.laser_timer = QtWidgets.QLineEdit()
         self.laser_off = QtWidgets.QPushButton('Off')
+        self.laser_check = QtWidgets.QPushButton('Check Status')
 
         self.laser_pfn.setFixedWidth(40)
         self.laser_attenuation.setFixedWidth(40)
@@ -685,8 +686,11 @@ class RunScreen(QtWidgets.QMainWindow):
         row_two.addWidget(self.laser_burst_count)
         row_two.addStretch()
         col_one.addLayout(row_two)
-        col_one.addWidget(self.laser_stop)
-        col_one.addWidget(self.laser_off)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.laser_stop)
+        row.addWidget(self.laser_off)
+        row.addWidget(self.laser_check)
+        col_one.addLayout(row)
         form_layout.addRow(col_one)
 
         self.laser_form.setLayout(form_layout)
@@ -903,6 +907,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_standby.setEnabled(enabled)
         self.laser_on_check.setEnabled(enabled)
         self.laser_fire_check.setEnabled(enabled)
+        self.laser_off.setEnabled(enabled)
+        self.laser_check.setEnabled(enabled)
 
     def enable_voltage_form(self, enabled):
         self.voltage_value.setEnabled(enabled)
