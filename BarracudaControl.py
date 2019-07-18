@@ -1026,7 +1026,8 @@ class RunScreenController:
     _laser_poll_flag = False
     _stop_thread_flag = False
     _plot_data = False
-    _laser_on_time = 600  # seconds
+    _laser_on_time = 0  # seconds
+    _laser_max = 60
 
     _stop.set()
     _stop.clear()
@@ -1386,6 +1387,7 @@ class RunScreenController:
 
     def stop_laser(self):
         self.hardware.laser_control.off()
+        self.screen.laser_timer.setText('0s')
         self._laser_poll_flag = False
 
     def stop_voltage(self):
@@ -1440,22 +1442,32 @@ class RunScreenController:
         pass
 
     def laser_on(self):
-        self.hardware.laser_control.start()
-        start_time = time.time()
-        self._laser_poll_thread = threading.Thread(target=self.laser_poll, args=(start_time,), daemon=True).start()
+        if self._laser_poll_flag:
+            logging.info('Adding {}s to timer.'.format(self._laser_max))
+            self._laser_max += self._laser_max
+        else:
+            self.hardware.laser_control.start()
+            start_time = time.time()
+            threading.Thread(target=self.laser_poll, args=(start_time,), daemon=True).start()
+            logging.info('Laser on standby for {}s'.format(self._laser_max))
 
     def laser_poll(self, start_time):
         self._laser_poll_flag = True
         while True:
             if self._laser_poll_flag:
-                time_on = time.time() - start_time
-                if time_on < self._laser_on_time:
-                    self.screen.laser_timer.setText('{:.1f}s'.format(self._laser_on_time - time_on))
+                self._laser_on_time = time.time() - start_time
+                if self._laser_on_time < self._laser_max:
+                    self.screen.laser_timer.setText('{:.1f}s'.format(self._laser_max - self._laser_on_time))
                     response = self.hardware.laser_control.poll_status()
-                    logging.info('Poll status: {}'.format(response))
+                    # logging.info('Poll status: {}'.format(response))
+                    if response == '90':
+                        self.screen.laser_on_check.setChecked(False)
                     time.sleep(1)
                 else:
-                    logging.info('10 Minutes have passed, turning off laser.')
+                    logging.info('{:.0f}s have passed, turning off laser.'.format(self._laser_on_time))
+                    self.stop_laser()
+                    self.screen.laser_timer.setText('0s')
+                    self._laser_on_time = 0
                     break
             else:
                 break

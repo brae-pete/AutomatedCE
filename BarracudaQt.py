@@ -643,7 +643,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_standby = QtWidgets.QPushButton('Standby')
         self.laser_on_check = QtWidgets.QCheckBox()
         self.laser_fire_check = QtWidgets.QCheckBox()
-        self.laser_timer = QtWidgets.QLineEdit()
+        self.laser_timer = QtWidgets.QLabel()
         self.laser_off = QtWidgets.QPushButton('Off')
         self.laser_check = QtWidgets.QPushButton('Check Status')
 
@@ -656,8 +656,8 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.laser_fire.setEnabled(False)
         self.laser_standby.setEnabled(False)
-        self.laser_timer.setReadOnly(True)
-        self.laser_timer.setText('{}s'.format(600))
+        # self.laser_timer.setReadOnly(True)
+        self.laser_timer.setText('0s')
         self.laser_pfn.setMaximum(255)
         self.laser_pfn.setValue(20)
         self.laser_attenuation.setMaximum(255)
@@ -672,6 +672,7 @@ class RunScreen(QtWidgets.QMainWindow):
         row_one.addStretch()
         row_one.addWidget(self.laser_fire_check)
         row_one.addWidget(self.laser_fire)
+        row_one.addStretch()
         row_one.addWidget(self.laser_timer)
         col_one.addLayout(row_one)
         row_two = QtWidgets.QHBoxLayout()

@@ -321,7 +321,6 @@ class Laser:
                 return False
 
             self.serial.write(self.commands['LASER_ON']().encode())
-            logging.info('Laser on standby for 10 minutes.')
             return True
 
     def fire(self):
