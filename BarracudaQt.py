@@ -638,12 +638,13 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_attenuation = QtWidgets.QSpinBox()
         self.laser_burst_count = QtWidgets.QSpinBox()
         self.laser_fire = QtWidgets.QPushButton('Fire')
-        self.laser_off = QtWidgets.QPushButton('Stop')
+        self.laser_stop = QtWidgets.QPushButton('Stop Firing')
         self.laser_timer = QtWidgets.QTimeEdit()
         self.laser_standby = QtWidgets.QPushButton('Standby')
         self.laser_on_check = QtWidgets.QCheckBox()
         self.laser_fire_check = QtWidgets.QCheckBox()
         self.laser_timer = QtWidgets.QLineEdit()
+        self.laser_off = QtWidgets.QPushButton('Off')
 
         self.laser_pfn.setFixedWidth(40)
         self.laser_attenuation.setFixedWidth(40)
@@ -684,6 +685,7 @@ class RunScreen(QtWidgets.QMainWindow):
         row_two.addWidget(self.laser_burst_count)
         row_two.addStretch()
         col_one.addLayout(row_two)
+        col_one.addWidget(self.laser_stop)
         col_one.addWidget(self.laser_off)
         form_layout.addRow(col_one)
 

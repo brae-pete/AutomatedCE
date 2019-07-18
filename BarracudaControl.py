@@ -65,6 +65,7 @@ class BarracudaSystem(BaseSystem):
     _xy_stage_lock = threading.Lock()
     _pressure_lock = threading.Lock()
     _camera_lock = threading.Lock()
+    _laser_lock = threading.Lock()
 
     xy_stage_size = [112792, 64340]  # Rough size in mm
     xy_stage_upper_left = [112598, -2959]  # Reading on stage controller when all the way to left and up (towards wall)
@@ -80,7 +81,7 @@ class BarracudaSystem(BaseSystem):
         self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
-        self.laser_control = LaserControl.Laser(com=self._laser_com, home=HOME)
+        self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
         self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
         self.start_daq()
@@ -1122,7 +1123,8 @@ class RunScreenController:
             self.screen.laser_burst_count.valueChanged.connect(lambda: self.set_burst(count=self.screen.laser_burst_count.value()))
             self.screen.laser_fire.released.connect(lambda: self.fire_laser())
             self.screen.laser_standby.released.connect(lambda: self.laser_on())
-            self.screen.laser_off.released.connect(lambda: self.stop_laser())
+            self.screen.laser_stop.released.connect(lambda: self.hardware.laser_control.stop())
+            self.screen.laser_off.released.connect(lambda: self.hardware.laser_control.off())
         else:
             self.screen.enable_laser_form(False)
 
@@ -1381,7 +1383,6 @@ class RunScreenController:
         self.hardware.pressure_control.stopRinsePressure()
 
     def stop_laser(self):
-        logging.warning('Stopping laser.')
         self.hardware.laser_control.stop()
 
     def stop_voltage(self):
