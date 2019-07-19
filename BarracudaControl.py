@@ -35,6 +35,8 @@ HOME = False
 
 # Possible Model Classes
 class BaseSystem:
+    _system_id = None
+
     def __init__(self):
         self.z_stage_control = None
         self.outlet_control = None
@@ -49,6 +51,51 @@ class BaseSystem:
         pass
 
     def close_system(self):
+        pass
+
+    def set_xy(self, xy=None, rel_xy=None):
+        pass
+
+    def get_xy(self):
+        pass
+
+    def stop_xy(self):
+        pass
+
+    def set_z(self, z=None, rel_z=None):
+        pass
+
+    def get_z(self):
+        pass
+
+    def stop_z(self):
+        pass
+
+    def set_outlet(self, h=None, rel_h=None):
+        pass
+
+    def get_outlet(self):
+        pass
+
+    def stop_outlet(self):
+        pass
+
+    def set_objective(self, h=None, rel_h=None):
+        pass
+
+    def get_objective(self):
+        pass
+
+    def stop_objective(self):
+        pass
+
+    def set_voltage(self, v=None):
+        pass
+
+    def get_voltage(self):
+        pass
+
+    def get_image(self):
         pass
 
 
@@ -150,28 +197,33 @@ class Insert:
         else:
             return None
 
-    def get_next_well_xy(self, label):
+    def get_next_well_xy(self, label, increment):
         tolerance = 2
         for well in self.wells:
             if well.label == label:
-                x, y, *_ = well.bound_box
-                dy = 312
+                wrong_wells = [well]
                 next_well = None
-                for other_well in self.wells:
-                    ox, oy, *_ = other_well.bound_box
-                    if 0 < (y - oy) < dy and abs(ox - x) < tolerance and other_well.location != well.location:
-                        next_well = other_well
-                        dy = y - oy
-                else:
-                    if next_well:
-                        return next_well.location
-                    dx = 584
+                for _ in range(increment):
+                    x, y, *_ = well.bound_box
+                    dy = 312
                     for other_well in self.wells:
                         ox, oy, *_ = other_well.bound_box
-                        if 0 < (ox - x) < dx and abs(oy - y) < tolerance and other_well.location != well.location:
+                        if 0 < (y - oy) < dy and abs(ox - x) < tolerance and other_well not in wrong_wells:
                             next_well = other_well
-                            dx = ox - x
-                return next_well.location
+                            dy = y - oy
+                    else:
+                        if next_well:
+                            wrong_wells.append(next_well)
+                            continue
+                        dx = 584
+                        for other_well in self.wells:
+                            ox, oy, *_ = other_well.bound_box
+                            if 0 < (ox - x) < dx and abs(oy - y) < tolerance and other_well not in wrong_wells:
+                                next_well = other_well
+                                dx = ox - x
+                    wrong_wells.append(next_well)
+                if next_well:
+                    return next_well.location
         else:
             return None
 
@@ -1643,26 +1695,25 @@ class RunScreenController:
                 continue
             if self._stop_thread_flag:
                 return False
+            return True
 
         def move_inlet(inlet_travel):
             self.set_z(step=inlet_travel)
             time.sleep(2)
-            check_flags()
+            return check_flags()
 
         def move_outlet(outlet_travel):
             self.set_outlet(step=outlet_travel)
             time.sleep(2)
-            check_flags()
+            return check_flags()
 
         def move_xy_stage(inlet_location):
             if inlet_location is None:
-                logging.error('Inlet not found in insert. Inlet and Insert given below.')
-                logging.error('INLET LABEL : {}'.format(step['Inlet']))
-                logging.error('INSERT WELLS : {}'.format(self.insert))
+                logging.error('Unable to make next XY movement.')
                 return False
             self.set_xy(inlet_location)
             time.sleep(2)
-            check_flags()
+            return check_flags()
 
         def separate():
             voltage_level = None
@@ -1752,21 +1803,32 @@ class RunScreenController:
             for step in method.steps:
                 if 'Type' in step.keys():
                     logging.info('{} Step: {}'.format(step['Type'], step['Summary']))
-                    check_flags()
+                    state = check_flags()
+                    if not state:
+                        return False
                     step_start = time.time()
 
-                    move_inlet(step['InletTravel'])
+                    state = move_inlet(step['InletTravel'])
+                    if not state:
+                        return False
 
-                    move_outlet(step['OutletTravel'])
-                    logging.info(step['TrayPositionsIncrementEdit'])
-                    if rep > int(step['TrayPositionsIncrementEdit']):
-                        move_xy_stage(self.insert.get_next_well_xy(step['Inlet']))
+                    state = move_outlet(step['OutletTravel'])
+                    if not state:
+                        return False
+
+                    cycles = int(step['TrayPositionsIncrementEdit'])
+                    if rep+1 > cycles:
+                        state = move_xy_stage(self.insert.get_next_well_xy(step['Inlet'], cycles - rep))
                     else:
-                        move_xy_stage(self.insert.get_well_xy(step['Inlet']))
+                        state = move_xy_stage(self.insert.get_well_xy(step['Inlet']))
+                    if not state:
+                        return False
 
                     if previous_step == 'Inject' and time.time() - step_start < self.injection_wait:
                         time.sleep(abs(self.injection_wait-(time.time() - step_start)))
-                        check_flags()
+                        state = check_flags()
+                        if not state:
+                            return False
 
                     move_inlet(-step['InletTravel'])
 
