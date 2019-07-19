@@ -356,12 +356,13 @@ class MethodScreen(QtWidgets.QMainWindow):
 
     def init_table(self):
         self.insert_table.setRowCount(0)
-        self.insert_table.setColumnCount(8)
+        self.insert_table.setColumnCount(10)
         self.insert_table.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.insert_table.setHorizontalHeaderLabels(["", 'Time (min)', 'Event', 'Value', 'Duration',
-                                                     'Inlet Vial', 'Outlet Vial', 'Summary'])
+                                                     'Inlet Vial', 'Outlet Vial', 'Inlet Travel', 'Outlet Travel',
+                                                     'Summary'])
         self.insert_table.setColumnWidth(0, 30)
-        self.insert_table.setColumnWidth(7, 200)
+        self.insert_table.setColumnWidth(9, 200)
         self.insert_table.verticalHeader().setVisible(False)
         self.insert_table.setMinimumWidth(800)
 
@@ -1101,11 +1102,14 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
         self.highlight_item(location)
 
     def get_bounding_rect(self, location):
-        logging.info(location)
+        logging.info('Getting shape with {}'.format(location))
         highlighted_item = self.itemAt(location[0], location[1], QtGui.QTransform())
+        # logging.info(highlighted_item)
         if highlighted_item and type(highlighted_item) != QtWidgets.QGraphicsPixmapItem:
-            logging.info(highlighted_item.boundingRect().getRect())
+            # logging.info(highlighted_item.boundingRect().getRect())
             return highlighted_item.boundingRect().getRect()
+        else:
+            logging.info('Not found.')
 
     def get_shape(self, location):
         highlighted_item = self.itemAt(location[0], location[1], QtGui.QTransform())
@@ -1138,6 +1142,8 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                     self.addItem(self._current_rect_item)
                     self._current_rect_item.setRect(r)
                     self._current_rect_item = None
+
+                    self._highlighted_location = None
 
             highlighted_item = self.itemAt(location[0],
                                            location[1],
@@ -1220,8 +1226,8 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
             radius = event[2]
             x = marked_area[0]
             y = marked_area[1]
-            dx = marked_area[2] / event[3]
-            dy = marked_area[3] / event[4]
+            dx = marked_area[2] / (event[3] - 1)
+            dy = marked_area[3] / (event[4] - 1)
 
             for _ in range(int(event[3])):
                 for _ in range(int(event[4])):
@@ -1237,6 +1243,7 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                     self._current_ellipse_item.setZValue(200)
                     self._current_ellipse_item = None
                     # self.controller.add_row([x, y])
+                    logging.info('adding shape with {}'.format([x, y]))
                     y += dy
                 y = marked_area[1]
                 x += dx
@@ -2622,6 +2629,23 @@ class InjectDialog(QtWidgets.QDialog):
 
     def init_values_form(self):
         layout = QtWidgets.QFormLayout()
+
+        # VOLTAGE
+        row = QtWidgets.QHBoxLayout()
+        wid = QtWidgets.QLabel('Voltage:')
+        row.addWidget(wid)
+
+        wid = QtWidgets.QLineEdit()
+        self.form_data['ValuesVoltageEdit'] = wid.text
+        wid.setFixedWidth(60)
+        row.addWidget(wid)
+
+        wid = QtWidgets.QLabel('kV')
+        row.addWidget(wid)
+
+        row.addStretch()
+        row.setAlignment(QtCore.Qt.AlignLeft)
+        layout.addRow(row)
 
         # PRESSURE
         row = QtWidgets.QHBoxLayout()

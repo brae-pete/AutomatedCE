@@ -159,17 +159,19 @@ class Insert:
                 next_well = None
                 for other_well in self.wells:
                     ox, oy, *_ = other_well.bound_box
-                    if 0 < (y - oy) < dy and abs(ox - x) < tolerance:
+                    if 0 < (y - oy) < dy and abs(ox - x) < tolerance and other_well.location != well.location:
                         next_well = other_well
                         dy = y - oy
                 else:
+                    if next_well:
+                        return next_well.location
                     dx = 584
                     for other_well in self.wells:
                         ox, oy, *_ = other_well.bound_box
-                        if 0 < (ox - x) < dx and abs(oy - y) < tolerance:
+                        if 0 < (ox - x) < dx and abs(oy - y) < tolerance and other_well.location != well.location:
                             next_well = other_well
                             dx = ox - x
-                return next_well
+                return next_well.location
         else:
             return None
 
@@ -360,12 +362,13 @@ class InsertScreenController:
             else:
                 x = self._initial_point[0]
                 y = self._initial_point[1]
-                dx = (location[0] - self._initial_point[0])/int(self.screen.num_circles_horizontal_input.text())
-                dy = (location[1] - self._initial_point[1])/int(self.screen.num_circles_vertical_input.text())
+                dx = (location[0] - self._initial_point[0])/(int(self.screen.num_circles_horizontal_input.text()) - 1)
+                dy = (location[1] - self._initial_point[1])/(int(self.screen.num_circles_vertical_input.text()) - 1)
                 for _ in range(int(self.screen.num_circles_horizontal_input.text())):
                     for _ in range(int(self.screen.num_circles_vertical_input.text())):
-                        y += dy
                         self._add_row([x, y], pixels=False)
+                        logging.info('adding row with {}'.format([x, y]))
+                        y += dy
                     y = self._initial_point[1]
                     x += dx
 
@@ -570,7 +573,8 @@ class MethodScreenController:
             self._step_well = combobox
 
     def add_step(self, inlets, outlets, action_input=None, inlet_input=None, outlet_input=None,
-                 time_input=None, value_input=None, duration_input=None, summary_input=None):
+                 time_input=None, value_input=None, duration_input=None, summary_input=None,
+                 inlet_travel_input=None, outlet_travel_input=None):
         if not self._populating_table:
             self._form_data.extend([{}])
         actions = ['Select', 'Separate', 'Rinse', 'Inject']
@@ -593,10 +597,26 @@ class MethodScreenController:
             blank_duration.setText(duration_input)
         self.screen.insert_table.setItem(row_count, 4, blank_duration)
 
+        inlet_travel = QtWidgets.QDoubleSpinBox()
+        if inlet_travel_input:
+            inlet_travel.setValue(inlet_travel_input)
+        else:
+            inlet_travel.setValue(25)
+        inlet_travel.setSuffix('mm')
+        self.screen.insert_table.setCellWidget(row_count, 7, inlet_travel)
+
+        outlet_travel = QtWidgets.QDoubleSpinBox()
+        if outlet_travel_input:
+            outlet_travel.setValue(outlet_travel_input)
+        else:
+            outlet_travel.setValue(1)
+        outlet_travel.setSuffix('cm')
+        self.screen.insert_table.setCellWidget(row_count, 8, outlet_travel)
+
         blank_summary = QtWidgets.QTableWidgetItem()
         if summary_input:
             blank_summary.setText(summary_input)
-        self.screen.insert_table.setItem(row_count, 7, blank_summary)
+        self.screen.insert_table.setItem(row_count, 9, blank_summary)
 
         add_button = QtWidgets.QPushButton('+')
         add_button.setFixedWidth(38)
@@ -755,7 +775,7 @@ class MethodScreenController:
 
         self.screen.insert_table.setItem(current_row, 3, value_item)
         self.screen.insert_table.setItem(current_row, 4, duration_item)
-        self.screen.insert_table.setItem(current_row, 7, summary_item)
+        self.screen.insert_table.setItem(current_row, 9, summary_item)
 
     def load_dialog(self, dialog_type):
         """ Loads the appropriate dialog based on user input in table. """
@@ -932,7 +952,8 @@ class MethodScreenController:
             if step:
                 self.add_step([step['Inlet']], [step['Outlet']], action_input=step['Type'], inlet_input=step['Inlet'],
                               outlet_input=step['Outlet'], time_input=step['Time'], value_input=step['Value'],
-                              duration_input=step['Duration'], summary_input=step['Summary'])
+                              duration_input=step['Duration'], summary_input=step['Summary'],
+                              inlet_travel_input=step['InletTravel'], outlet_travel_input=step['OutletTravel'])
                 self._form_data += [step]
 
         self._populating_table = False
@@ -942,10 +963,12 @@ class MethodScreenController:
         n = 0
         for data in self._form_data:
             if 'Type' in data.keys():
+                data['InletTravel'] = self.screen.insert_table.cellWidget(n, 7).value()
+                data['OutletTravel'] = self.screen.insert_table.cellWidget(n, 8).value()
                 data['Inlet'] = self.screen.insert_table.cellWidget(n, 5).currentText()
                 data['Outlet'] = self.screen.insert_table.cellWidget(n, 6).currentText()
                 data['Time'] = self.screen.insert_table.item(n, 1).text()
-                data['Summary'] = self.screen.insert_table.item(n, 7).text()
+                data['Summary'] = self.screen.insert_table.item(n, 9).text()
                 data['Value'] = self.screen.insert_table.item(n, 3).text()
                 data['Duration'] = self.screen.insert_table.item(n, 4).text()
                 n += 1
@@ -1297,7 +1320,6 @@ class RunScreenController:
     def _load_insert(self):
         if self.insert:
             for well in self.insert.wells:
-                logging.info(well)
                 self.screen.live_feed_scene.add_shape(well.shape, well.bound_box)
 
     # Hardware Control Functions
@@ -1515,7 +1537,10 @@ class RunScreenController:
         self.hardware.laser_control.check_parameters()
 
     def check_system(self):
-        pass
+        if self.hardware.xy_stage_control and self.hardware.outlet_control and self.hardware.pressure_control and \
+                self.hardware.daq_board_control:  #fixme
+            return True
+        return False
 
     # Sequence Table Functions
     def add_method(self):
@@ -1596,6 +1621,7 @@ class RunScreenController:
         self._pause_thread_flag = True
 
     def end_sequence(self):
+        logging.info('Stopping run ...')
         self._stop_thread_flag = True
 
     def run(self):
@@ -1606,7 +1632,7 @@ class RunScreenController:
             repetitions = self.screen.repetition_input.value()
             run_state = self.run_method(method, repetitions)
             if not run_state:
-                logging.info('Stopping run ...')
+                logging.info('Run stopped.')
                 self._stop_thread_flag = False
                 return False
         return True
@@ -1642,28 +1668,28 @@ class RunScreenController:
             voltage_level = None
             pressure_state = None
 
-            if step['SeparationTypeVoltageRadio']():
-                voltage_level = float(step['ValuesVoltageEdit']())
+            if step['SeparationTypeVoltageRadio']:
+                voltage_level = float(step['ValuesVoltageEdit'])
             elif step['SeparationTypeCurrentRadio']():
                 logging.error('Unsupported: Separation with current')
                 return False
-            elif step['SeparationTypePowerRadio']():
+            elif step['SeparationTypePowerRadio']:
                 logging.error('Unsupported: Separation with power')
                 return False
-            elif step['SeparationTypePressureRadio']():
+            elif step['SeparationTypePressureRadio']:
                 logging.error('Unsupported: Separation with pressure')
                 return False
-            elif step['SeparationTypeVacuumRadio']():
+            elif step['SeparationTypeVacuumRadio']:
                 logging.error('Unsupported: Separation with vacuum')
                 return False
 
-            if step['SeparationTypeWithPressureCheck']():
+            if step['SeparationTypeWithPressureCheck']:
                 pressure_state = True
-            elif step['SeparationTypeWithVacuumCheck']():
+            elif step['SeparationTypeWithVacuumCheck']:
                 logging.error('Unsupported: Separation with vacuum.')
                 return False
 
-            duration = float(step['ValuesDurationEdit']())
+            duration = float(step['ValuesDurationEdit'])
 
             if voltage_level:
                 self.hardware.start_daq()
@@ -1680,13 +1706,13 @@ class RunScreenController:
 
         def rinse():
             pressure_state = None
-            if step['PressureTypePressureRadio']():
+            if step['PressureTypePressureRadio']:
                 pressure_state = True
-            elif step['PressureTypeVacuumRadio']():
+            elif step['PressureTypeVacuumRadio']:
                 logging.error('Unsupported: Rinsing with vacuum.')
                 return False
 
-            duration = float(step['ValuesDurationEdit']())
+            duration = float(step['ValuesDurationEdit'])
 
             if pressure_state:
                 self.rinse_pressure(off=False)
@@ -1698,16 +1724,16 @@ class RunScreenController:
 
         def inject():
             voltage_level = None
-            if step['InjectionTypeVoltageRadio']():
-                voltage_level = float(step['ValuesVoltageEdit']())
-            elif step['InjectionTypePressureRadio']():
+            if step['InjectionTypeVoltageRadio']:
+                voltage_level = float(step['ValuesVoltageEdit'])
+            elif step['InjectionTypePressureRadio']:
                 logging.error('Unsupported: Injection with pressure.')
                 return False
-            elif step['InjectionTypeVacuumRadio']():
+            elif step['InjectionTypeVacuumRadio']:
                 logging.error('Unsupported: Injection with vacuum.')
                 return False
 
-            duration = float(step['ValuesDurationEdit']())
+            duration = float(step['ValuesDurationEdit'])
 
             if voltage_level:
                 self.hardware.start_daq()
@@ -1729,11 +1755,11 @@ class RunScreenController:
                     check_flags()
                     step_start = time.time()
 
-                    move_inlet(self._clearance_height)  # fixme, self._clearance_height is a placeholder, get input
+                    move_inlet(step['InletTravel'])
 
-                    move_outlet(self._clearance_height)
-
-                    if rep > int(step['TrayPositionsIncrementEdit']()):
+                    move_outlet(step['OutletTravel'])
+                    logging.info(step['TrayPositionsIncrementEdit'])
+                    if rep > int(step['TrayPositionsIncrementEdit']):
                         move_xy_stage(self.insert.get_next_well_xy(step['Inlet']))
                     else:
                         move_xy_stage(self.insert.get_well_xy(step['Inlet']))
@@ -1742,7 +1768,7 @@ class RunScreenController:
                         time.sleep(abs(self.injection_wait-(time.time() - step_start)))
                         check_flags()
 
-                    move_inlet(-self._clearance_height)
+                    move_inlet(-step['InletTravel'])
 
                     # fixme prompt user with error message when a step isn't executed instead of immediately ending.
 
@@ -1764,7 +1790,7 @@ class RunScreenController:
                     logging.info('Step completed.')
 
                     previous_step = step['Type']
-            return True
+        return True
 
     # Output Terminal Functions
     def clear_output_window(self):

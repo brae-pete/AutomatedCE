@@ -58,13 +58,13 @@ class DAQBoard:
         voltage = float(voltage) / self.voltage_conversion
         diff = float(voltage) - self.voltage
         if diff == 0:
-            self.output_task.write(0)
+            # self.output_task.write(0)
             self.voltage = voltage
             return
         # Get samples to send DAQ
         samples = self.get_voltage_ramp(voltage, diff)
         # Reset current voltage
-        self.output_task.write(samples)
+        # self.output_task.write(samples)
         self.voltage = voltage
         logging.info('Voltage set to {}'.format(voltage))
 
