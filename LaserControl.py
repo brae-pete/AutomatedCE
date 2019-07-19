@@ -26,7 +26,8 @@ class Laser:
         if not home:
             self.serial.open()
 
-        self.commands = {'MANUFACTURERS_DATE': ';LAMD{}\r'.format,  # ?
+        self.commands = {  # Commented out commands are not supported by our laser configuration.
+                         'MANUFACTURERS_DATE': ';LAMD{}\r'.format,  # ?
                          'ATTENUATION': ';LAAT{}\r'.format,  # ? or ### (000 - 255)
                          'BURST_COUNT': ';LABU{}\r'.format,  # ? or #### (0001 - 4000)
                          'ENABLE_Q-SWITCH': ';LADQ{}\r'.format,  # ? or # (0 (enable) or 1 (disable))
@@ -41,25 +42,26 @@ class Laser:
                          'LASER_OFF': ';LAOF\r'.format,  # no input
                          'LASER_ON': ';LAON\r'.format,  # no input
                          'PULSE_MODE': ';LAPM{}\r'.format,  # ? or # (1 enables long pulse, 0 disables it)
-                         'ROTATING_POLARIZER': ';LARP{}\r'.format,  # ### (0 to max channel travel)
-                         'ROTATING_POLARIZER_POSITION': ';LARP{}\r'.format,  # ? or xxx (measured in motor steps)
-                         'ROTATING_POLARIZER_TRAVEL': ';LARPT{}\r'.format,  # ?
-                         'ROTATING_POLARIZER_ZERO': ';LARPTZ{}\r'.format,  # ? or xxx!
+                         # 'ROTATING_POLARIZER': ';LARP{}\r'.format,  # ### (0 to max channel travel)
+                         # 'ROTATING_POLARIZER_POSITION': ';LARP{}\r'.format,  # ? or xxx (measured in motor steps)
+                         # 'ROTATING_POLARIZER_TRAVEL': ';LARPT{}\r'.format,  # ?
+                         # 'ROTATING_POLARIZER_ZERO': ';LARPTZ{}\r'.format,  # ? or xxx!
                          'LASER_REPETITION_RATE': ';LARR{}\r'.format,  # ? or ###
                          'RESET': ';LARS\r'.format,  # no input
                          'LASER_SHOT_COUNT': ';LASC\r'.format,  # no input
                          'SERIAL_MODE': ';LASM{}\r'.format,  # ? or # (0 is off and 1 is on)
                          'SERIAL_NUMBER': ';LASN{}\r'.format,  # ?
                          'SPOT_MARKER_CONTROL': ';LASP{}\r'.format,  # ? or ### (000 - 255)
-                         'SHUTTER_ROTATION_CONTROL': ';LASR{}\r'.format,  # ? or T? or +/-##
+                         # 'SHUTTER_ROTATION_CONTROL': ';LASR{}\r'.format,  # ? or T? or +/-##
                          'SYSTEM_STATUS': ';LASS\r'.format,  # no input
                          'STOP_FIRING': ';LAST\r'.format,  # no input
                          'ACCESSORY_CONFIGURATION': ';LASV{}\r'.format,  # ?
                          'PFN_VOLTAGE': ';LAVO{}\r'.format,  # ?  or ### (000 - 255)
                          'VERSION_NUMBER': ';LAVN\r'.format,  # no input
                          'LASER_WARM_UP_MODE': ';LAWU{}\r'.format,  # ? or ####
-                         'X_SHUTTER': ';X{}\r'.format,  # S? or T? or S###
-                         'Y_SHUTTER': ';Y{}\r'.format}  # S? or T? or S###
+                         # 'X_SHUTTER': ';X{}\r'.format,  # S? or T? or S###
+                         # 'Y_SHUTTER': ';Y{}\r'.format  # S? or T? or S###
+                         }
 
     def _read_buffer(self):
         response = self.serial.readlines()
@@ -68,7 +70,7 @@ class Laser:
         return response
 
     def check_status(self):
-        logging.info('** LASER SYSTEM STATUS **\n')
+        logging.info(' ** LASER SYSTEM STATUS **')
         with self.lock:
             self.serial.write(self.commands['SYSTEM_STATUS']().encode())
             response = self._read_buffer()
@@ -80,6 +82,9 @@ class Laser:
             response = '{:024b}'.format(int(response))
         except ValueError:
             logging.error('Cannot check status right now.')
+            return
+        except TypeError:
+            logging.error('Error checking status ({}). Is the power on and is the key turned?'.format(response))
             return
 
         is_not = 'not ' if response[23] == 1 else ''
@@ -155,7 +160,7 @@ class Laser:
 
     def check_parameters(self):
         with self.lock:
-            logging.info('** LASER SETTINGS **\n')
+            logging.info(' ** LASER SETTINGS **')
             self.serial.write(self.commands['WAVELENGTH']('?').encode())
             response = self._read_buffer()
             logging.info('\tWavelength set to: {}'.format(response))
@@ -172,9 +177,9 @@ class Laser:
             response = self._read_buffer()
             logging.info('\tLaser Mode set to: {}'.format(response))
 
-            # self.serial.write(self.commands['PULSE_MODE']('?')) # fixme unrecognized command?
-            # response = self._read_buffer()
-            # print('\tPulse Mode set to: {}'.format(response))
+            self.serial.write(self.commands['PULSE_MODE']('?').encode())
+            response = self._read_buffer()
+            print('\tPulse Mode set to: {}'.format(response))
 
             self.serial.write(self.commands['PFN_VOLTAGE']('?').encode())
             response = self._read_buffer()
@@ -184,7 +189,7 @@ class Laser:
             response = self._read_buffer()
             logging.info('\tConfiguration: {0:08b}\n'.format(int(response)))
 
-    def set_pfn(self, value):
+    def set_pfn(self, value):  # fixme, check input type here and change accordingly
         try:
             int(value)
         except ValueError:
@@ -238,7 +243,7 @@ class Laser:
             logging.error('Invalid Burst value provided - {}. Must be integer between 0001 and 4000'.format(value))
             return False
 
-        if len(str(value)) != 3 or 1 > int(value) or int(value) > 4000:  # fixme (len)
+        if len(str(value)) != 3 or 1 > int(value) or int(value) > 4000:
             logging.error('Invalid Burst value provided - {}. Must be integer between 0001 and 4000'.format(value))
             return False
 
@@ -315,12 +320,16 @@ class Laser:
             response = self.serial.readlines()
             response = '{:024b}'.format(int(response[0].rsplit('\r'.encode())[0]))
             if response[0] == 1 or response[3] == 1 or response[4] == 1 or response[5] == 1 or response[7] == 1 or \
-                response[8] == 1 or response[17] == 1 or response[18] == 1 or response[20] == 1 or response[21] == 1 or \
+                response[8] == 1 or response[17] == 1 or response[18] == 1 or response[20] == 1 or response[21] == 1 or\
                     response[22] == 1 or response[23] == 1:
-                logging.error('Check system status for problems. Laser Response: {}'.format(response))
+                logging.error('Check system status for problems, could not start. Laser Response: {}'.format(response))
                 return False
 
             self.serial.write(self.commands['LASER_ON']().encode())
+            response = self.serial.readlines()
+            if response != 'ok':
+                logging.error('Failed to put laser in standby mode. Laser Response: {}'.format(response))
+                return False
             return True
 
     def fire(self):

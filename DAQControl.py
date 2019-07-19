@@ -58,20 +58,20 @@ class DAQBoard:
         voltage = float(voltage) / self.voltage_conversion
         diff = float(voltage) - self.voltage
         if diff == 0:
-            self.outputTask.write(0)
+            self.output_task.write(0)
             self.voltage = voltage
             return
         # Get samples to send DAQ
         samples = self.get_voltage_ramp(voltage, diff)
         # Reset current voltage
-        self.outputTask.write(samples)
+        self.output_task.write(samples)
         self.voltage = voltage
+        logging.info('Voltage set to {}'.format(voltage))
 
     def get_voltage_ramp(self, voltage, diff):
         """When changing voltages, ramp up the voltage output"""
         # Create a ramp from the current voltage to the set voltage
 
-        logging.info(diff, voltage, self.voltage)
         ramp_time = abs(float(diff) / self.voltage_ramp)
         logging.info(ramp_time)
         samples = round(ramp_time * self.output_freq)

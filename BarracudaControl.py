@@ -78,7 +78,7 @@ class BarracudaSystem(BaseSystem):
         self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
         self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        self.image_control = ImageControl.ImageControl(home=HOME)
+        # self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
         self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
@@ -140,15 +140,36 @@ class Insert:
     def __str__(self):
         separator = ','
         wells = ['{}'.format(str(well)) for well in self.wells]
-        logging.info(wells)
         return_wells = separator.join(wells)
-        logging.info(return_wells)
         return return_wells
 
     def get_well_xy(self, label):
         for well in self.wells:
             if well.label == label:
                 return well.location
+        else:
+            return None
+
+    def get_next_well_xy(self, label):
+        tolerance = 2
+        for well in self.wells:
+            if well.label == label:
+                x, y, *_ = well.bound_box
+                dy = 312
+                next_well = None
+                for other_well in self.wells:
+                    ox, oy, *_ = other_well.bound_box
+                    if 0 < (y - oy) < dy and abs(ox - x) < tolerance:
+                        next_well = other_well
+                        dy = y - oy
+                else:
+                    dx = 584
+                    for other_well in self.wells:
+                        ox, oy, *_ = other_well.bound_box
+                        if 0 < (ox - x) < dx and abs(oy - y) < tolerance:
+                            next_well = other_well
+                            dx = ox - x
+                return next_well
         else:
             return None
 
@@ -1032,6 +1053,7 @@ class RunScreenController:
     _stop.set()
     _stop.clear()
 
+    # Screen Background Functions
     def __init__(self, screen, hardware, repository):
         self.screen = screen
         self.hardware = hardware
@@ -1127,13 +1149,12 @@ class RunScreenController:
             self.screen.laser_standby.released.connect(lambda: self.laser_on())
             self.screen.laser_stop.released.connect(lambda: self.stop_fire())
             self.screen.laser_off.released.connect(lambda: self.stop_laser())
-            self.screen.laser_check.released.connect(lambda: self.hardware.laser_control.check_status())
+            self.screen.laser_check.released.connect(lambda: threading.Thread(target=self.check_laser).start())
         else:
             self.screen.enable_laser_form(False)
 
         if self.hardware.daq_board_control:
             self.screen.voltage_value.valueChanged.connect(lambda: self.set_voltage(value=self.screen.voltage_value.value()))
-            self.screen.voltage_on.released.connect(lambda: self.voltage_on())
             self.screen.voltage_off.released.connect(lambda: self.stop_voltage())
         else:
             self.screen.enable_voltage_form(False)
@@ -1351,16 +1372,17 @@ class RunScreenController:
             self._stop.clear()
 
     def set_voltage(self, value):
+        # self.hardware.start_daq()
         self.hardware.daq_board_control.change_voltage(value)
 
     def set_pfn(self, value):
-        self.hardware.laser_control.set_pfn(value)
+        self.hardware.laser_control.set_pfn('{:03d}'.format(value))
 
     def set_attenuation(self, value):
-        self.hardware.laser_control.set_attenuation(value)
+        self.hardware.laser_control.set_attenuation('{:03d}'.format(value))
 
     def set_burst(self, count):
-        self.hardware.laser_control.set_burst(count)
+        self.hardware.laser_control.set_burst('{:04d}'.format(count))
 
     def stop_xy_stage(self):
         logging.warning('Stopping XY stage.')
@@ -1387,6 +1409,7 @@ class RunScreenController:
 
     def stop_laser(self):
         self.hardware.laser_control.off()
+        self.screen.laser_fire_check.setEnabled(False)
         self.screen.laser_timer.setText('0s')
         self._laser_poll_flag = False
 
@@ -1418,10 +1441,20 @@ class RunScreenController:
         sys.exit()
 
     def rinse_pressure(self, off):
-        logging.info(off)
+        if not off:
+            logging.info('Applying rinse pressure.')
+            self.hardware.pressure_control.apply_rinse_pressure()
+        else:
+            logging.info('Stopping rinse pressure.')
+            self.hardware.pressure_control.stop_rinse_pressure()
 
     def pressure_valve(self, closed):
-        logging.info(closed)
+        if not closed:
+            logging.info('Opening pressure valve.')
+            self.hardware.pressure_control.open_valve()
+        else:
+            logging.info('Closing pressure valve.')
+            self.hardware.pressure_control.close_valve()
 
     def fire_laser(self):
         def fire():
@@ -1446,10 +1479,12 @@ class RunScreenController:
             logging.info('Adding {}s to timer.'.format(self._laser_max))
             self._laser_max += self._laser_max
         else:
-            self.hardware.laser_control.start()
-            start_time = time.time()
-            threading.Thread(target=self.laser_poll, args=(start_time,), daemon=True).start()
-            logging.info('Laser on standby for {}s'.format(self._laser_max))
+            response = self.hardware.laser_control.start()
+            if response:
+                start_time = time.time()
+                threading.Thread(target=self.laser_poll, args=(start_time,), daemon=True).start()
+                logging.info('Laser on standby for {}s'.format(self._laser_max))
+                self.screen.laser_fire_check.setEnabled(True)
 
     def laser_poll(self, start_time):
         self._laser_poll_flag = True
@@ -1475,9 +1510,12 @@ class RunScreenController:
     def stop_fire(self):
         self.hardware.laser_control.stop()
 
+    def check_laser(self):
+        self.hardware.laser_control.check_status()
+        self.hardware.laser_control.check_parameters()
+
     def check_system(self):
-        logging.info('Checking system status ...')
-        return True
+        pass
 
     # Sequence Table Functions
     def add_method(self):
@@ -1508,10 +1546,8 @@ class RunScreenController:
                                                    ' loaded methods.')
                         return
                 else:
-                    logging.info('insertnotyetloaded')
                     self.insert = data.insert
                     if not self._live_feed:
-                        logging.info('loadingthisjunk')
                         self._load_insert()
 
                 self.methods.append(data)
@@ -1567,106 +1603,167 @@ class RunScreenController:
             logging.error('Unable to start run.')
 
         for method in self.methods:
-            run_state = self.run_method(method)
+            repetitions = self.screen.repetition_input.value()
+            run_state = self.run_method(method, repetitions)
             if not run_state:
                 logging.info('Stopping run ...')
                 self._stop_thread_flag = False
                 return False
         return True
 
-    def run_method(self, method):
+    def run_method(self, method, repetitions):
         def check_flags():
             while self._pause_thread_flag:
                 continue
             if self._stop_thread_flag:
                 return False
 
-        previous_step = None
-        for step in method.steps:
-            if 'Type' in step.keys():
-                logging.info('{} Step: {}'.format(step['Type'], step['Summary']))
-                check_flags()
-                step_start = time.time()
+        def move_inlet(inlet_travel):
+            self.set_z(step=inlet_travel)
+            time.sleep(2)
+            check_flags()
 
-                inlet_travel = self._clearance_height
-                self.set_z(step=inlet_travel)
-                time.sleep(2)
-                check_flags()
+        def move_outlet(outlet_travel):
+            self.set_outlet(step=outlet_travel)
+            time.sleep(2)
+            check_flags()
 
-                outlet_travel = self._clearance_height
-                self.set_outlet(step=outlet_travel)
-                time.sleep(2)
-                check_flags()
+        def move_xy_stage(inlet_location):
+            if inlet_location is None:
+                logging.error('Inlet not found in insert. Inlet and Insert given below.')
+                logging.error('INLET LABEL : {}'.format(step['Inlet']))
+                logging.error('INSERT WELLS : {}'.format(self.insert))
+                return False
+            self.set_xy(inlet_location)
+            time.sleep(2)
+            check_flags()
 
-                inlet_location = self.insert.get_well_xy(step['Inlet'])
-                if inlet_location is None:
-                    logging.error('Inlet not found in insert. Inlet and Insert given below.')
-                    logging.error('INLET LABEL : {}'.format(step['Inlet']))
-                    logging.error('INSERT WELLS : {}'.format(self.insert))
-                    return False
-                self.set_xy(inlet_location)
-                time.sleep(2)
-                check_flags()
+        def separate():
+            voltage_level = None
+            pressure_state = None
 
-                if previous_step == 'Inject' and time.time() - step_start < self.injection_wait:
-                    time.sleep(abs(self.injection_wait-(time.time() - step_start)))
+            if step['SeparationTypeVoltageRadio']():
+                voltage_level = float(step['ValuesVoltageEdit']())
+            elif step['SeparationTypeCurrentRadio']():
+                logging.error('Unsupported: Separation with current')
+                return False
+            elif step['SeparationTypePowerRadio']():
+                logging.error('Unsupported: Separation with power')
+                return False
+            elif step['SeparationTypePressureRadio']():
+                logging.error('Unsupported: Separation with pressure')
+                return False
+            elif step['SeparationTypeVacuumRadio']():
+                logging.error('Unsupported: Separation with vacuum')
+                return False
+
+            if step['SeparationTypeWithPressureCheck']():
+                pressure_state = True
+            elif step['SeparationTypeWithVacuumCheck']():
+                logging.error('Unsupported: Separation with vacuum.')
+                return False
+
+            duration = float(step['ValuesDurationEdit']())
+
+            if voltage_level:
+                self.hardware.start_daq()
+                self.set_voltage(voltage_level)
+
+            if pressure_state:
+                self.rinse_pressure(off=False)
+
+            time.sleep(duration)
+            self.set_voltage(0)
+            self.rinse_pressure(off=True)
+
+            return True
+
+        def rinse():
+            pressure_state = None
+            if step['PressureTypePressureRadio']():
+                pressure_state = True
+            elif step['PressureTypeVacuumRadio']():
+                logging.error('Unsupported: Rinsing with vacuum.')
+                return False
+
+            duration = float(step['ValuesDurationEdit']())
+
+            if pressure_state:
+                self.rinse_pressure(off=False)
+
+            time.sleep(duration)
+            self.rinse_pressure(off=True)
+
+            return True
+
+        def inject():
+            voltage_level = None
+            if step['InjectionTypeVoltageRadio']():
+                voltage_level = float(step['ValuesVoltageEdit']())
+            elif step['InjectionTypePressureRadio']():
+                logging.error('Unsupported: Injection with pressure.')
+                return False
+            elif step['InjectionTypeVacuumRadio']():
+                logging.error('Unsupported: Injection with vacuum.')
+                return False
+
+            duration = float(step['ValuesDurationEdit']())
+
+            if voltage_level:
+                self.hardware.start_daq()
+                self.set_voltage(voltage_level)
+
+            time.sleep(duration)
+            self.set_voltage(0)
+            self.rinse_pressure(off=True)
+
+            return True
+
+        # fixme prompt for alternate input if user selects unsupported type.
+
+        for rep in range(repetitions):
+            previous_step = None
+            for step in method.steps:
+                if 'Type' in step.keys():
+                    logging.info('{} Step: {}'.format(step['Type'], step['Summary']))
                     check_flags()
+                    step_start = time.time()
 
-                self.set_z(step=-inlet_travel)
-                time.sleep(2)
-                check_flags()
+                    move_inlet(self._clearance_height)  # fixme, self._clearance_height is a placeholder, get input
 
-                voltage_level = 0
-                pressure_state = False
-                start_time = step['Time']
+                    move_outlet(self._clearance_height)
 
-                if step['Type'] == 'Separate':
-                    self.hardware.start_daq()
+                    if rep > int(step['TrayPositionsIncrementEdit']()):
+                        move_xy_stage(self.insert.get_next_well_xy(step['Inlet']))
+                    else:
+                        move_xy_stage(self.insert.get_well_xy(step['Inlet']))
 
-                    if step['SeparationTypeVoltageRadio']():
-                        voltage_level = float(step['ValuesVoltageEdit']())
-                    elif step['SeparationTypeCurrentRadio']():
-                        logging.error('Unsupported: Separation with current')
-                        return False
-                    elif step['SeparationTypePowerRadio']():
-                        logging.error('Unsupported: Separation with power')
-                        return False
-                    elif step['SeparationTypePressureRadio']():
-                        logging.error('Unsupported: Separation with pressure')
-                        return False
-                    elif step['SeparationTypeVacuumRadio']():
-                        logging.error('Unsupported: Separation with vacuum')
-                        return False
+                    if previous_step == 'Inject' and time.time() - step_start < self.injection_wait:
+                        time.sleep(abs(self.injection_wait-(time.time() - step_start)))
+                        check_flags()
 
-                    if step['SeparationTypeWithPressureCheck']():
-                        pressure_state = True
-                    elif step['SeparationTypeWithVacuumCheck']():
-                        logging.error('Unsupported: Separation with vacuum.')
-                        return False
+                    move_inlet(-self._clearance_height)
 
-                elif step['Type'] == 'Rinse':
-                    if step['PressureTypePressureRadio']():
-                        pressure_state = True
-                    elif step['PressureTypeVacuumRadio']():
-                        return False
+                    # fixme prompt user with error message when a step isn't executed instead of immediately ending.
 
-                elif step['Type'] == 'Inject':
-                    if step['InjectionTypeVoltageRadio']():
-                        return False
-                    elif step['InjectionTypeVacuumRadio']():
-                        return False
+                    if step['Type'] == 'Separate':
+                        executed = separate()
+                        if not executed:
+                            return False
 
-                self.hardware.daq_board_control.change_voltage(voltage_level)
-                if pressure_state:
-                    self.hardware.pressure_control.apply_rinse_pressure()
-                time.sleep(start_time)
+                    elif step['Type'] == 'Rinse':
+                        executed = rinse()
+                        if not executed:
+                            return False
 
-                self.hardware.daq_board_control.change_voltage(0)
-                threading.Thread(target=self.hardware.pressure_control.stop_rinse_pressure).start()
+                    elif step['Type'] == 'Inject':
+                        executed = inject()
+                        if not executed:
+                            return False
 
-                logging.info('Step completed.')
+                    logging.info('Step completed.')
 
-                previous_step = step['Type']
+                    previous_step = step['Type']
             return True
 
     # Output Terminal Functions
