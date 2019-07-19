@@ -54,6 +54,7 @@ class BaseSystem:
         pass
 
     def set_xy(self, xy=None, rel_xy=None):
+        """Move the XY """
         pass
 
     def get_xy(self):
