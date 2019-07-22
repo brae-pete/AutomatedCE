@@ -1233,7 +1233,7 @@ class SequenceScreenController:
 class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
-    _xy_step_size = 1/1000  # µm
+    _xy_step_size = 1  # 1 is µm, mm would be 1000
     _live_feed = False
     _pause_thread_flag = False
     _clearance_height = 10
@@ -1290,8 +1290,8 @@ class RunScreenController:
             self.screen.xy_y_value.unselected.connect(lambda: self._value_display_interact(selected=False))
             self.screen.xy_x_value.returnPressed.connect(lambda: self.set_x(x=float(self.screen.xy_x_value.text())))
             self.screen.xy_y_value.returnPressed.connect(lambda: self.set_y(y=float(self.screen.xy_y_value.text())))
-            self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
-            self.screen.xy_origin.released.connect(lambda: self.origin())
+            # self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
+            # self.screen.xy_origin.released.connect(lambda: self.origin())
             self.screen.xy_stop.released.connect(lambda: self.stop_xy_stage())
         else:
             self.screen.enable_xy_stage_form(False)
@@ -1370,26 +1370,43 @@ class RunScreenController:
         self.screen.xy_updated.connect(lambda: self.screen.live_feed_scene.draw_crosshairs(self._event))
 
     def _start_updating_display(self):
-        if self.hardware.xy_stage_control:
-            value = self.hardware.xy_stage_control.read_xy()
-            self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
-            self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
-
-        if self.hardware.z_stage_control:
-            value = self.hardware.z_stage_control.read_z()
-            self.screen.z_value.setText("{:.3f}".format(float(value)))
-
-        if self.hardware.outlet_control:
-            value = self.hardware.outlet_control.read_z()
-            self.screen.outlet_value.setText("{:.3f}".format(float(value)))
-
-        if self.hardware.objective_control:
-            value = self.hardware.objective_control.read_z()
-            self.screen.objective_value.setText("{:.3f}".format(float(value)))
-
-        threading.Thread(target=self._update_stages, daemon=True).start()
         threading.Thread(target=self._update_live_feed, daemon=True).start()
         threading.Thread(target=self._update_plot, daemon=True).start()
+
+        if self.hardware.xy_stage_control:
+            value = self.hardware.get_xy()
+            if value:
+                self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+                self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+            else:
+                logging.error('Error reading XY position. Make sure get_xy() in hardware class is defined.')
+                return
+
+        if self.hardware.z_stage_control:
+            value = self.hardware.get_z()
+            if value:
+                self.screen.z_value.setText("{:.3f}".format(float(value)))
+            else:
+                logging.error('Error reading Z position. Make sure get_z() in hardware class is defined.')
+                return
+
+        if self.hardware.outlet_control:
+            value = self.hardware.get_outlet()
+            if value:
+                self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+            else:
+                logging.error('Error reading outlet position. Make sure get_outlet() in hardware class is defined.')
+                return
+
+        if self.hardware.objective_control:
+            value = self.hardware.get_objective()
+            if value:
+                self.screen.objective_value.setText("{:.3f}".format(float(value)))
+            else:
+                logging.error('Error reading objective position. Make sure get_objective in hardware class is defined.')
+                return
+
+        threading.Thread(target=self._update_stages, daemon=True).start()
 
     def _value_display_interact(self, selected=False):
         logging.info(selected)
@@ -1405,32 +1422,24 @@ class RunScreenController:
                 continue
 
             if self.hardware.xy_stage_control:
-                prev = self.hardware.xy_stage_control.position
-                value = self.hardware.xy_stage_control.read_xy()
-                if value != prev:
-                    self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
-                    self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+                value = self.hardware.get_xy()
+                self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+                self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
                 time.sleep(self._update_delay)
 
             if self.hardware.z_stage_control:
-                prev = self.hardware.z_stage_control.pos
-                value = str(self.hardware.z_stage_control.read_z())
-                if value != prev:
-                    self.screen.z_value.setText("{:.3f}".format(float(value)))
+                value = self.hardware.get_z()
+                self.screen.z_value.setText("{:.3f}".format(float(value)))
                 time.sleep(self._update_delay)
 
             if self.hardware.objective_control:
-                prev = self.hardware.objective_control.pos
-                value = str(self.hardware.objective_control.read_z())
-                if value != prev:
-                    self.screen.objective_value.setText("{:.3f}".format(float(value)))
+                value = self.hardware.get_objective()
+                self.screen.objective_value.setText("{:.3f}".format(float(value)))
                 time.sleep(self._update_delay)
 
             if self.hardware.outlet_control:
-                prev = self.hardware.outlet_control.pos
-                value = str(self.hardware.outlet_control.read_z())
-                if value != prev:
-                    self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+                value = self.hardware.get_outlet()
+                self.screen.outlet_value.setText("{:.3f}".format(float(value)))
                 time.sleep(self._update_delay)
 
     def _update_live_feed(self):
@@ -1445,7 +1454,7 @@ class RunScreenController:
                 self.screen.feed_updated.emit()
                 time.sleep(.25)
             elif self.hardware.xy_stage_control:
-                event_location = self.hardware.xy_stage_control.read_xy()
+                event_location = self.hardware.get_xy()
                 self._event = [(event_location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
                                (event_location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
 
@@ -1494,45 +1503,49 @@ class RunScreenController:
                 self.screen.live_feed_scene.add_shape(well.shape, well.bound_box)
 
     # Hardware Control Functions
-    def set_origin(self):
+    def set_origin(self):  # fixme
         message = 'Are you sure you want to set the origin to your current position? This cannot be undone.'
         pos_function = self.hardware.xy_stage_control.set_origin()
         BarracudaQt.PermissionsMessageUI(permissions_message=message, pos_function=pos_function)
 
-    def origin(self):
+    def origin(self):  # fixme
         self.hardware.xy_stage_control.origin()
 
     def set_x(self, x=None, step=None):
         if step:
-            self.hardware.xy_stage_control.set_rel_x(step*self._xy_step_size)
+            step = [step*self._xy_step_size, 0]
         elif x:
-            position = self.hardware.xy_stage_control.read_xy()
-            self.hardware.xy_stage_control.set_x(x)
+            position = self.hardware.get_xy()
+            x = [x, position[1]]
 
-        value = self.hardware.xy_stage_control.read_xy()
-        self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+        executed = self.hardware.set_xy(xy=x, rel_xy=step)
+        if not executed:
+            logging.error('Error moving XY stage. Make sure set_xy() in hardware class is defined.')
 
         if self._stop.is_set():
             self._stop.clear()
 
     def set_y(self, y=None, step=None):
         if step:
-            self.hardware.xy_stage_control.set_rel_y(step*self._xy_step_size)
+            step = [0, step*self._xy_step_size]
         elif y:
-            self.hardware.xy_stage_control.set_y(y)
+            position = self.hardware.get_xy()
+            y = [position[0], y]
 
-        value = self.hardware.xy_stage_control.read_xy()
-        self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+        executed = self.hardware.set_xy(xy=y, rel_xy=step)
+        if not executed:
+            logging.error('Error moving XY stage. Make sure set_xy() in hardware class is defined.')
 
         if self._stop.is_set():
             self._stop.clear()
 
     def set_xy(self, xy):
-        logging.info('Moving XY stage to ({}, {})'.format(xy[0], xy[1]))
-        self.hardware.xy_stage_control.set_xy(xy)
+        executed = self.hardware.set_xy(xy=xy)
+        if not executed:
+            logging.error('Error moving XY stage. Make sure set_xy() in hardware class is defined.')
 
-        value = self.hardware.xy_stage_control.read_xy()
-        self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+        if self._stop.is_set():
+            self._stop.clear()
 
     def set_z(self, height=None, step=None):
         executed = self.hardware.set_z(z=height, rel_z=step)
