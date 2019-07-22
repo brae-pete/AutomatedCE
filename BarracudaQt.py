@@ -841,7 +841,7 @@ class RunScreen(QtWidgets.QMainWindow):
         live_feed_window.setCentralWidget(self.live_feed_view)
         live_feed_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_feed_control)
         live_feed_control.setTitleBarWidget(QtWidgets.QWidget())
-        live_feed_window = wrap_widget(live_feed_window)
+        # live_feed_window = wrap_widget(live_feed_window)
         self.live_feed_view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.live_feed_view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
@@ -862,9 +862,9 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.save_plot.setFixedWidth(60)
         live_plot_window.setCentralWidget(self.plot_panel)
-        # live_plot_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_plot_control)  # fixme when you want to add buttons
+        live_plot_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_plot_control)  # fixme when you want to add buttons
         live_plot_control.setTitleBarWidget(QtWidgets.QWidget())
-        live_plot_window = wrap_widget(live_plot_window)
+        # live_plot_window = wrap_widget(live_plot_window)
 
         return live_plot_window
 
@@ -951,6 +951,7 @@ class RunScreen(QtWidgets.QMainWindow):
     def update_plots(self, rfu, current):
         self.plot_panel.canvas.update_rfu(rfu)
         self.plot_panel.canvas.update_current(current)
+        self.plot_panel.canvas.set_style()
         self.plot_panel.canvas.draw()
 
 
@@ -1658,14 +1659,11 @@ class RunPlot(FigureCanvas):
 
     def set_style(self):
         title_font_size = 12
-        # self.axes_rfu.spines['top'].set_visible(False)
+        self.axes_current.set_ylabel("Current (mA)", fontsize=title_font_size)
+        self.axes_current.set_facecolor('#FFFFFF')
         self.axes_rfu.set_xlabel("Time (µs)", fontsize=title_font_size)
         self.axes_rfu.set_ylabel("RFU (kV)", fontsize=title_font_size)
         self.axes_rfu.set_facecolor('#FFFFFF')
-
-        self.axes_current.set_ylabel("Current (mA)", fontsize=title_font_size)
-        self.axes_current.legend(loc='upper right')
-        self.axes_current.set_facecolor('#FFFFFF')
 
     def update_rfu(self, rfu):
         self.axes_rfu.clear()
