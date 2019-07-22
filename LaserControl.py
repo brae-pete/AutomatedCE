@@ -326,7 +326,7 @@ class Laser:
                 return False
 
             self.serial.write(self.commands['LASER_ON']().encode())
-            response = self.serial.readlines()
+            response = self._read_buffer()
             if response != 'ok':
                 logging.error('Failed to put laser in standby mode. Laser Response: {}'.format(response))
                 return False
