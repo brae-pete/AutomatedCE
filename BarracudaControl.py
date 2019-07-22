@@ -115,7 +115,7 @@ class ProgramController:
 
         # Connect the views to the controllers.
         self.gs_screen = self.program_window.getting_started_screen
-        self.gs_control = GettingStartedScreenController(self.gs_screen, self.hardware, self.repository)
+        self.gs_control = GettingStartedScreenController(self.gs_screen, self.hardware, self.repository, self)
 
         self.i_screen = self.program_window.insert_screen
         self.i_control = InsertScreenController(self.i_screen, self.hardware, self.repository)
@@ -137,30 +137,55 @@ class ProgramController:
 
 
 class GettingStartedScreenController:
-    def __init__(self, screen, hardware, repository):
+    def __init__(self, screen, hardware, repository, parent):
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
+        self.parent = parent
 
-        self.set_callbacks()
+        self._set_callbacks()
 
-    def set_callbacks(self):
-        pass
+    def _set_callbacks(self):
+        self.screen.options.load_data.released.connect(lambda: self.load_data())
+        self.screen.options.load_method.released.connect(lambda: self.load_method())
+        self.screen.options.load_insert.released.connect(lambda: self.load_insert())
+        self.screen.options.load_sequence.released.connect(lambda: self.load_sequence())
+        self.screen.options.new_data.released.connect(lambda: self.new_data())
+        self.screen.options.new_method.released.connect(lambda: self.new_method())
+        self.screen.options.new_insert.released.connect(lambda: self.new_insert())
+        self.screen.options.new_sequence.released.connect(lambda: self.new_sequence())
+
+    def _select_file(self, ext, ext_label):
+        file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Select a file', os.getcwd(),
+                                                          '{}(*{})'.format(ext_label, ext))
+        if file_path[0]:
+            file_path = file_path[0]
+        else:
+            return None
+
+        if os.path.splitext(file_path)[1] != ext:
+            BarracudaQt.ErrorMessageUI(error_message='Invalid File Extension')
+            return None
+
+        return file_path
 
     def load_data(self):
-        pass
+        data_file = self._select_file('.dat', 'DATA')
 
     def load_insert(self):
-        pass
+        insert_file = self._select_file('.ins', 'INSERT')
 
     def load_method(self):
-        pass
+        method_file = self._select_file('.met', 'METHOD')
 
     def load_sequence(self):
-        pass
+        sequence_file = self._select_file('.seq', 'SEQUENCE')
 
     def load_system(self):
         pass
+
+    def new_data(self):
+        self.parent.program_window.tabBar().setCurrentIndex(2)
 
     def new_insert(self):
         pass

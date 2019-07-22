@@ -106,11 +106,11 @@ class GettingStartedScreen(QtWidgets.QMainWindow):
         palette.setColor(self.backgroundRole(), QtGui.QColor(250,250,250))
         self.setPalette(palette)
 
-        self.main_options = self.init_load_new_options()
-        self.main_options.setFixedSize(1050, 500)
+        main_options = self.init_load_new_options()
+        main_options.setFixedSize(1050, 500)
         main_layout = QtWidgets.QHBoxLayout()
         main_layout.addStretch()
-        main_layout.addWidget(self.main_options)
+        main_layout.addWidget(main_options)
         main_layout.addStretch()
         main_widget = QtWidgets.QWidget()
         main_widget.setLayout(main_layout)
@@ -119,12 +119,12 @@ class GettingStartedScreen(QtWidgets.QMainWindow):
     def init_load_new_options(self):
         central_widget = QtWidgets.QWidget()
         layouts = QtWidgets.QVBoxLayout()
-        options = LoadNewMainWidget()
-        options = wrap_widget(options)
+        self.options = LoadNewMainWidget()
+        self.options = wrap_widget(self.options)
         systems = SystemSelectionWidget()
         systems = wrap_widget(systems)
         layouts.addStretch()
-        layouts.addWidget(options)
+        layouts.addWidget(self.options)
         layouts.addSpacing(20)
         layouts.addWidget(systems)
         layouts.addStretch()
@@ -185,8 +185,8 @@ class InsertScreen(QtWidgets.QMainWindow):
         self.clear_object_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "eraser.png")), "")
         self.clear_object_action.setToolTip('Delete object')
 
-        self.load_insert_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "open-archive.png")), "")
-        self.load_insert_action.setToolTip('Load an old insert')
+        self.self.load_insert_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "open-archive.png")), "")
+        self.self.load_insert_action.setToolTip('Load an old insert')
 
         self.clear_area_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "clear.png")), "")
         self.clear_area_action.setToolTip('Clear objects in an area')
@@ -230,7 +230,7 @@ class InsertScreen(QtWidgets.QMainWindow):
         self.insert_joystick_tool_bar.addSeparator()
         self.insert_joystick_tool_bar.addSeparator()
 
-        self.insert_joystick_tool_bar.addAction(self.load_insert_action)
+        self.insert_joystick_tool_bar.addAction(self.self.load_insert_action)
         self.insert_joystick_tool_bar.addAction(self.init_grid_action)
         self.insert_joystick_tool_bar.addAction(self.joystick_action)
         self.insert_joystick_tool_bar.addWidget(self.circle_radius_input)
@@ -1708,47 +1708,47 @@ class LoadNewMainWidget(AlteredTabWidget):
         v2 = QtWidgets.QHBoxLayout()
 
         layouts = QtWidgets.QVBoxLayout()
-        pushButton1 = QtWidgets.QPushButton("                   Data")
-        pushButton1.setObjectName('MAIN')
+        self.load_data = QtWidgets.QPushButton("                   Data")
+        self.load_data.setObjectName('MAIN')
         if CUSTOM:
             with open("style.qss", "r") as qss:
-                pushButton1.setStyleSheet(qss.read())
-        pushButton1.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "graph.png")))
-        pushButton1.setIconSize(QtCore.QSize(48, 48))
+                self.load_data.setStyleSheet(qss.read())
+        self.load_data.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "graph.png")))
+        self.load_data.setIconSize(QtCore.QSize(48, 48))
 
-        pushButton2 = QtWidgets.QPushButton("                   Method")
-        pushButton2.setObjectName('MAIN')
+        self.load_method = QtWidgets.QPushButton("                   Method")
+        self.load_method.setObjectName('MAIN')
         if CUSTOM:
             with open("style.qss", "r") as qss:
-                pushButton2.setStyleSheet(qss.read())
-        pushButton2.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "meter.png")))
-        pushButton2.setIconSize(QtCore.QSize(48, 48))
+                self.load_method.setStyleSheet(qss.read())
+        self.load_method.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "meter.png")))
+        self.load_method.setIconSize(QtCore.QSize(48, 48))
 
-        pushButton3 = QtWidgets.QPushButton("                   Insert")
-        pushButton3.setObjectName('MAIN')
+        self.load_insert = QtWidgets.QPushButton("                   Insert")
+        self.load_insert.setObjectName('MAIN')
         if CUSTOM:
             with open("style.qss", "r") as qss:
-                pushButton3.setStyleSheet(qss.read())
-        pushButton3.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "plastic.png")))
-        pushButton3.setIconSize(QtCore.QSize(48, 48))
+                self.load_insert.setStyleSheet(qss.read())
+        self.load_insert.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "plastic.png")))
+        self.load_insert.setIconSize(QtCore.QSize(48, 48))
 
-        pushButton4 = QtWidgets.QPushButton("                   Sequence")
-        pushButton4.setObjectName('MAIN')
+        self.load_sequence = QtWidgets.QPushButton("                   Sequence")
+        self.load_sequence.setObjectName('MAIN')
         if CUSTOM:
             with open("style.qss", "r") as qss:
-                pushButton4.setStyleSheet(qss.read())
-        pushButton4.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "tick.png")))
-        pushButton4.setIconSize(QtCore.QSize(48, 48))
+                self.load_sequence.setStyleSheet(qss.read())
+        self.load_sequence.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "tick.png")))
+        self.load_sequence.setIconSize(QtCore.QSize(48, 48))
 
         v1.addSpacing(40)
-        v1.addWidget(pushButton1)
+        v1.addWidget(self.load_data)
         v1.addSpacing(40)
-        v1.addWidget(pushButton2)
+        v1.addWidget(self.load_method)
         v1.addSpacing(40)
         v2.addSpacing(40)
-        v2.addWidget(pushButton3)
+        v2.addWidget(self.load_insert)
         v2.addSpacing(40)
-        v2.addWidget(pushButton4)
+        v2.addWidget(self.load_sequence)
         v2.addSpacing(40)
 
         layouts.addLayout(v1)
@@ -1760,47 +1760,47 @@ class LoadNewMainWidget(AlteredTabWidget):
         v4 = QtWidgets.QHBoxLayout()
 
         layouts = QtWidgets.QVBoxLayout()
-        pushButton5 = QtWidgets.QPushButton("                   Data")
-        pushButton5.setObjectName('MAIN')
+        self.new_data = QtWidgets.QPushButton("                   Data")
+        self.new_data.setObjectName('MAIN')
         if CUSTOM:
             with open("style.qss", "r") as qss:
-                pushButton5.setStyleSheet(qss.read())
-        pushButton5.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "graph.png")))
-        pushButton5.setIconSize(QtCore.QSize(48, 48))
+                self.new_data.setStyleSheet(qss.read())
+        self.new_data.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "graph.png")))
+        self.new_data.setIconSize(QtCore.QSize(48, 48))
 
-        pushButton6 = QtWidgets.QPushButton("                   Method")
-        pushButton6.setObjectName('MAIN')
+        self.new_method = QtWidgets.QPushButton("                   Method")
+        self.new_method.setObjectName('MAIN')
         if CUSTOM:
             with open("style.qss", "r") as qss:
-                pushButton6.setStyleSheet(qss.read())
-        pushButton6.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "meter.png")))
-        pushButton6.setIconSize(QtCore.QSize(48, 48))
+                self.new_method.setStyleSheet(qss.read())
+        self.new_method.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "meter.png")))
+        self.new_method.setIconSize(QtCore.QSize(48, 48))
 
-        pushButton7 = QtWidgets.QPushButton("                   Insert")
-        pushButton7.setObjectName('MAIN')
+        self.new_insert = QtWidgets.QPushButton("                   Insert")
+        self.new_insert.setObjectName('MAIN')
         if CUSTOM:
             with open("style.qss", "r") as qss:
-                pushButton7.setStyleSheet(qss.read())
-        pushButton7.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "plastic.png")))
-        pushButton7.setIconSize(QtCore.QSize(48, 48))
+                self.new_insert.setStyleSheet(qss.read())
+        self.new_insert.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "plastic.png")))
+        self.new_insert.setIconSize(QtCore.QSize(48, 48))
 
-        pushButton8 = QtWidgets.QPushButton("                   Sequence")
-        pushButton8.setObjectName('MAIN')
+        self.new_sequence = QtWidgets.QPushButton("                   Sequence")
+        self.new_sequence.setObjectName('MAIN')
         if CUSTOM:
             with open("style.qss", "r") as qss:
-                pushButton8.setStyleSheet(qss.read())
-        pushButton8.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "tick.png")))
-        pushButton8.setIconSize(QtCore.QSize(48, 48))
+                self.new_sequence.setStyleSheet(qss.read())
+        self.new_sequence.setIcon(QtGui.QIcon(os.path.join(ICON_FOLDER, "tick.png")))
+        self.new_sequence.setIconSize(QtCore.QSize(48, 48))
 
         v3.addSpacing(40)
-        v3.addWidget(pushButton5)
+        v3.addWidget(self.new_data)
         v3.addSpacing(40)
-        v3.addWidget(pushButton6)
+        v3.addWidget(self.new_method)
         v3.addSpacing(40)
         v4.addSpacing(40)
-        v4.addWidget(pushButton7)
+        v4.addWidget(self.new_insert)
         v4.addSpacing(40)
-        v4.addWidget(pushButton8)
+        v4.addWidget(self.new_sequence)
         v4.addSpacing(40)
 
         layouts.addLayout(v3)
@@ -1810,7 +1810,7 @@ class LoadNewMainWidget(AlteredTabWidget):
 
         self.setFixedSize(1000, 240)
 
-        # pushButton1.released.connect(lambda: )
+        # self.load_data.released.connect(lambda: )
 
 
 class SystemSelectionWidget(AlteredTabWidget):
