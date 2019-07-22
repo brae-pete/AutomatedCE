@@ -47,6 +47,8 @@ class BaseSystem:
         self.laser_control = None
         self.pressure_control = None
 
+        self.laser_max_time = None
+
     def start_system(self):
         pass
 
@@ -111,11 +113,56 @@ class BaseSystem:
     def get_voltage(self):
         pass
 
+    def close_image(self):
+        pass
+
+    def start_feed(self):
+        pass
+
+    def stop_feed(self):
+        # Only fill out stop_feed if you can fill out start_feed.
+        pass
+
     def get_image(self):
+        pass
+
+    def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
+        pass
+
+    def laser_standby(self):
+        pass
+
+    def laser_fire(self):
+        pass
+
+    def laser_stop(self):
+        pass
+
+    def laser_close(self):
+        pass
+
+    def laser_check(self):
+        pass
+
+    def pressure_close(self):
+        pass
+
+    def pressure_rinse_start(self):
+        pass
+
+    def pressure_rinse_stop(self):
+        pass
+
+    def pressure_valve_open(self):
+        pass
+
+    def pressure_valve_close(self):
         pass
 
 
 class BarracudaSystem(BaseSystem):
+    _system_id = 'BARRACUDA'
+
     _z_stage_com = "COM4"
     _outlet_com = "COM7"
     _objective_com = "COM8"
@@ -129,13 +176,34 @@ class BarracudaSystem(BaseSystem):
     _pressure_lock = threading.Lock()
     _camera_lock = threading.Lock()
     _laser_lock = threading.Lock()
+    _laser_poll_flag = threading.Event()
+    _laser_rem_time = 0
 
+    laser_max_time = 600
     xy_stage_size = [112792, 64340]  # Rough size in mm
     xy_stage_upper_left = [112598, -2959]  # Reading on stage controller when all the way to left and up (towards wall)
     xy_stage_inversion = [-1, -1]
 
     def __init__(self):
         super(BarracudaSystem, self).__init__()
+
+    def _start_daq(self):
+        self.daq_board_control.max_time = 600000
+        self.daq_board_control.start_read_task()
+
+    def _poll_laser(self, start_time):
+        while True:
+            if self._laser_poll_flag.is_set():
+                self._laser_rem_time = self.laser_max_time - (time.time() - start_time)
+                if self._laser_rem_time > 0:
+                    self.laser_control.poll_status()
+                    time.sleep(1)
+                else:
+                    self._laser_poll_flag.clear()
+            else:
+                logging.info('{:.0f}s have passed. turning off laser.'.format(self.laser_max_time))
+                self.laser_close()
+                self._laser_rem_time = 0
 
     def start_system(self):
         self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
@@ -147,14 +215,10 @@ class BarracudaSystem(BaseSystem):
         self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
         self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
-        self.start_daq()
+        self._start_daq()
 
     def close_system(self):
         pass
-
-    def start_daq(self):
-        self.daq_board_control.max_time = 600000
-        self.daq_board_control.start_read_task()
 
     def get_image(self):
         with self._camera_lock:
@@ -167,6 +231,18 @@ class BarracudaSystem(BaseSystem):
                 image.save("recentImg.png")
 
         return image
+
+    def close_image(self):
+        self.image_control.close()
+        return True
+
+    def start_feed(self):
+        self.image_control.start_video_feed()
+        return True
+
+    def stop_feed(self):
+        self.image_control.stop_video_feed()
+        return True
 
     def close_xy(self):
         self.xy_stage_control.close()
@@ -261,12 +337,79 @@ class BarracudaSystem(BaseSystem):
         pass
 
     def set_voltage(self, v=None):
+        self._start_daq()
         self.daq_board_control.change_voltage(v)
         return True
 
     def get_voltage(self):
         # fixme, not sure how to get current voltage by the daq
         return self.daq_board_control.voltage
+
+    def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
+        if pfn:
+            self.laser_control.set_pfn('{:03d}'.format(pfn))
+
+        if att:
+            self.laser_control.set_attenuation('{:03d}'.format(att))
+
+        if energy:
+            logging.info('Cannot set energy of laser currently.')
+
+        if mode:
+            logging.info('Cannot set mode of laser currently.')
+
+        if burst:
+            self.laser_control.set_burst('{:04d}'.format(burst))
+
+        return True
+
+    def laser_standby(self):
+        executed = self.laser_control.start()
+        if executed:
+            self._laser_poll_flag.set()
+
+            start_time = time.time()
+            threading.Thread(target=self._poll_laser, args=(start_time,), daemon=True).start()
+            logging.info('Laser on standby for {}s'.format(self.laser_max_time))
+
+            return True
+
+    def laser_fire(self):
+        self.laser_control.fire()
+        return True
+
+    def laser_stop(self):
+        self.laser_control.stop()
+        return True
+
+    def laser_close(self):
+        self.laser_control.off()
+        return True
+
+    def laser_check(self):
+        self.laser_control.check_status()
+        self.laser_control.check_parameters()
+        return True
+
+    def pressure_close(self):
+        self.pressure_control.close()
+        return True
+
+    def pressure_rinse_start(self):
+        self.pressure_control.apply_rinse_pressure()
+        return True
+
+    def pressure_rinse_stop(self):
+        self.pressure_control.stop_rinse_pressure()
+        return True
+
+    def pressure_valve_open(self):
+        self.pressure_control.open_valve()
+        return True
+
+    def pressure_valve_close(self):
+        self.pressure_control.close_valve()
+        return True
 
 
 class FinchSystem(BaseSystem):
@@ -1234,15 +1377,16 @@ class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
     _xy_step_size = 1  # 1 is µm, mm would be 1000
-    _live_feed = False
-    _pause_thread_flag = False
     _clearance_height = 10
     _run_thread = None
     _laser_poll_flag = False
-    _stop_thread_flag = False
-    _plot_data = False
     _laser_on_time = 0  # seconds
     _laser_max = 60
+    _laser_on = threading.Event()
+    _stop_thread_flag = threading.Event()
+    _pause_flag = threading.Event()
+    _live_feed = threading.Event()
+    _plot_data = threading.Event()
 
     _stop.set()
     _stop.clear()
@@ -1444,7 +1588,7 @@ class RunScreenController:
 
     def _update_live_feed(self):
         while True:
-            if self._live_feed and self.hardware.image_control:
+            if self._live_feed.is_set() and self.hardware.image_control:
                 image = self.hardware.get_image()
 
                 if image is None:
@@ -1469,7 +1613,7 @@ class RunScreenController:
             kv = self.hardware.daq_board_control.data['ai1']
             ua = self.hardware.daq_board_control.data['ai2']
 
-            if self._plot_data:
+            if self._plot_data.is_set():
                 logging.info('Graphing data.')
                 threading.Thread(target=self.screen.update_plots, args=(rfu, ua)).start()
 
@@ -1486,16 +1630,16 @@ class RunScreenController:
     def _switch_feed(self, live):
         if not live:
             logging.info('Switching to insert view.')
-            self.hardware.image_control.stop_video_feed()
+            self.hardware.stop_feed()
             self._new_pixmap = self.screen.update_pixmap(camera=False)
             self.screen.feed_updated.emit()
             self._load_insert()
+            self._live_feed.clear()
         else:
             logging.info('Switching to live feed.')
             self.screen.clear_feed_scene()
-            self.hardware.image_control.start_video_feed()
-
-        self._live_feed = live
+            self.hardware.start_feed()
+            self._live_feed.set()
 
     def _load_insert(self):
         if self.insert:
@@ -1577,13 +1721,19 @@ class RunScreenController:
             logging.error('Error setting voltage. Make sure set_voltage() in hardware class is defined.')
 
     def set_pfn(self, value):
-        self.hardware.laser_control.set_pfn('{:03d}'.format(value))
+        executed = self.hardware.set_laser_parameters(pfn=value)
+        if not executed:
+            logging.error('Error setting laser parameter. Maker sure set_laser_parameters is defined in hardware class')
 
     def set_attenuation(self, value):
-        self.hardware.laser_control.set_attenuation('{:03d}'.format(value))
+        executed = self.hardware.set_laser_parameters(att=value)
+        if not executed:
+            logging.error('Error setting laser parameter. Maker sure set_laser_parameters is defined in hardware class')
 
     def set_burst(self, count):
-        self.hardware.laser_control.set_burst('{:04d}'.format(count))
+        executed = self.hardware.set_laser_parameters(burst=count)
+        if not executed:
+            logging.error('Error setting laser parameter. Maker sure set_laser_parameters is defined in hardware class')
 
     def stop_xy_stage(self):
         logging.warning('Stopping XY stage.')
@@ -1614,10 +1764,12 @@ class RunScreenController:
         self.hardware.pressure_control.stopRinsePressure()
 
     def stop_laser(self):
-        self.hardware.laser_control.off()
+        executed = self.hardware.laser_close()
+        if not executed:
+            logging.error('Error closing laser. Make sure laser_close() is properly defined in the hardware class.')
         self.screen.laser_fire_check.setEnabled(False)
         self.screen.laser_timer.setText('0s')
-        self._laser_poll_flag = False
+        self._laser_on.clear()
 
     def stop_voltage(self):
         logging.warning('Stopping voltage.')
@@ -1649,31 +1801,41 @@ class RunScreenController:
     def rinse_pressure(self, off):
         if not off:
             logging.info('Applying rinse pressure.')
-            self.hardware.pressure_control.apply_rinse_pressure()
+            executed = self.hardware.pressure_rinse_start()
+            if not executed:
+                logging.error('Error rinsing pressure. Make sure pressure_rinse_start is defined in the hardware class')
         else:
             logging.info('Stopping rinse pressure.')
-            self.hardware.pressure_control.stop_rinse_pressure()
+            executed = self.hardware.pressure_rinse_stop()
+            if not executed:
+                logging.error('Error rinsing pressure. Make sure pressure_rinse_stop is defined in the hardware class.')
 
     def pressure_valve(self, closed):
         if not closed:
             logging.info('Opening pressure valve.')
-            self.hardware.pressure_control.open_valve()
+            executed = self.hardware.pressure_valve_open()
+            if not executed:
+                logging.error('Error opening valve. Make sure pressure_valve_open is defined in the hardware class.')
         else:
             logging.info('Closing pressure valve.')
-            self.hardware.pressure_control.close_valve()
+            executed = self.hardware.pressure_valve_close()
+            if not executed:
+                logging.error('Error closing valve. Make sure pressure_valve_close is defined in the hardware class.')
 
     def fire_laser(self):
         def fire():
-            pfn = '{:03d}'.format(self.screen.laser_pfn.value())
-            attenuation = '{:03d}'.format(self.screen.laser_attenuation.value())
+            pfn = self.screen.laser_pfn.value()
+            attenuation = self.screen.laser_attenuation.value()
 
-            set_bool = self.hardware.laser_control.set_parameters(pfn, attenuation, 2)  # fixme, add mode
+            set_bool = self.hardware.set_laser_parameters(pfn=pfn, att=attenuation, mode=2)  # fixme, add mode
 
             if not set_bool:
                 logging.warning('Laser firing canceled.')
                 return
 
-            self.hardware.laser_control.fire()
+            executed = self.hardware.laser_fire()
+            if not executed:
+                logging.error('Error firing laser. Maker sure laser_fire() is properly defined in the hardware class.')
 
         threading.Thread(target=fire, daemon=True).start()  # Separate thread because it takes a few seconds.
 
@@ -1682,47 +1844,44 @@ class RunScreenController:
 
     def laser_on(self):
         if self._laser_poll_flag:
-            logging.info('Adding {}s to timer.'.format(self._laser_max))
-            self._laser_max += self._laser_max
+            logging.info('Adding {}s to timer.'.format(self.hardware.laser_max_time))
+            self.hardware.laser_max_time += self.hardware.laser_max_time
         else:
-            response = self.hardware.laser_control.start()
+            response = self.hardware.laser_standby()
             if response:
-                start_time = time.time()
-                threading.Thread(target=self.laser_poll, args=(start_time,), daemon=True).start()
-                logging.info('Laser on standby for {}s'.format(self._laser_max))
+                self._laser_on.set()
                 self.screen.laser_fire_check.setEnabled(True)
+                threading.Thread(target=self.laser_timer, args=(time.time(),)).start()
+            else:
+                logging.error('Error starting laser. Make sure laser_standby() in hardware class is defined correctly.')
 
-    def laser_poll(self, start_time):
-        self._laser_poll_flag = True
+    def laser_timer(self, start_time):
         while True:
-            if self._laser_poll_flag:
-                self._laser_on_time = time.time() - start_time
-                if self._laser_on_time < self._laser_max:
-                    self.screen.laser_timer.setText('{:.1f}s'.format(self._laser_max - self._laser_on_time))
-                    response = self.hardware.laser_control.poll_status()
-                    # logging.info('Poll status: {}'.format(response))
-                    if response == '90':
-                        self.screen.laser_on_check.setChecked(False)
+            if self._laser_on.is_set():
+                _laser_rem_time = self.hardware.laser_max_time - (time.time() - start_time)
+                if _laser_rem_time > 0:
+                    self.screen.laser_timer.setText('{:.1f}s'.format(_laser_rem_time))
                     time.sleep(1)
                 else:
-                    logging.info('{:.0f}s have passed, turning off laser.'.format(self._laser_on_time))
-                    self.stop_laser()
-                    self.screen.laser_timer.setText('0s')
-                    self._laser_on_time = 0
-                    break
+                    self._laser_on.clear()
             else:
+                self.screen.laser_timer.setText('0s')
+                self.screen.laser_fire_check.setEnabled(False)
                 break
 
     def stop_fire(self):
-        self.hardware.laser_control.stop()
+        executed = self.hardware.laser_stop()
+        if not executed:
+            logging.error('Error stopping laser. Make sure laser_stop() is properly defined in the hardware class.')
 
     def check_laser(self):
-        self.hardware.laser_control.check_status()
-        self.hardware.laser_control.check_parameters()
+        executed = self.hardware.laser_check()
+        if not executed:
+            logging.error('Error checking laser status. Make sure laser_check() is defined in the hardware class.')
 
     def check_system(self):
         if self.hardware.xy_stage_control and self.hardware.outlet_control and self.hardware.pressure_control and \
-                self.hardware.daq_board_control:  #fixme
+                self.hardware.daq_board_control:  # fixme
             return True
         return False
 
@@ -1756,7 +1915,7 @@ class RunScreenController:
                         return
                 else:
                     self.insert = data.insert
-                    if not self._live_feed:
+                    if not self._live_feed.is_set():
                         self._load_insert()
 
                 self.methods.append(data)
@@ -1792,9 +1951,9 @@ class RunScreenController:
 
     # Run Control Functions
     def start_sequence(self):
-        if self._pause_thread_flag:
+        if self._pause_flag.is_set():
             logging.info('Continuing run ...')
-            self._pause_thread_flag = False
+            self._pause_flag.clear()
             return
 
         logging.info('Starting run ...')
@@ -1802,11 +1961,11 @@ class RunScreenController:
 
     def pause_sequence(self):
         logging.info('Pausing run ...')
-        self._pause_thread_flag = True
+        self._pause_flag.set()
 
     def end_sequence(self):
         logging.info('Stopping run ...')
-        self._stop_thread_flag = True
+        self._stop_thread_flag.set()
 
     def run(self):
         if not self.check_system():
@@ -1817,16 +1976,16 @@ class RunScreenController:
             run_state = self.run_method(method, repetitions)
             if not run_state:
                 logging.info('Run stopped.')
-                self._stop_thread_flag = False
+                self._stop_thread_flag.clear()
                 return False
         logging.info('Sequence Completed.')
         return True
 
     def run_method(self, method, repetitions):
         def check_flags():
-            while self._pause_thread_flag:
+            while self._pause_flag.is_set():
                 continue
-            if self._stop_thread_flag:
+            if self._stop_thread_flag.is_set():
                 return False
             return True
 
@@ -1876,7 +2035,6 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if voltage_level:
-                self.hardware.start_daq()
                 self.set_voltage(voltage_level)
 
             if pressure_state:
@@ -1920,7 +2078,6 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if voltage_level:
-                self.hardware.start_daq()
                 self.set_voltage(voltage_level)
 
             time.sleep(duration)
@@ -2008,23 +2165,6 @@ class SystemScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
-
-
-class RunThread(QtCore.QThread):
-    def __init__(self, hardware, method):
-        QtCore.QThread.__init__(self)
-
-    def run(self):
-        logging.info('1')
-        time.sleep(1)
-        logging.info('2')
-        time.sleep(1)
-        logging.info('3')
-        time.sleep(1)
-        logging.info('4')
-        time.sleep(1)
-        logging.info('5')
-        time.sleep(1)
 
 
 pc = ProgramController()

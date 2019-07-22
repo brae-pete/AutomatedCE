@@ -46,3 +46,7 @@ class PressureControl:
         with self.lock:
             self.state = self.arduino.closeValves()
 
+    def close(self):
+        with self.lock:
+            self.arduino.close()
+
