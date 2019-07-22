@@ -9,19 +9,12 @@ import time
 # GUI Framework
 import BarracudaQt
 
-# if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
-#     sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
-# prev_dir = os.getcwd()
-# os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
-
 # Classes for the CE systems.
 import CESystems
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
-
-# os.chdir(prev_dir)
 
 HOME = False
 
@@ -1216,13 +1209,14 @@ class RunScreenController:
                 break
 
     def _update_plot(self):
+        # self._plot_data.set()  # fixme
+
         while True:
             rfu = self.hardware.daq_board_control.data['ai3']
             kv = self.hardware.daq_board_control.data['ai1']
             ua = self.hardware.daq_board_control.data['ai2']
 
             if self._plot_data.is_set():
-                logging.info('Graphing data.')
                 threading.Thread(target=self.screen.update_plots, args=(rfu, ua)).start()
 
             if len(kv) > 4:
@@ -1566,6 +1560,7 @@ class RunScreenController:
             return
 
         logging.info('Starting run ...')
+        self._plot_data.set()
         self._run_thread = threading.Thread(target=self.run).start()
 
     def pause_sequence(self):
@@ -1587,15 +1582,20 @@ class RunScreenController:
                 logging.info('Run stopped.')
                 self._stop_thread_flag.clear()
                 return False
+        self._plot_data.clear()
         logging.info('Sequence Completed.')
         return True
 
     def run_method(self, method, repetitions):
         def check_flags():
             while self._pause_flag.is_set():
+                self._plot_data.clear()
+                time.sleep(1)
                 continue
             if self._stop_thread_flag.is_set():
+                self._plot_data.clear()
                 return False
+            self._plot_data.set()
             return True
 
         def move_inlet(inlet_travel):
@@ -1717,7 +1717,7 @@ class RunScreenController:
 
                     cycles = int(step['TrayPositionsIncrementEdit'])
                     if rep+1 > cycles:
-                        state = move_xy_stage(self.insert.get_next_well_xy(step['Inlet'], rep+1 - cycles))
+                        state = move_xy_stage(self.insert.get_next_well_xy(step['Inlet'], int(np.floor(rep/cycles))))
                     else:
                         state = move_xy_stage(self.insert.get_well_xy(step['Inlet']))
                     if not state:

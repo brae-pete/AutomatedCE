@@ -20,7 +20,7 @@ class DAQBoard:
 
     def __init__(self, dev='/Dev1/', stop=None):
         self.dev = dev
-        self.data = {'ai3': [], 'ai2': [], 'ai1': []}
+        self.data = {'ai3': [], 'ai2': [], 'ai1': []}  # RFU, Current and Voltage respectively
         if stop is None:
             stop = threading.Event()
         self.stop = stop
@@ -32,9 +32,9 @@ class DAQBoard:
             samples = self.task.read(number_of_samples_per_channel=self.samples_per_chain)
         except nidaqmx.errors.DaqError:
             return
-        self.data['ai1'].extend([x*self.voltage_conversion for x in samples[0]])
-        self.data['ai2'].extend([x*self.voltage_conversion for x in samples[1]])
-        self.data['ai3'].extend([x*self.voltage_conversion for x in samples[2]])
+        self.data['ai1'].extend([x*self.voltage_conversion for x in samples[0]])  # Voltage
+        self.data['ai2'].extend([x*self.voltage_conversion for x in samples[1]])  # Current
+        self.data['ai3'].extend([x*self.voltage_conversion for x in samples[2]])  # RFU
         return 0
 
     def sample_config(self, task):

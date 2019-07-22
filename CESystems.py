@@ -1,7 +1,4 @@
 # Standard library modules
-import sys
-import os
-import pickle
 import threading
 import logging
 import time
@@ -117,6 +114,18 @@ class BaseSystem:
 
     def get_voltage(self):
         """Gets the current voltage of the voltage source."""
+        pass
+
+    def get_voltage_data(self):
+        """Gets a list of the voltages over time."""
+        pass
+
+    def get_current_data(self):
+        """Gets a list of the current over time."""
+        pass
+
+    def get_rfu_data(self):
+        """Gets a list of the RFU over time."""
         pass
 
     def close_image(self):
@@ -363,8 +372,16 @@ class BarracudaSystem(BaseSystem):
         return True
 
     def get_voltage(self):
-        # fixme, not sure how to get current voltage by the daq
         return self.daq_board_control.voltage
+
+    def get_voltage_data(self):
+        return self.daq_board_control.data['ai1']
+
+    def get_current_data(self):
+        return self.daq_board_control.data['ai2']
+
+    def get_rfu_data(self):
+        return self.daq_board_control.data['ai3']
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         if pfn:
