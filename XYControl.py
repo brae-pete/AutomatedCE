@@ -55,14 +55,15 @@ class XYControl:
     x_inversion = 1
     y_inversion = 1
 
-    def __init__(self, home=True, lock=-1):
+    def __init__(self, home=True, lock=-1, stage='XYStage', config_file = "PriorXY.cfg"):
         logging.info("{} IS LOCK {} IS HOME".format(lock, home))
 
         if lock == -1:
             lock = threading.Lock()
         self.lock = lock
         self.home = home
-        self.stageID = 'XYStage'
+        self.stageID = stage
+        self.config_file = config_file
         self.position = [0, 0]
 
         if not home:
@@ -79,7 +80,7 @@ class XYControl:
             return self.home
         logging.info("{} is lock".format(type(self.lock)))
         with self.lock:
-            self.mmc.loadSystemConfiguration(CONFIG_FILE)
+            self.mmc.loadSystemConfiguration(self.config_file)
             self.stageID = self.mmc.getXYStageDevice()
 
     def read_xy(self):

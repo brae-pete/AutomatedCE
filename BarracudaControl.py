@@ -146,14 +146,15 @@ class GettingStartedScreenController:
         self._set_callbacks()
 
     def _set_callbacks(self):
-        self.screen.options.load_data.released.connect(lambda: self.load_data())
-        self.screen.options.load_method.released.connect(lambda: self.load_method())
-        self.screen.options.load_insert.released.connect(lambda: self.load_insert())
-        self.screen.options.load_sequence.released.connect(lambda: self.load_sequence())
-        self.screen.options.new_data.released.connect(lambda: self.new_data())
-        self.screen.options.new_method.released.connect(lambda: self.new_method())
-        self.screen.options.new_insert.released.connect(lambda: self.new_insert())
-        self.screen.options.new_sequence.released.connect(lambda: self.new_sequence())
+        # self.screen.options.load_data.released.connect(lambda: self.load_data())
+        # self.screen.options.load_method.released.connect(lambda: self.load_method())
+        # self.screen.options.load_insert.released.connect(lambda: self.load_insert())
+        # self.screen.options.load_sequence.released.connect(lambda: self.load_sequence())
+        # self.screen.options.new_data.released.connect(lambda: self.new_data())
+        # self.screen.options.new_method.released.connect(lambda: self.new_method())
+        # self.screen.options.new_insert.released.connect(lambda: self.new_insert())
+        # self.screen.options.new_sequence.released.connect(lambda: self.new_sequence())
+        pass
 
     def _select_file(self, ext, ext_label):
         file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Select a file', os.getcwd(),

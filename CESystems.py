@@ -236,16 +236,17 @@ class BarracudaSystem(BaseSystem):
                 self._laser_rem_time = 0
 
     def start_system(self):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        # self.image_control = ImageControl.ImageControl(home=HOME)
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, home=HOME)
-        self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
-        self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
-        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
+        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
+        # # self.image_control = ImageControl.ImageControl(home=HOME)
+        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
+        # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
+        # self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
+        # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
-        self._start_daq()
+        # self._start_daq()
+        pass
 
     def close_system(self):
         pass
@@ -456,5 +457,165 @@ class FinchSystem(BaseSystem):
 
 
 class OstrichSystem(BaseSystem):
+    _xy_stage_lock = threading.Lock()
+
     def __init__(self):
         super(OstrichSystem, self).__init__()
+        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='TIXYDrive', config_file='sysConfig.cfg', home=HOME)
+
+    def start_system(self):
+        """Puts the system into its functional state."""
+        pass
+
+    def close_system(self):
+        """Takes system out of its functional state."""
+        pass
+
+    def close_xy(self):
+        """Removes immediate functionality of XY stage."""
+        pass
+
+    def set_xy(self, xy=None, rel_xy=None):
+        """Sets the position of the XY Stage. 'xy' is absolute, 'rel_xy' is relative to current."""
+        pass
+
+    def get_xy(self):
+        """Gets the current position of the XY stage."""
+        pass
+
+    def stop_xy(self):
+        """Stops current movement of the XY stage."""
+        pass
+
+    def close_z(self):
+        """Removes immediate functionality of Z stage/motor."""
+        pass
+
+    def set_z(self, z=None, rel_z=None):
+        """Sets the position of the Z stage/motor. 'z' is absolute, 'rel_z' is relative to current."""
+        pass
+
+    def get_z(self):
+        """Gets the current position of the Z stage/motor."""
+        pass
+
+    def stop_z(self):
+        """Stops current movement of the Z stage/motor."""
+        pass
+
+    def close_outlet(self):
+        """Removes immediate functionality of the outlet stage/motor."""
+        pass
+
+    def set_outlet(self, h=None, rel_h=None):
+        """Sets the position of the outlet stage/motor. 'h' is absolute, 'rel_h' is relative to current."""
+        pass
+
+    def get_outlet(self):
+        """Gets the current position of the outlet stage/motor."""
+        pass
+
+    def stop_outlet(self):
+        """Stops current movement of the outlet stage/motor."""
+        pass
+
+    def close_objective(self):
+        """Removes immediate functionality of the objective stage/motor."""
+        pass
+
+    def set_objective(self, h=None, rel_h=None):
+        """Sets the position of the objective stage/motor. 'h' is absolute, 'rel_h' is relative to current."""
+        pass
+
+    def get_objective(self):
+        """Gets the current position of the objective stage/motor."""
+        pass
+
+    def stop_objective(self):
+        """Stops the current movement of the objective stage/motor."""
+        pass
+
+    def close_voltage(self):
+        """Removes immediate functionality of the voltage source."""
+        pass
+
+    def set_voltage(self, v=None):
+        """Sets the current voltage of the voltage source."""
+        pass
+
+    def get_voltage(self):
+        """Gets the current voltage of the voltage source."""
+        pass
+
+    def get_voltage_data(self):
+        """Gets a list of the voltages over time."""
+        pass
+
+    def get_current_data(self):
+        """Gets a list of the current over time."""
+        pass
+
+    def get_rfu_data(self):
+        """Gets a list of the RFU over time."""
+        pass
+
+    def close_image(self):
+        """Removes the immediate functionality of the camera."""
+        pass
+
+    def start_feed(self):
+        """Sets camera to start gathering images. Does not return images."""
+        pass
+
+    def stop_feed(self):
+        """Stops camera from gathering images."""
+        # Only fill out stop_feed if you can fill out start_feed.
+        pass
+
+    def get_image(self):
+        """Returns the most recent image from the camera."""
+        pass
+
+    def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
+        """Sets the parameters of the laser device."""
+        pass
+
+    def laser_standby(self):
+        """Puts laser in a standby 'fire-ready' mode."""
+        pass
+
+    def laser_fire(self):
+        """Fires the laser."""
+        pass
+
+    def laser_stop(self):
+        """Stops current firing of the laser."""
+        pass
+
+    def laser_close(self):
+        """Removes immediate functionality of the laser."""
+        pass
+
+    def laser_check(self):
+        """Logs status of laser system."""
+        pass
+
+    def pressure_close(self):
+        """Removes immediate functionality of the pressure system."""
+        pass
+
+    def pressure_rinse_start(self):
+        """Starts rinsing pressure.."""
+        pass
+
+    def pressure_rinse_stop(self):
+        """Stops rinsing pressure."""
+        pass
+
+    def pressure_valve_open(self):
+        """Opens pressure valve."""
+        pass
+
+    def pressure_valve_close(self):
+        """Closes pressure valve."""
+        pass

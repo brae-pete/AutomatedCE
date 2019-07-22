@@ -185,8 +185,8 @@ class InsertScreen(QtWidgets.QMainWindow):
         self.clear_object_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "eraser.png")), "")
         self.clear_object_action.setToolTip('Delete object')
 
-        self.self.load_insert_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "open-archive.png")), "")
-        self.self.load_insert_action.setToolTip('Load an old insert')
+        self.load_insert_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "open-archive.png")), "")
+        self.load_insert_action.setToolTip('Load an old insert')
 
         self.clear_area_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "clear.png")), "")
         self.clear_area_action.setToolTip('Clear objects in an area')
@@ -230,7 +230,7 @@ class InsertScreen(QtWidgets.QMainWindow):
         self.insert_joystick_tool_bar.addSeparator()
         self.insert_joystick_tool_bar.addSeparator()
 
-        self.insert_joystick_tool_bar.addAction(self.self.load_insert_action)
+        self.insert_joystick_tool_bar.addAction(self.load_insert_action)
         self.insert_joystick_tool_bar.addAction(self.init_grid_action)
         self.insert_joystick_tool_bar.addAction(self.joystick_action)
         self.insert_joystick_tool_bar.addWidget(self.circle_radius_input)
@@ -755,7 +755,7 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.sequence_display.setColumnCount(3)
         self.sequence_display.setColumnWidth(0, 30)
-        self.sequence_display.setColumnWidth(1, 370)
+        self.sequence_display.setColumnWidth(1, 390)
         self.sequence_display.setColumnWidth(2, 160)
         self.sequence_display.setHorizontalHeaderLabels(['', 'Method', 'Summary'])
         self.sequence_display.setFixedWidth(600)
@@ -814,6 +814,7 @@ class RunScreen(QtWidgets.QMainWindow):
         temp_layout.addLayout(feed_layout)
         # temp_layout.addStretch()
         temper_wid.setLayout(temp_layout)
+        temper_wid = wrap_widget(temper_wid)
         self.live_feed_panel.setWidget(temper_wid)
 
     def init_insert_view(self):
@@ -922,7 +923,7 @@ class RunScreen(QtWidgets.QMainWindow):
     def enable_voltage_form(self, enabled):
         self.voltage_value.setEnabled(enabled)
         self.voltage_off.setEnabled(enabled)
-        self.voltage_on.setEnabled(enabled)
+        # self.voltage_on.setEnabled(enabled)
         self.voltage_on_check.setEnabled(enabled)
 
     def enable_live_feed(self, enabled):

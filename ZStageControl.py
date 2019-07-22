@@ -210,6 +210,54 @@ class OpticsFocusZStage:
         logging.info(response)
 
 
+class NikonZStage:
+    def __init__(self, lock, stage, config_file, home=False):
+        self.lock = lock
+        self.stage_id = stage
+        self.config_file = config_file
+        self.home = home
+
+        if not home:
+            self.mmc = MMCorePy.CMMCore()
+            self.load_config()
+
+    def load_config(self):
+        if not self.home:
+            with self.lock:
+                self.mmc.loadSystemConfiguration(self.config_file)
+                self.stage_id = self.mmc.getZStageDevice()
+
+    def close(self):
+        if not self.home:
+            with self.lock:
+                self.mmc.reset()
+
+    def reset(self):
+        self.close()
+        if not self.home:
+            with self.lock:
+                self.mmc.loadSystemConfiguration(self.config_file)
+
+    def set_z(self):
+        if not self.home:
+            with self.lock:
+                pass
+
+    def set_rel_z(self):
+        pass
+
+    def read_z(self):
+        if not self.home:
+            with self.lock:
+                pos = self.mmc.getZPosition(self.stage_id)
+                return pos
+
+    def stop(self):
+        if not self.home:
+            with self.lock:
+                self.mmc.stop(self.stage_id)
+
+
 def threading_test():
     # import threading
     # lock = threading.Lock()
