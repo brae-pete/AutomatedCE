@@ -53,14 +53,20 @@ class BaseSystem:
     def close_system(self):
         pass
 
+    def close_xy(self):
+        pass
+
     def set_xy(self, xy=None, rel_xy=None):
-        """Move the XY """
+        """Move the XY Stage"""
         pass
 
     def get_xy(self):
         pass
 
     def stop_xy(self):
+        pass
+
+    def close_z(self):
         pass
 
     def set_z(self, z=None, rel_z=None):
@@ -72,6 +78,9 @@ class BaseSystem:
     def stop_z(self):
         pass
 
+    def close_outlet(self):
+        pass
+
     def set_outlet(self, h=None, rel_h=None):
         pass
 
@@ -81,6 +90,9 @@ class BaseSystem:
     def stop_outlet(self):
         pass
 
+    def close_objective(self):
+        pass
+
     def set_objective(self, h=None, rel_h=None):
         pass
 
@@ -88,6 +100,9 @@ class BaseSystem:
         pass
 
     def stop_objective(self):
+        pass
+
+    def close_voltage(self):
         pass
 
     def set_voltage(self, v=None):
@@ -134,6 +149,9 @@ class BarracudaSystem(BaseSystem):
 
         self.start_daq()
 
+    def close_system(self):
+        pass
+
     def start_daq(self):
         self.daq_board_control.max_time = 600000
         self.daq_board_control.start_read_task()
@@ -149,6 +167,106 @@ class BarracudaSystem(BaseSystem):
                 image.save("recentImg.png")
 
         return image
+
+    def close_xy(self):
+        self.xy_stage_control.close()
+        return True
+
+    def set_xy(self, xy=None, rel_xy=None):
+        """Move the XY Stage"""
+        if xy:
+            self.xy_stage_control.set_xy(xy)
+            return True
+
+        elif rel_xy:
+            self.xy_stage_control.set_rel_xy(rel_xy)
+            return True
+
+        return False
+
+    def get_xy(self):
+        return self.xy_stage_control.read_xy()
+
+    def stop_xy(self):
+        self.xy_stage_control.stop()
+        return True
+
+    def close_z(self):
+        self.z_stage_control.close()
+        return True
+
+    def set_z(self, z=None, rel_z=None):
+        if z:
+            self.z_stage_control.set_z(z)
+            return True
+
+        elif rel_z:
+            self.z_stage_control.set_rel_z(rel_z)
+            return True
+
+        return False
+
+    def get_z(self):
+        return self.z_stage_control.read_z()
+
+    def stop_z(self):
+        self.z_stage_control.stop()
+        return True
+
+    def close_outlet(self):
+        self.outlet_control.close()
+        return True
+
+    def set_outlet(self, h=None, rel_h=None):
+        if h:
+            self.outlet_control.set_z(h)
+            return True
+
+        elif rel_h:
+            self.outlet_control.set_rel_z(rel_h)
+            return True
+
+        return False
+
+    def get_outlet(self):
+        return self.outlet_control.read_z()
+
+    def stop_outlet(self):
+        self.outlet_control.stop()
+        return True
+
+    def close_objective(self):
+        self.objective_control.close()
+        return True
+
+    def set_objective(self, h=None, rel_h=None):
+        if h:
+            self.objective_control.set_z(h)
+            return True
+
+        elif rel_h:
+            self.objective_control.set_rel_z(rel_h)
+            return True
+
+        return False
+
+    def get_objective(self):
+        return self.objective_control.read_z()
+
+    def stop_objective(self):
+        self.objective_control.stop()
+        return True
+
+    def close_voltage(self):
+        pass
+
+    def set_voltage(self, v=None):
+        self.daq_board_control.change_voltage(v)
+        return True
+
+    def get_voltage(self):
+        # fixme, not sure how to get current voltage by the daq
+        return self.daq_board_control.voltage
 
 
 class FinchSystem(BaseSystem):
@@ -1388,6 +1506,7 @@ class RunScreenController:
         if step:
             self.hardware.xy_stage_control.set_rel_x(step*self._xy_step_size)
         elif x:
+            position = self.hardware.xy_stage_control.read_xy()
             self.hardware.xy_stage_control.set_x(x)
 
         value = self.hardware.xy_stage_control.read_xy()
@@ -1416,39 +1535,33 @@ class RunScreenController:
         self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
 
     def set_z(self, height=None, step=None):
-        if step:
-            logging.info('Moving inlet {}mm'.format(step))
-            self.hardware.z_stage_control.set_rel_z(step)
-        elif height:
-            logging.info('Moving inlet to {}mm'.format(height))
-            self.hardware.z_stage_control.set_z(height)
+        executed = self.hardware.set_z(z=height, rel_z=step)
+        if not executed:
+            logging.error('Error moving Z stage. Make sure set_z() in hardware class is defined.')
 
         if self._stop.is_set():
             self._stop.clear()
 
     def set_objective(self, height=None, step=None):
-        if step:
-            self.hardware.objective_control.set_rel_z(step)
-        elif height:
-            self.hardware.objective_control.set_z(height)
+        executed = self.hardware.set_objective(h=height, rel_h=step)
+        if not executed:
+            logging.error('Error moving objective. Make sure set_objective() in hardware class is defined.')
 
         if self._stop.is_set():
             self._stop.clear()
 
     def set_outlet(self, height=None, step=None):
-        if step:
-            logging.info('Moving outlet {}mm'.format(step))
-            self.hardware.outlet_control.set_rel_z(step)
-        elif height:
-            logging.info('Moving outlet to {}mm'.format(height))
-            self.hardware.outlet_control.set_z(height)
+        executed = self.hardware.set_outlet(h=height, rel_h=step)
+        if not executed:
+            logging.error('Error moving outlet. Make sure set_outlet() in hardware class is defined.')
 
         if self._stop.is_set():
             self._stop.clear()
 
     def set_voltage(self, value):
-        # self.hardware.start_daq()
-        self.hardware.daq_board_control.change_voltage(value)
+        executed = self.hardware.set_voltage(value)
+        if not executed:
+            logging.error('Error setting voltage. Make sure set_voltage() in hardware class is defined.')
 
     def set_pfn(self, value):
         self.hardware.laser_control.set_pfn('{:03d}'.format(value))
@@ -1461,22 +1574,27 @@ class RunScreenController:
 
     def stop_xy_stage(self):
         logging.warning('Stopping XY stage.')
-        self.hardware.xy_stage_control.stop()
+        executed = self.hardware.stop_xy()
+        if not executed:
+            logging.error('Error stopping XY stage. Make sure stop_xy() in hardware class is defined.')
 
     def stop_outlet(self):
         logging.warning('Stopping outlet motor.')
-        self.hardware.outlet_control.stop()
-        self.hardware.outlet_control.reset()
+        executed = self.hardware.stop_outlet()
+        if not executed:
+            logging.error('Error stopping outlet. Make sure stop_outlet() in hardware class is defined.')
 
     def stop_objective(self):
         logging.warning('Stopping objective motor.')
-        self.hardware.objective_control.stop_z()
-        self.hardware.objective_control.reset()
+        executed = self.hardware.stop_objective()
+        if not executed:
+            logging.error('Error stopping objective. Make sure stop_objective() in hardware class is defined.')
 
     def stop_z_stage(self):
         logging.warning('Stopping Z stage.')
-        self.hardware.z_stage_control.stop()
-        self.hardware.z_stage_control.reset()
+        executed = self.hardware.stop_z()
+        if not executed:
+            logging.error('Error stopping Z stage. Make sure stop_z() in hardware class is defined.')
 
     def stop_pressure(self):
         logging.warning('Stopping pressure.')
@@ -1688,6 +1806,7 @@ class RunScreenController:
                 logging.info('Run stopped.')
                 self._stop_thread_flag = False
                 return False
+        logging.info('Sequence Completed.')
         return True
 
     def run_method(self, method, repetitions):
@@ -1819,7 +1938,7 @@ class RunScreenController:
 
                     cycles = int(step['TrayPositionsIncrementEdit'])
                     if rep+1 > cycles:
-                        state = move_xy_stage(self.insert.get_next_well_xy(step['Inlet'], cycles - rep))
+                        state = move_xy_stage(self.insert.get_next_well_xy(step['Inlet'], rep+1 - cycles))
                     else:
                         state = move_xy_stage(self.insert.get_well_xy(step['Inlet']))
                     if not state:
@@ -1831,9 +1950,9 @@ class RunScreenController:
                         if not state:
                             return False
 
-                    move_inlet(-step['InletTravel'])
-
-                    # fixme prompt user with error message when a step isn't executed instead of immediately ending.
+                    state = move_inlet(-step['InletTravel'])
+                    if not state:
+                        return False
 
                     if step['Type'] == 'Separate':
                         executed = separate()

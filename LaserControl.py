@@ -197,9 +197,9 @@ class Laser:
             return False
 
         if len(str(value)) != 3 or 0 > int(value) or int(value) > self._safety_pfn_limit:
-            logging.info(len(str(value)) != 3)
-            logging.info(0 > int(value))
-            logging.info(int(value) > self._safety_pfn_limit)
+            # logging.info(len(str(value)) != 3)
+            # logging.info(0 > int(value))
+            # logging.info(int(value) > self._safety_pfn_limit)
             logging.error('VL:Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
             return False
 
