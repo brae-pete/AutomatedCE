@@ -63,7 +63,7 @@ class XYControl:
         self.lock = lock
         self.home = home
         self.stageID = stage
-        self.config_file = config_file
+        self.config_file = os.path.join(CONFIG_FOLDER, config_file)
         self.position = [0, 0]
 
         if not home:

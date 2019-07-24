@@ -56,6 +56,14 @@ class BaseSystem:
         """Stops current movement of the XY stage."""
         pass
 
+    def set_xy_home(self):
+        """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
+        pass
+
+    def home_xy(self):
+        """Goes to current position marked as home. Return False if device has no 'home' capability."""
+        pass
+
     def close_z(self):
         """Removes immediate functionality of Z stage/motor."""
         pass
@@ -70,6 +78,14 @@ class BaseSystem:
 
     def stop_z(self):
         """Stops current movement of the Z stage/motor."""
+        pass
+
+    def set_z_home(self):
+        """Sets the current position of the Z stage/motor as home. Return False if device has no 'home' capability."""
+        pass
+
+    def home_z(self):
+        """Goes to current position marked as home. Return False if device has no 'home' capability."""
         pass
 
     def close_outlet(self):
@@ -88,6 +104,14 @@ class BaseSystem:
         """Stops current movement of the outlet stage/motor."""
         pass
 
+    def set_outlet_home(self):
+        """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
+        pass
+
+    def home_outlet(self):
+        """Goes to the current position marked as home. Return False if device has no 'home' capability."""
+        pass
+
     def close_objective(self):
         """Removes immediate functionality of the objective stage/motor."""
         pass
@@ -102,6 +126,14 @@ class BaseSystem:
 
     def stop_objective(self):
         """Stops the current movement of the objective stage/motor."""
+        pass
+
+    def set_objective_home(self):
+        """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
+        pass
+
+    def home_objective(self):
+        """Goes to the current position marked as home. Return False if device has no 'home' capability."""
         pass
 
     def close_voltage(self):
@@ -236,16 +268,16 @@ class BarracudaSystem(BaseSystem):
                 self._laser_rem_time = 0
 
     def start_system(self):
-        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        # # self.image_control = ImageControl.ImageControl(home=HOME)
-        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
-        # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
-        # self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
-        # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
+        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
+        # self.image_control = ImageControl.ImageControl(home=HOME)
+        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
+        self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
+        self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
+        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
-        # self._start_daq()
+        self._start_daq()
         pass
 
     def close_system(self):
@@ -298,6 +330,14 @@ class BarracudaSystem(BaseSystem):
         self.xy_stage_control.stop()
         return True
 
+    def set_xy_home(self):
+        """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
+        pass
+
+    def home_xy(self):
+        """Goes to current position marked as home. Return False if device has no 'home' capability."""
+        pass
+
     def close_z(self):
         self.z_stage_control.close()
         return True
@@ -319,6 +359,14 @@ class BarracudaSystem(BaseSystem):
     def stop_z(self):
         self.z_stage_control.stop()
         return True
+
+    def set_z_home(self):
+        """Sets the current position of the Z stage as home. Return False if device has no 'home' capability."""
+        pass
+
+    def home_z(self):
+        """Goes to current position marked as home. Return False if device has no 'home' capability."""
+        pass
 
     def close_outlet(self):
         self.outlet_control.close()
@@ -342,6 +390,14 @@ class BarracudaSystem(BaseSystem):
         self.outlet_control.stop()
         return True
 
+    def set_outlet_home(self):
+        """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
+        pass
+
+    def home_outlet(self):
+        """Goes to the current position marked as home. Return False if device has no 'home' capability."""
+        pass
+
     def close_objective(self):
         self.objective_control.close()
         return True
@@ -363,6 +419,14 @@ class BarracudaSystem(BaseSystem):
     def stop_objective(self):
         self.objective_control.stop()
         return True
+
+    def set_objective_home(self):
+        """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
+        pass
+
+    def home_objective(self):
+        """Goes to the current position marked as home. Return False if device has no 'home' capability."""
+        pass
 
     def close_voltage(self):
         pass

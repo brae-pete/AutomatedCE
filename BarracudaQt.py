@@ -481,8 +481,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.xy_x_value = ValueDisplay()
         self.xy_y_value = ValueDisplay()
         self.xy_step_size = QtWidgets.QDoubleSpinBox()
-        self.xy_origin = QtWidgets.QPushButton('Origin')
-        self.xy_set_origin = QtWidgets.QPushButton('Set Origin')
+        self.xy_origin = QtWidgets.QPushButton('Home')
+        self.xy_set_origin = QtWidgets.QPushButton('Set Home')
         self.xy_stop = QtWidgets.QPushButton('Stop')
 
         self.xy_step_size.setSuffix(" µm")
@@ -536,6 +536,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.objective_value = ValueDisplay()
         self.objective_stop = QtWidgets.QPushButton('Stop')
         self.objective_step_size = QtWidgets.QDoubleSpinBox()
+        self.objective_set_home = QtWidgets.QPushButton('Set Home')
+        self.objective_home = QtWidgets.QPushButton('Home')
 
         self.objective_step_size.setSuffix(" µm")
         self.objective_step_size.setValue(5)
@@ -553,6 +555,8 @@ class RunScreen(QtWidgets.QMainWindow):
         row.addStretch()
         form_layout.addRow(row)
         form_layout.addWidget(self.objective_step_size)
+        form_layout.addWidget(self.objective_set_home)
+        form_layout.addWidget(self.objective_home)
         form_layout.addWidget(self.objective_stop)
 
         self.objective_form.setLayout(form_layout)
@@ -565,6 +569,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.outlet_value = ValueDisplay()
         self.outlet_stop = QtWidgets.QPushButton('Stop')
         self.outlet_step_size = QtWidgets.QDoubleSpinBox()
+        self.outlet_set_home = QtWidgets.QPushButton('Set Home')
+        self.outlet_home = QtWidgets.QPushButton('Home')
 
         self.outlet_step_size.setSuffix(" mm")
         self.outlet_step_size.setValue(1)
@@ -582,6 +588,8 @@ class RunScreen(QtWidgets.QMainWindow):
         row.addStretch()
         form_layout.addRow(row)
         form_layout.addWidget(self.outlet_step_size)
+        form_layout.addWidget(self.outlet_set_home)
+        form_layout.addWidget(self.outlet_home)
         form_layout.addWidget(self.outlet_stop)
 
         self.outlet_form.setLayout(form_layout)
@@ -594,6 +602,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.z_value = ValueDisplay()
         self.z_stop = QtWidgets.QPushButton('Stop')
         self.z_step_size = QtWidgets.QDoubleSpinBox()
+        self.z_set_home = QtWidgets.QPushButton('Set Home')
+        self.z_home = QtWidgets.QPushButton('Home')
 
         self.z_step_size.setSuffix(" mm")
         self.z_step_size.setValue(3)
@@ -611,6 +621,8 @@ class RunScreen(QtWidgets.QMainWindow):
         row.addStretch()
         form_layout.addRow(row)
         form_layout.addWidget(self.z_step_size)
+        form_layout.addWidget(self.z_set_home)
+        form_layout.addWidget(self.z_home)
         form_layout.addWidget(self.z_stop)
 
         self.z_stage_form.setLayout(form_layout)

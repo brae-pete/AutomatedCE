@@ -318,7 +318,13 @@ class Laser:
 
             self.serial.write(self.commands['SYSTEM_STATUS']().encode())
             response = self.serial.readlines()
-            response = '{:024b}'.format(int(response[0].rsplit('\r'.encode())[0]))
+
+            try:
+                response = '{:024b}'.format(int(response[0].rsplit('\r'.encode())[0]))
+            except IndexError:
+                logging.info('Error putting laser in standby, try again.')
+                return False
+
             if response[0] == 1 or response[3] == 1 or response[4] == 1 or response[5] == 1 or response[7] == 1 or \
                 response[8] == 1 or response[17] == 1 or response[18] == 1 or response[20] == 1 or response[21] == 1 or\
                     response[22] == 1 or response[23] == 1:

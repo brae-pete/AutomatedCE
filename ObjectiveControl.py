@@ -69,7 +69,7 @@ class ObjectiveControl:
 
     def load_history(self):
         try:
-            dos2unix.dos2unix("ObjectiveHistory.p", "ObjectiveHistory.p")
+            self.dos2unix("ObjectiveHistory.p", "ObjectiveHistory.p")
             with open("ObjectiveHistory.p", "rb") as fin:
                 logging.info(fin)
                 data = pickle.load(fin)
@@ -143,3 +143,16 @@ class ObjectiveControl:
         if self.home:
             return
         self.arduino.close()
+
+    @staticmethod
+    def dos2unix(in_file, out_file):
+        outsize = 0
+        with open(in_file, 'rb') as infile:
+            content = infile.read()
+            print(content)
+        with open(out_file, 'wb') as output:
+            for line in content.splitlines():
+                outsize += len(line) + 1
+                output.write(line + '\n'.encode())
+
+        print("Done. Saved %s bytes." % (len(content) - outsize))

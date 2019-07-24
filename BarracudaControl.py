@@ -1059,8 +1059,8 @@ class RunScreenController:
             self.screen.xy_y_value.unselected.connect(lambda: self._value_display_interact(selected=False))
             self.screen.xy_x_value.returnPressed.connect(lambda: self.set_x(x=float(self.screen.xy_x_value.text())))
             self.screen.xy_y_value.returnPressed.connect(lambda: self.set_y(y=float(self.screen.xy_y_value.text())))
-            # self.screen.xy_set_origin.released.connect(lambda: self.set_origin())
-            # self.screen.xy_origin.released.connect(lambda: self.origin())
+            self.screen.xy_set_origin.released.connect(lambda: self.set_xy_home())
+            self.screen.xy_origin.released.connect(lambda: self.set_xy(home=True))
             self.screen.xy_stop.released.connect(lambda: self.stop_xy_stage())
         else:
             self.screen.enable_xy_stage_form(False)
@@ -1072,6 +1072,8 @@ class RunScreenController:
             self.screen.objective_stop.released.connect(lambda: self.stop_objective())
             self.screen.objective_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.objective_value.unselected.connect(lambda: self._value_display_interact(selected=False))
+            self.screen.objective_set_home.released.connect(lambda: self.set_objective_home())
+            self.screen.objective_home.released.connect(lambda: self.set_objective(home=True))
         else:
             self.screen.enable_objective_form(False)
 
@@ -1082,6 +1084,8 @@ class RunScreenController:
             self.screen.outlet_stop.released.connect(lambda: self.stop_outlet())
             self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
+            self.screen.outlet_set_home.released.connect(lambda: self.set_outlet_home())
+            self.screen.outlet_home.released.connect(lambda: self.set_outlet(home=True))
         else:
             self.screen.enable_outlet_form(False)
 
@@ -1101,6 +1105,8 @@ class RunScreenController:
             self.screen.z_stop.released.connect(lambda: self.stop_z_stage())
             self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.z_value.unselected.connect(lambda: self._value_display_interact(selected=False))
+            self.screen.z_set_home.released.connect(lambda: self.set_z_home())
+            self.screen.z_home.released.connect(lambda: self.set_z(home=True))
         else:
             self.screen.enable_z_stage_form(False)
 
@@ -1275,14 +1281,6 @@ class RunScreenController:
                 self.screen.live_feed_scene.add_shape(well.shape, well.bound_box)
 
     # Hardware Control Functions
-    def set_origin(self):  # fixme
-        message = 'Are you sure you want to set the origin to your current position? This cannot be undone.'
-        pos_function = self.hardware.xy_stage_control.set_origin()
-        BarracudaQt.PermissionsMessageUI(permissions_message=message, pos_function=pos_function)
-
-    def origin(self):  # fixme
-        self.hardware.xy_stage_control.origin()
-
     def set_x(self, x=None, step=None):
         if step:
             step = [step*self._xy_step_size, 0]
@@ -1311,7 +1309,13 @@ class RunScreenController:
         if self._stop.is_set():
             self._stop.clear()
 
-    def set_xy(self, xy):
+    def set_xy(self, xy=None, home=None):
+        if home:
+            executed = self.hardware.home_xy()
+            if not executed:
+                logging.error('Error going home on XY stage. Make sure home_xy() is defined in hardware class.')
+            return
+
         executed = self.hardware.set_xy(xy=xy)
         if not executed:
             logging.error('Error moving XY stage. Make sure set_xy() in hardware class is defined.')
@@ -1319,7 +1323,18 @@ class RunScreenController:
         if self._stop.is_set():
             self._stop.clear()
 
-    def set_z(self, height=None, step=None):
+    def set_xy_home(self):
+        executed = self.hardware.set_xy_home()
+        if not executed:
+            logging.error('Error setting home on XY stage. Make sure set_xy_home() is defined in hardware class.')
+
+    def set_z(self, height=None, step=None, home=None):
+        if home:
+            executed = self.hardware.home_z()
+            if not executed:
+                logging.error('Error going home on Z stage. Make sure home_z() is defined in hardware class.')
+            return
+
         executed = self.hardware.set_z(z=height, rel_z=step)
         if not executed:
             logging.error('Error moving Z stage. Make sure set_z() in hardware class is defined.')
@@ -1327,7 +1342,18 @@ class RunScreenController:
         if self._stop.is_set():
             self._stop.clear()
 
-    def set_objective(self, height=None, step=None):
+    def set_z_home(self):
+        executed = self.hardware.set_z_home()
+        if not executed:
+            logging.error('Error setting home on Z stage. Make sure set_z_home() is defined in hardware class.')
+
+    def set_objective(self, height=None, step=None, home=None):
+        if home:
+            executed = self.hardware.home_objective()
+            if not executed:
+                logging.error('Error going home on objective. Make sure home_objective() is defined in hardware.')
+            return
+
         executed = self.hardware.set_objective(h=height, rel_h=step)
         if not executed:
             logging.error('Error moving objective. Make sure set_objective() in hardware class is defined.')
@@ -1335,13 +1361,29 @@ class RunScreenController:
         if self._stop.is_set():
             self._stop.clear()
 
-    def set_outlet(self, height=None, step=None):
+    def set_objective_home(self):
+        executed = self.hardware.set_objective_home()
+        if not executed:
+            logging.error('Error setting objective home. Make sure set_objective_home() is defined in hardware class')
+
+    def set_outlet(self, height=None, step=None, home=None):
+        if home:
+            executed = self.hardware.home_outlet()
+            if not executed:
+                logging.error('Error going home on outlet. Make sure home_outlet() is defined in hardware class.')
+            return
+
         executed = self.hardware.set_outlet(h=height, rel_h=step)
         if not executed:
             logging.error('Error moving outlet. Make sure set_outlet() in hardware class is defined.')
 
         if self._stop.is_set():
             self._stop.clear()
+
+    def set_outlet_home(self):
+        executed = self.hardware.set_outlet_home()
+        if not executed:
+            logging.error('Error setting home on outlet. Make sure set_outlet_home() is defined in hardware class.')
 
     def set_voltage(self, value):
         executed = self.hardware.set_voltage(value)
