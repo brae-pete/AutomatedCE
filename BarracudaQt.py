@@ -1895,6 +1895,8 @@ class RinseDialog(QtWidgets.QDialog):
         self.at_time_form = QtWidgets.QGroupBox()
         self.init_at_time_form()
 
+        single_cell_check = QtWidgets.QCheckBox()
+        self.form_data['SingleCell'] = single_cell_check.isChecked
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         if pos_function:
             button_box.accepted.connect(lambda: pos_function('Rinse', self.form_data))
@@ -1906,6 +1908,7 @@ class RinseDialog(QtWidgets.QDialog):
         top_forms = QtWidgets.QHBoxLayout()
         lower_forms = QtWidgets.QHBoxLayout()
         lower_right_forms = QtWidgets.QVBoxLayout()
+        bottom_options = QtWidgets.QHBoxLayout()
 
         lower_right_forms.addWidget(self.pressure_direction_form)
         lower_right_forms.addWidget(self.at_time_form)
@@ -1916,7 +1919,11 @@ class RinseDialog(QtWidgets.QDialog):
         forms_layout.addLayout(top_forms)
         forms_layout.addLayout(lower_forms)
         main_layout.addLayout(forms_layout)
-        main_layout.addWidget(button_box)
+        # bottom_options.addWidget(single_cell_check)
+        # bottom_options.addWidget(QtWidgets.QLabel('Single Cell'))
+        bottom_options.addStretch()
+        bottom_options.addWidget(button_box)
+        main_layout.addLayout(bottom_options)
 
         self.setLayout(main_layout)
         self.exec_()
@@ -2160,6 +2167,8 @@ class SeparateDialog(QtWidgets.QDialog):
         # self.external_adapter_form = QtWidgets.QGroupBox()
         # self.init_external_adapter_form()
 
+        single_cell_check = QtWidgets.QCheckBox()
+        self.form_data['SingleCell'] = single_cell_check.isChecked
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         if pos_function:
             button_box.accepted.connect(lambda: pos_function('Separate', self.form_data))
@@ -2171,6 +2180,7 @@ class SeparateDialog(QtWidgets.QDialog):
         left_column = QtWidgets.QVBoxLayout()
         center_column = QtWidgets.QVBoxLayout()
         right_column = QtWidgets.QVBoxLayout()
+        bottom_options = QtWidgets.QHBoxLayout()
 
         left_column.addWidget(self.separation_type_form)
         left_column.addWidget(self.polarity_form)
@@ -2186,7 +2196,11 @@ class SeparateDialog(QtWidgets.QDialog):
         forms_layout.addLayout(center_column)
         forms_layout.addLayout(right_column)
         main_layout.addLayout(forms_layout)
-        main_layout.addWidget(button_box)
+        # bottom_options.addWidget(single_cell_check)
+        # bottom_options.addWidget(QtWidgets.QLabel('Single Cell'))
+        bottom_options.addStretch()
+        bottom_options.addWidget(button_box)
+        main_layout.addLayout(bottom_options)
 
         self.setLayout(main_layout)
         self.exec_()
@@ -2514,6 +2528,8 @@ class InjectDialog(QtWidgets.QDialog):
         self.tray_positions_form = QtWidgets.QGroupBox('Tray Positions')
         self.init_tray_positions_form()
 
+        single_cell_check = QtWidgets.QCheckBox()
+        self.form_data['SingleCell'] = single_cell_check.isChecked
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         if pos_function:
             button_box.accepted.connect(lambda: pos_function('Inject', self.form_data))
@@ -2524,6 +2540,7 @@ class InjectDialog(QtWidgets.QDialog):
         form_layout = QtWidgets.QHBoxLayout()
         left_column = QtWidgets.QVBoxLayout()
         right_column = QtWidgets.QVBoxLayout()
+        bottom_options = QtWidgets.QHBoxLayout()
 
         left_column.addWidget(self.injection_type_form)
         left_column.addWidget(self.polarity_form)
@@ -2534,7 +2551,11 @@ class InjectDialog(QtWidgets.QDialog):
         form_layout.addLayout(left_column)
         form_layout.addLayout(right_column)
         main_layout.addLayout(form_layout)
-        main_layout.addWidget(button_box)
+        bottom_options.addWidget(single_cell_check)
+        bottom_options.addWidget(QtWidgets.QLabel('Single Cell'))
+        bottom_options.addStretch()
+        bottom_options.addWidget(button_box)
+        main_layout.addLayout(bottom_options)
 
         self.setLayout(main_layout)
         self.exec_()

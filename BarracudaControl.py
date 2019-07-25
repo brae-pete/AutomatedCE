@@ -1366,6 +1366,9 @@ class RunScreenController:
         if not executed:
             logging.error('Error setting objective home. Make sure set_objective_home() is defined in hardware class')
 
+    def focus(self, cell=None, capillary=None):
+        pass
+
     def set_outlet(self, height=None, step=None, home=None):
         if home:
             executed = self.hardware.home_outlet()
@@ -1753,6 +1756,10 @@ class RunScreenController:
                 return False
 
             duration = float(step['ValuesDurationEdit'])
+
+            if step['SingleCell']:
+                self.focus()
+                self.find_cell()
 
             if voltage_level:
                 self.set_voltage(voltage_level)

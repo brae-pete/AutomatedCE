@@ -332,11 +332,13 @@ class BarracudaSystem(BaseSystem):
 
     def set_xy_home(self):
         """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
-        pass
+        self.xy_stage_control.set_origin()
+        return True
 
     def home_xy(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        pass
+        self.xy_stage_control.origin()
+        return True
 
     def close_z(self):
         self.z_stage_control.close()
@@ -362,11 +364,12 @@ class BarracudaSystem(BaseSystem):
 
     def set_z_home(self):
         """Sets the current position of the Z stage as home. Return False if device has no 'home' capability."""
-        pass
+        return False
 
     def home_z(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        pass
+        self.z_stage_control.set_z(0)
+        return True
 
     def close_outlet(self):
         self.outlet_control.close()
@@ -392,11 +395,11 @@ class BarracudaSystem(BaseSystem):
 
     def set_outlet_home(self):
         """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
-        pass
+        return False  # fixme, add a history like objectivehistory.p?
 
     def home_outlet(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        pass
+        return False
 
     def close_objective(self):
         self.objective_control.close()
@@ -422,11 +425,13 @@ class BarracudaSystem(BaseSystem):
 
     def set_objective_home(self):
         """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
-        pass
+        self.objective_control.set_origin()
+        return True
 
     def home_objective(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        pass
+        self.objective_control.set_z(0)
+        return True
 
     def close_voltage(self):
         pass

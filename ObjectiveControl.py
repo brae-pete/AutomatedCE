@@ -2,8 +2,6 @@ import threading
 import ArduinoBase
 import pickle
 import logging
-import dos2unix
-
 
 class ObjectiveControl:
     """Class to control Z-stage for capillary/optical train
@@ -100,8 +98,6 @@ class ObjectiveControl:
                 return
             go_to = self.inversion*(set_z-self.offset)
             self.arduino.set_objective_z(go_to)
-            # logging.warning("set_z:{} offset:{}  pos:{}".format(set_z, self.offset, self.pos))
-            # logging.warning(self.inversion*(set_z-self.offset))
         return True
 
     def set_rel_z(self, set_z):
@@ -113,8 +109,6 @@ class ObjectiveControl:
                 return
             go_to = self.inversion * (set_z - self.offset + pos)
             self.arduino.set_objective_z(go_to)
-            # logging.warning("set_z:{} offset:{}  pos:{}".format(set_z, self.offset, self.pos))
-            # logging.warning(self.inversion * (set_z - self.offset - pos))
         return True
 
     def stop_z(self):
