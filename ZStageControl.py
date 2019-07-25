@@ -1,7 +1,26 @@
 import serial
 import threading
 import logging
+import sys
+import os
 
+if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
+    sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
+prev_dir = os.getcwd()
+os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
+
+MMCOREPY_FATAL = False
+
+try:
+    import MMCorePy
+except ImportError:
+    logging.error('Can not import MMCorePy.')
+    if MMCOREPY_FATAL:
+        sys.exit()
+else:
+    logging.info('MMCorePy successfully imported.')
+
+os.chdir(prev_dir)
 
 class ZStageControl:
     """Class to control Z-stage for capillary/optical train
@@ -211,14 +230,14 @@ class OpticsFocusZStage:
 
 
 class NikonZStage:
-    def __init__(self, lock, stage, config_file, home=False):
+    def __init__(self, lock, stage=None, config_file=None, home=False, loaded=False):
         self.lock = lock
         self.stage_id = stage
         self.config_file = config_file
         self.home = home
 
-        if not home:
-            self.mmc = MMCorePy.CMMCore()
+        self.mmc = MMCorePy.CMMCore()
+        if not home and not loaded:
             self.load_config()
 
     def load_config(self):
@@ -238,13 +257,15 @@ class NikonZStage:
             with self.lock:
                 self.mmc.loadSystemConfiguration(self.config_file)
 
-    def set_z(self):
+    def set_z(self, z):
         if not self.home:
             with self.lock:
-                pass
+                self.mmc.setZPosition(self.stage_id, z)
 
-    def set_rel_z(self):
-        pass
+    def set_rel_z(self, rel_z):
+        if not self.home:
+            with self.lock:
+                self.mmc.setRelativeZPosition(self.stage_id, rel_z)
 
     def read_z(self):
         if not self.home:

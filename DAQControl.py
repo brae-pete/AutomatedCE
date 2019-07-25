@@ -18,9 +18,13 @@ class DAQBoard:
     voltage = 0  # Current voltage in V to send to the  daq. (-10 to 10 max)
     voltage_conversion = 30 / 10  # kV/daqV conversion factor
 
-    def __init__(self, dev='/Dev1/', stop=None):
+    def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None):
         self.dev = dev
-        self.data = {'ai3': [], 'ai2': [], 'ai1': []}  # RFU, Current and Voltage respectively
+        self.voltage_control = voltage_control
+        self.voltage_readout = voltage_read
+        self.current_readout = current_read
+        self.rfu_chan = rfu_read
+        self.data = {self.rfu_chan: [], self.current_readout: [], self.voltage_readout: []}  # RFU, Current and Voltage respectively
         if stop is None:
             stop = threading.Event()
         self.stop = stop
@@ -32,9 +36,9 @@ class DAQBoard:
             samples = self.task.read(number_of_samples_per_channel=self.samples_per_chain)
         except nidaqmx.errors.DaqError:
             return
-        self.data['ai1'].extend([x*self.voltage_conversion for x in samples[0]])  # Voltage
-        self.data['ai2'].extend([x*self.voltage_conversion for x in samples[1]])  # Current
-        self.data['ai3'].extend([x*self.voltage_conversion for x in samples[2]])  # RFU
+        self.data[self.voltage_readout].extend([x*self.voltage_conversion for x in samples[0]])  # Voltage
+        self.data[self.current_readout].extend([x*self.voltage_conversion for x in samples[1]])  # Current
+        self.data[self.rfu_chan].extend([x*self.voltage_conversion for x in samples[2]])  # RFU
         return 0
 
     def sample_config(self, task):
@@ -46,8 +50,8 @@ class DAQBoard:
                                         sample_mode=self.mode)
         return task
 
-    def analog_out_config(self, task, chan='ao1'):
-        chan = self.dev + chan
+    def analog_out_config(self, task):
+        chan = self.dev + self.voltage_control
         task.ao_channels.add_ao_voltage_chan(chan)
         task.timing.cfg_samp_clk_timing(self.output_freq)
         return task
@@ -58,13 +62,13 @@ class DAQBoard:
         voltage = float(voltage) / self.voltage_conversion
         diff = float(voltage) - self.voltage
         if diff == 0:
-            # self.output_task.write(0)
+            self.output_task.write(0)
             self.voltage = voltage
             return
         # Get samples to send DAQ
         samples = self.get_voltage_ramp(voltage, diff)
         # Reset current voltage
-        # self.output_task.write(samples)
+        self.output_task.write(samples)
         self.voltage = voltage
         logging.info('Voltage set to {}'.format(voltage))
 
@@ -82,11 +86,11 @@ class DAQBoard:
 
     def analog_in_config(self, task, chan='ai3'):
         """Set up the analog read channels here"""
-        chan = self.dev + 'ai1'
+        chan = self.dev + self.voltage_readout
         task.ai_channels.add_ai_voltage_chan(chan)
-        chan = self.dev + 'ai2'
+        chan = self.dev + self.current_readout
         task.ai_channels.add_ai_voltage_chan(chan)
-        chan = self.dev + 'ai3'
+        chan = self.dev + self.rfu_chan
         task.ai_channels.add_ai_voltage_chan(chan)
 
         s_terminal = self.dev + self.sample_terminal
@@ -104,7 +108,7 @@ class DAQBoard:
         if not self.stop.is_set():
             self.stop.set()
             time.sleep(0.2)
-        self.data = {'ai1': [], 'ai2': [], 'ai3': []}
+        self.data = {self.voltage_readout: [], self.current_readout: [], self.rfu_chan: []}
         self.stop = threading.Event()
         threading.Thread(target=self.read_task, daemon=True).start()
         time.sleep(0.2)

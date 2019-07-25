@@ -55,7 +55,7 @@ class XYControl:
     x_inversion = 1
     y_inversion = 1
 
-    def __init__(self, home=True, lock=-1, stage='XYStage', config_file = "PriorXY.cfg"):
+    def __init__(self, home=True, lock=-1, stage='XYStage', config_file = "PriorXY.cfg", loaded=False):
         logging.info("{} IS LOCK {} IS HOME".format(lock, home))
 
         if lock == -1:
@@ -144,7 +144,6 @@ class XYControl:
         pos[0] *= self.x_inversion
         pos[1] *= self.y_inversion
         pos = [x * self.scale for x in pos]
-        logging.info("{} is XY MOVE".format(pos))
 
         with self.lock:
             self.mmc.setRelativeXYPosition(self.stageID, pos[0], pos[1])

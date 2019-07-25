@@ -2,6 +2,7 @@
 import threading
 import logging
 import time
+import ctypes
 
 # Custom Hardware Modules
 import DAQControl
@@ -224,13 +225,17 @@ class BaseSystem:
 
 class BarracudaSystem(BaseSystem):
     _system_id = 'BARRACUDA'
-
     _z_stage_com = "COM4"
     _outlet_com = "COM7"
     _objective_com = "COM8"
     _laser_com = "COM6"
     _pressure_com = "COM7"
     _daq_dev = "/Dev1/"
+    _daq_current_readout = "ai2"
+    _daq_voltage_readout = "ai1"
+    _daq_voltage_control = 'ao1'
+    _daq_rfu = "ai3"
+
     _z_stage_lock = threading.Lock()
     _outlet_lock = threading.Lock()
     _objective_lock = threading.Lock()
@@ -241,6 +246,7 @@ class BarracudaSystem(BaseSystem):
     _laser_poll_flag = threading.Event()
     _laser_rem_time = 0
 
+    image_size = (512, 384)
     xy_stage_size = [112792, 64340]  # Rough size in mm
     xy_stage_upper_left = [112598, -2959]  # Reading on stage controller when all the way to left and up (towards wall)
     xy_stage_inversion = [-1, -1]
@@ -271,9 +277,13 @@ class BarracudaSystem(BaseSystem):
         self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
         self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        # self.image_control = ImageControl.ImageControl(home=HOME)
+        self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
-        self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev)
+
+        self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
+                                                     current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
+                                                     voltage_control=self._daq_voltage_control)
+
         self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
         self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
@@ -281,11 +291,17 @@ class BarracudaSystem(BaseSystem):
         pass
 
     def close_system(self):
-        pass
+        self.close_image()
+        self.close_objective()
+        self.close_outlet()
+        self.close_voltage()
+        self.close_xy()
+        self.close_z()
+        return True
 
     def get_image(self):
         with self._camera_lock:
-            image = self.image_control.get_recent_image(size=(512, 384))
+            image = self.image_control.get_recent_image(size=self.image_size)
 
             if image is None:
                 return None
@@ -315,13 +331,10 @@ class BarracudaSystem(BaseSystem):
         """Move the XY Stage"""
         if xy:
             self.xy_stage_control.set_xy(xy)
-            return True
-
         elif rel_xy:
             self.xy_stage_control.set_rel_xy(rel_xy)
-            return True
 
-        return False
+        return True
 
     def get_xy(self):
         return self.xy_stage_control.read_xy()
@@ -525,36 +538,82 @@ class FinchSystem(BaseSystem):
         super(FinchSystem, self).__init__()
 
 
+# NEEDS:
+# A motor for the outlet (don't really need encoder), and a z stage for the inlet and a
+# pressure control device (preferably the same one used on the Barracuda system)
 class OstrichSystem(BaseSystem):
+    _daq_dev = "/Dev1/"  # fixme not sure what to put here ("/Dev1/" is from Barracuda)
+    _daq_voltage_control = 'ao1'
+    _daq_current_readout = 'ai0'
+    _daq_voltage_readout = 'ai1'
+    _daq_rfu = 'ai3'
+    _xy_stage_id = 'TIXYDrive'
+    _z_stage_id = 'TIZDrive'
+
+    _z_stage_lock = threading.Lock()
+    _outlet_lock = threading.Lock()
+    _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
+    _pressure_lock = threading.Lock()
+    _camera_lock = threading.Lock()
+
+    image_size = (512, 512)
 
     def __init__(self):
         super(OstrichSystem, self).__init__()
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='TIXYDrive', config_file='sysConfig.cfg', home=HOME)
+
+    def _start_daq(self):
+        self.daq_board_control.max_time = 600000
+        self.daq_board_control.start_read_task()
 
     def start_system(self):
         """Puts the system into its functional state."""
-        pass
+        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage=self._xy_stage_id,
+                                                    config_file='sysConfig.cfg', home=HOME, loaded=False)
+
+        self.objective_control = ZStageControl.NikonZStage(lock=self._objective_lock, stage=self._z_stage_id,
+                                                           config_file='sysConfig.cfg', home=HOME, loaded=False)
+
+        self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
+                                                     current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
+                                                     voltage_control=self._daq_voltage_control)
+
+        self.laser_control = True  # No need to define a new class when we only have one command
+
+        self.image_control = ImageControl.ImageControl(home=HOME)
+        return True
 
     def close_system(self):
         """Takes system out of its functional state."""
-        pass
+        self.close_z()
+        self.close_xy()
+        self.close_voltage()
+        self.close_outlet()
+        self.close_objective()
+        self.close_image()
+        return True
 
     def close_xy(self):
         """Removes immediate functionality of XY stage."""
-        pass
+        self.xy_stage_control.close()
 
     def set_xy(self, xy=None, rel_xy=None):
         """Sets the position of the XY Stage. 'xy' is absolute, 'rel_xy' is relative to current."""
-        pass
+        if xy:
+            self.xy_stage_control.set_xy(xy)
+        elif rel_xy:
+            self.xy_stage_control.set_rel_xy(rel_xy)
+
+        return True
 
     def get_xy(self):
         """Gets the current position of the XY stage."""
-        pass
+        return self.xy_stage_control.read_xy()
 
     def stop_xy(self):
         """Stops current movement of the XY stage."""
-        pass
+        self.xy_stage_control.stop()
+        return True
 
     def close_z(self):
         """Removes immediate functionality of Z stage/motor."""
@@ -590,19 +649,26 @@ class OstrichSystem(BaseSystem):
 
     def close_objective(self):
         """Removes immediate functionality of the objective stage/motor."""
-        pass
+        self.z_stage_control.close()
+        return True
 
     def set_objective(self, h=None, rel_h=None):
         """Sets the position of the objective stage/motor. 'h' is absolute, 'rel_h' is relative to current."""
-        pass
+        if h:
+            self.objective_control.set_z(h)
+        elif rel_h:
+            self.objective_control.set_rel_z(rel_h)
+
+        return True
 
     def get_objective(self):
         """Gets the current position of the objective stage/motor."""
-        pass
+        return self.objective_control.read_z()
 
     def stop_objective(self):
         """Stops the current movement of the objective stage/motor."""
-        pass
+        self.objective_control.stop()
+        return True
 
     def close_voltage(self):
         """Removes immediate functionality of the voltage source."""
@@ -610,64 +676,88 @@ class OstrichSystem(BaseSystem):
 
     def set_voltage(self, v=None):
         """Sets the current voltage of the voltage source."""
-        pass
+        self._start_daq()
+        self.daq_board_control.change_voltage(v)
+        return True
 
     def get_voltage(self):
         """Gets the current voltage of the voltage source."""
-        pass
+        return self.daq_board_control.voltage
 
     def get_voltage_data(self):
         """Gets a list of the voltages over time."""
-        pass
+        return self.daq_board_control.data[self._daq_voltage_readout]
 
     def get_current_data(self):
         """Gets a list of the current over time."""
-        pass
+        return self.daq_board_control.data[self._daq_current_readout]
 
     def get_rfu_data(self):
         """Gets a list of the RFU over time."""
-        pass
+        return self.daq_board_control.data[self._daq_rfu]
 
     def close_image(self):
         """Removes the immediate functionality of the camera."""
-        pass
+        self.image_control.close()
+        return True
 
     def start_feed(self):
         """Sets camera to start gathering images. Does not return images."""
-        pass
+        self.image_control.start_video_feed()
+        return True
 
     def stop_feed(self):
         """Stops camera from gathering images."""
         # Only fill out stop_feed if you can fill out start_feed.
-        pass
+        self.image_control.stop_video_feed()
+        return True
 
     def get_image(self):
         """Returns the most recent image from the camera."""
-        pass
+        with self._camera_lock:
+            image = self.image_control.get_recent_image(size=self.image_size)
+
+            if image is None:
+                return None
+
+            if not HOME:
+                image.save("recentImg.png")
+
+        return image
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         """Sets the parameters of the laser device."""
-        pass
+        logging.warning('No laser parameters can be set with current system.')
+        return True
 
     def laser_standby(self):
         """Puts laser in a standby 'fire-ready' mode."""
-        pass
+        logging.warning('Laser can not be put in standby from computer.')
+        return True
 
     def laser_fire(self):
         """Fires the laser."""
-        pass
+        ctypes.windll.inpout32.Out32(0x378,255)
+        time.sleep(0.1)
+        ctypes.windll.inpout32.Out32(0x378, 0)
+        return True
 
     def laser_stop(self):
         """Stops current firing of the laser."""
-        pass
+        ctypes.windll.inpout32.Out32(0x378, 0)
+        return True
 
     def laser_close(self):
         """Removes immediate functionality of the laser."""
-        pass
+        ctypes.windll.inpout32.Out32(0x378, 0)
+        return True
 
     def laser_check(self):
         """Logs status of laser system."""
-        pass
+        # fixme, see if an exception comes up when setting laser power to 0 and the laser is not properly connected. If
+        # fixme an exception occurs we can use that to log whether the system is on or not.
+        logging.warning('Laser system status can not be checked from computer.')
+        return True
 
     def pressure_close(self):
         """Removes immediate functionality of the pressure system."""
