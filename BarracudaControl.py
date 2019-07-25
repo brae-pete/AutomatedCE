@@ -246,7 +246,7 @@ class InsertScreenController:
     def joystick(self):
         """ Prompts shapes to be created in the view via the joystick method. """
         # The event we are sending holds the current coordinates of the stage and converts them to pixel
-        event_location = self.hardware.xy_stage_control.read_xy()
+        event_location = self.hardware.get_xy()
         event = [(event_location[0] * self._um2pix * self._stage_inversion[0]) + (self._stage_offset[0] * self._um2pix),
                  (event_location[1] * self._um2pix * self._stage_inversion[1]) - (self._stage_offset[1] * self._um2pix)]
         logging.info(event)

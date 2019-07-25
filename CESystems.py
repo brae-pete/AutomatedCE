@@ -557,6 +557,7 @@ class OstrichSystem(BaseSystem):
     _pressure_lock = threading.Lock()
     _camera_lock = threading.Lock()
 
+    _laser_pfn = 255
     image_size = (512, 512)
 
     def __init__(self):
@@ -727,7 +728,13 @@ class OstrichSystem(BaseSystem):
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         """Sets the parameters of the laser device."""
-        logging.warning('No laser parameters can be set with current system.')
+        if pfn:
+            if 0 < pfn < 256:  # fixme, not sure if this is the actual limit, but all I've seen is 255 and 0. Only 2?
+                self._laser_pfn = pfn
+            else:
+                logging.error('Invalid PFN, must be an integer between 0 and 255.')
+        else:
+            logging.warning('Cannot set this parameter on the current laser for Ostrich.')
         return True
 
     def laser_standby(self):
@@ -737,7 +744,7 @@ class OstrichSystem(BaseSystem):
 
     def laser_fire(self):
         """Fires the laser."""
-        ctypes.windll.inpout32.Out32(0x378,255)
+        ctypes.windll.inpout32.Out32(0x378, self._laser_pfn)
         time.sleep(0.1)
         ctypes.windll.inpout32.Out32(0x378, 0)
         return True
