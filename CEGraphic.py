@@ -1,14 +1,9 @@
 # Standard library modules
-import sys
 import os
 import logging
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
-# import qtmodern.styles
-# import qtmodern.windows
-# import qdarkstyle
-import numpy as np
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 import matplotlib.pyplot as plt
 
@@ -19,8 +14,8 @@ contents = os.listdir(cwd)
 # Locate the directory of icons
 if "icons" in contents:
     ICON_FOLDER = os.path.join(cwd, "icons")
-elif "BarracudaQt" in contents:
-    contents = os.listdir(os.chdir(os.path.join(contents, "BarracudaQt")))
+elif "CEGraphic" in contents:
+    contents = os.listdir(os.chdir(os.path.join(contents, "CEGraphic")))
     if "icons" in contents:
         ICON_FOLDER = os.path.join(os.getcwd(), "icons")
 else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
@@ -197,7 +192,7 @@ class InsertScreen(QtWidgets.QMainWindow):
         self.init_grid_action = QtWidgets.QAction(QtGui.QIcon(os.path.join(ICON_FOLDER, "grid.png")), "")
         self.init_grid_action.setToolTip('Initialize stage dimensions')
 
-        # self.select_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\pointing.png"))
+        # self.select_action = QtWidgets.QAction(QtGui.QIcon(r"C:\Users\kalec\Documents\Research_Allbritton\CEGraphic\pointing.png"))
         # self.select_action.setToolTip('Select')
 
         self.circle_radius_input = QtWidgets.QLineEdit()
@@ -442,8 +437,15 @@ class RunScreen(QtWidgets.QMainWindow):
         self.stop_form = QtWidgets.QGroupBox()
         self.init_stop_form()
 
+        self.temp_calibrate_layout = QtWidgets.QHBoxLayout()
+        self.temp_calibrate_layout.addStretch()
+        self.temp_calibrate_button = QtWidgets.QPushButton('Calibrate FIXME')
+        self.temp_calibrate_layout.addWidget(self.temp_calibrate_button)
+        self.temp_calibrate_layout.addStretch()
+
         main_layout = QtWidgets.QVBoxLayout()
         main_layout.addStretch()
+        main_layout.addLayout(self.temp_calibrate_layout)
         main_layout.addWidget(self.xy_stage_form)
         main_layout.addSpacing(20)
         motor_layout = QtWidgets.QHBoxLayout()
@@ -953,6 +955,7 @@ class RunScreen(QtWidgets.QMainWindow):
             return QtGui.QPixmap('recentImg.png')
 
     def clear_feed_scene(self):
+        # fixme, has to be done twice because not all items are removed with one go, not sure why.
         for item in self.live_feed_scene.items():
             if item != self.feed_pointer:
                 self.live_feed_scene.removeItem(item)
@@ -2847,12 +2850,13 @@ class ErrorMessageUI(QtWidgets.QDialog):
 
 
 class PermissionsMessageUI(QtWidgets.QDialog):
-    def __init__(self, permissions_message=None, pos_function=None, neg_function=None):
+    def __init__(self, permissions_message=None, pos_function=None, neg_function=None, other_function=None, other_label=None):
         super(PermissionsMessageUI, self).__init__()
         self.setWindowTitle('Permission')
         message = QtWidgets.QLabel(permissions_message)
         self.pos_button = QtWidgets.QPushButton('Okay')
         self.neg_button = QtWidgets.QPushButton('Cancel')
+
         self.setMinimumWidth(300)
         self.setMinimumWidth(80)
         self.pos_button.setFixedWidth(80)
@@ -2871,6 +2875,14 @@ class PermissionsMessageUI(QtWidgets.QDialog):
         col.addWidget(message)
         col.setAlignment(message, QtCore.Qt.AlignCenter)
         row = QtWidgets.QHBoxLayout()
+
+        if other_function and other_label:
+            self.other_button = QtWidgets.QPushButton(other_label)
+            self.other_button.setFixedWidth(80)
+            self.other_button.released.connect(lambda: other_function())
+            self.other_button.released.connect(lambda: self.close())
+            row.addWidget(self.other_button)
+
         row.addWidget(self.pos_button)
         row.addWidget(self.neg_button)
         row.setAlignment(self.pos_button, QtCore.Qt.AlignRight)
@@ -2884,3 +2896,4 @@ class PermissionsMessageUI(QtWidgets.QDialog):
 class InputMessageUI(QtWidgets.QDialog):
     def __init__(self, message=None):
         print(message)
+a

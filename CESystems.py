@@ -19,6 +19,7 @@ HOME = False
 
 
 class BaseSystem:
+    """Interface controllers will interact with to control the different hardware systems."""
     _system_id = None
 
     def __init__(self):
@@ -33,194 +34,198 @@ class BaseSystem:
 
         self.laser_max_time = None
 
+    def calibrate_system(self, permissions_gui):
+        """Calibrates the system."""
+        logging.error('calibrate_system not implemented in hardware class.')
+
     def start_system(self):
         """Puts the system into its functional state."""
-        pass
+        logging.error('start_system not implemented in hardware class.')
 
     def close_system(self):
         """Takes system out of its functional state."""
-        pass
+        logging.error('close_system not implemented in hardware class.')
 
     def close_xy(self):
         """Removes immediate functionality of XY stage."""
-        pass
+        logging.error('close_xy not implemented in hardware class.')
 
     def set_xy(self, xy=None, rel_xy=None):
         """Sets the position of the XY Stage. 'xy' is absolute, 'rel_xy' is relative to current."""
-        pass
+        logging.error('set_xy not implemented in hardware class.')
 
     def get_xy(self):
         """Gets the current position of the XY stage."""
-        pass
+        logging.error('get_xy not implemented in hardware class.')
 
     def stop_xy(self):
         """Stops current movement of the XY stage."""
-        pass
+        logging.error('stop_xy not implemented in hardware class.')
 
     def set_xy_home(self):
         """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
-        pass
+        logging.error('set_xy_home not implemented in hardware class.')
 
     def home_xy(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        pass
+        logging.error('home_xy not implemented in hardware class.')
 
     def close_z(self):
         """Removes immediate functionality of Z stage/motor."""
-        pass
+        logging.error('close_z not implemented in hardware class.')
 
     def set_z(self, z=None, rel_z=None):
         """Sets the position of the Z stage/motor. 'z' is absolute, 'rel_z' is relative to current."""
-        pass
+        logging.error('set_z not implemented in hardware class.')
 
     def get_z(self):
         """Gets the current position of the Z stage/motor."""
-        pass
+        logging.error('get_z not implemented in hardware class.')
 
     def stop_z(self):
         """Stops current movement of the Z stage/motor."""
-        pass
+        logging.error('stop_z not implemented in hardware class.')
 
     def set_z_home(self):
         """Sets the current position of the Z stage/motor as home. Return False if device has no 'home' capability."""
-        pass
+        logging.error('set_z_home not implemented in hardware class.')
 
     def home_z(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        pass
+        logging.error('home_z not implemented in hardware class.')
 
     def close_outlet(self):
         """Removes immediate functionality of the outlet stage/motor."""
-        pass
+        logging.error('close_outlet not implemented in hardware class.')
 
     def set_outlet(self, h=None, rel_h=None):
         """Sets the position of the outlet stage/motor. 'h' is absolute, 'rel_h' is relative to current."""
-        pass
+        logging.error('set_outlet not implemented in hardware class.')
 
     def get_outlet(self):
         """Gets the current position of the outlet stage/motor."""
-        pass
+        logging.error('get_outlet not implemented in hardware class.')
 
     def stop_outlet(self):
         """Stops current movement of the outlet stage/motor."""
-        pass
+        logging.error('stop_outlet not implemented in hardware class.')
 
     def set_outlet_home(self):
         """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
-        pass
+        logging.error('set_outlet_home not implemented in hardware class.')
 
     def home_outlet(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        pass
+        logging.error('home_outlet not implemented in hardware class.')
 
     def close_objective(self):
         """Removes immediate functionality of the objective stage/motor."""
-        pass
+        logging.error('close_objective not implemented in hardware class.')
 
     def set_objective(self, h=None, rel_h=None):
         """Sets the position of the objective stage/motor. 'h' is absolute, 'rel_h' is relative to current."""
-        pass
+        logging.error('set_objective not implemented in hardware class.')
 
     def get_objective(self):
         """Gets the current position of the objective stage/motor."""
-        pass
+        logging.error('get_objective not implemented in hardware class.')
 
     def stop_objective(self):
         """Stops the current movement of the objective stage/motor."""
-        pass
+        logging.error('stop_objective not implemented in hardware class.')
 
     def set_objective_home(self):
         """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
-        pass
+        logging.error('set_objective_home not implemented in hardware class.')
 
     def home_objective(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        pass
+        logging.error('home_objective not implemented in hardware class.')
 
     def close_voltage(self):
         """Removes immediate functionality of the voltage source."""
-        pass
+        logging.error('close_voltage not implemented in hardware class.')
 
     def set_voltage(self, v=None):
         """Sets the current voltage of the voltage source."""
-        pass
+        logging.error('set_voltage not implemented in hardware class.')
 
     def get_voltage(self):
         """Gets the current voltage of the voltage source."""
-        pass
+        logging.error('get_voltage not implemented in hardware class.')
 
     def get_voltage_data(self):
         """Gets a list of the voltages over time."""
-        pass
+        logging.error('get_voltage_data not implemented in hardware class.')
 
     def get_current_data(self):
         """Gets a list of the current over time."""
-        pass
+        logging.error('get_current_data not implemented in hardware class.')
 
     def get_rfu_data(self):
         """Gets a list of the RFU over time."""
-        pass
+        logging.error('get_rfu_data not implemented in hardware class.')
 
     def close_image(self):
         """Removes the immediate functionality of the camera."""
-        pass
+        logging.error('close_image not implemented in hardware class.')
 
     def start_feed(self):
         """Sets camera to start gathering images. Does not return images."""
-        pass
+        logging.error('start_feed not implemented in hardware class.')
 
     def stop_feed(self):
         """Stops camera from gathering images."""
         # Only fill out stop_feed if you can fill out start_feed.
-        pass
+        logging.error('stop_feed not implemented in hardware class.')
 
     def get_image(self):
         """Returns the most recent image from the camera."""
-        pass
+        logging.error('get_image not implemented in hardware class.')
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         """Sets the parameters of the laser device."""
-        pass
+        logging.error('set_laser_parameters not implemented in hardware class.')
 
     def laser_standby(self):
         """Puts laser in a standby 'fire-ready' mode."""
-        pass
+        logging.error('laser_standby not implemented in hardware class.')
 
     def laser_fire(self):
         """Fires the laser."""
-        pass
+        logging.error('laser_fire not implemented in hardware class.')
 
     def laser_stop(self):
         """Stops current firing of the laser."""
-        pass
+        logging.error('laser_stop not implemented in hardware class.')
 
     def laser_close(self):
         """Removes immediate functionality of the laser."""
-        pass
+        logging.error('laser_close not implemented in hardware class.')
 
     def laser_check(self):
         """Logs status of laser system."""
-        pass
+        logging.error('laser_check not implemented in hardware class.')
 
     def pressure_close(self):
         """Removes immediate functionality of the pressure system."""
-        pass
+        logging.error('pressure_close not implemented in hardware class.')
 
     def pressure_rinse_start(self):
         """Starts rinsing pressure.."""
-        pass
+        logging.error('pressure_rinse_start not implemented in hardware class.')
 
     def pressure_rinse_stop(self):
         """Stops rinsing pressure."""
-        pass
+        logging.error('pressure_rinse_stop not implemented in hardware class.')
 
     def pressure_valve_open(self):
         """Opens pressure valve."""
-        pass
+        logging.error('pressure_valve_open not implemented in hardware class.')
 
     def pressure_valve_close(self):
         """Closes pressure valve."""
-        pass
+        logging.error('pressure_valve_close not implemented in hardware class.')
 
 
 class BarracudaSystem(BaseSystem):
@@ -247,8 +252,9 @@ class BarracudaSystem(BaseSystem):
     _laser_rem_time = 0
 
     image_size = (512, 384)
+    objective_focus = 0
     xy_stage_size = [112792, 64340]  # Rough size in mm
-    xy_stage_upper_left = [112598, -2959]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_upper_left = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
     xy_stage_inversion = [-1, -1]
 
     def __init__(self):
@@ -273,11 +279,15 @@ class BarracudaSystem(BaseSystem):
                 self.laser_close()
                 self._laser_rem_time = 0
 
+    def calibrate_system(self, permissions_gui):
+        """Calibrates the system."""
+        pass
+
     def start_system(self):
         self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
         self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
         self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        self.image_control = ImageControl.ImageControl(home=HOME)
+        # self.image_control = ImageControl.ImageControl(home=HOME)
         self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
 
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
@@ -542,6 +552,8 @@ class FinchSystem(BaseSystem):
 # A motor for the outlet (don't really need encoder), and a z stage for the inlet and a
 # pressure control device (preferably the same one used on the Barracuda system)
 class OstrichSystem(BaseSystem):
+    _system_id = 'OSTRICH'
+
     _daq_dev = "/Dev1/"  # fixme not sure what to put here ("/Dev1/" is from Barracuda)
     _daq_voltage_control = 'ao1'
     _daq_current_readout = 'ai0'

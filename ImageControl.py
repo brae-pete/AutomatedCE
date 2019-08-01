@@ -30,10 +30,10 @@ contents = os.listdir(cwd)
 
 if "config" in contents:
     CONFIG_FOLDER = os.path.join(cwd, "config")
-elif "BarracudaQt" in contents:
-    contents = os.listdir(os.path.join(contents, "BarracudaQt"))
+elif "CEGraphic" in contents:
+    contents = os.listdir(os.path.join(contents, "CEGraphic"))
     if "config" in contents:
-        os.chdir(os.path.join(contents, "BarracudaQt"))
+        os.chdir(os.path.join(contents, "CEGraphic"))
         CONFIG_FOLDER = os.path.join(os.getcwd(), "config")
     else:
         CONFIG_FOLDER = os.getcwd()
@@ -95,7 +95,8 @@ class ImageControl:
                 img = pilImage.fromarray(img, 'L')
             except:  # fixme, pin down the exceptions we want to include here, don't use broad.
                 img = pilImage.fromarray(img)
-            img.thumbnail(size)
+
+            img.resize(size)
             return img
 
     @staticmethod
