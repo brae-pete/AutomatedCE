@@ -1054,7 +1054,7 @@ class RunScreenController:
             self.screen.enable_laser_form(False)
 
         if self.hardware.daq_board_control:
-            self.screen.voltage_value.valueChanged.connect(lambda: self.hardware.set_voltage(value=self.screen.voltage_value.value()))
+            self.screen.voltage_value.valueChanged.connect(lambda: self.hardware.set_voltage(self.screen.voltage_value.value()))
             self.screen.voltage_off.released.connect(lambda: self.hardware.stop_voltage())
         else:
             self.screen.enable_voltage_form(False)
@@ -1477,12 +1477,12 @@ class RunScreenController:
             return True
 
         def move_inlet(inlet_travel):
-            self.set_z(step=inlet_travel)
+            self.hardware.set_z(rel_z=inlet_travel)
             time.sleep(2)
             return check_flags()
 
         def move_outlet(outlet_travel):
-            self.set_outlet(step=outlet_travel)
+            self.hardware.set_outlet(rel_h=outlet_travel)
             time.sleep(2)
             return check_flags()
 
@@ -1490,7 +1490,7 @@ class RunScreenController:
             if inlet_location is None:
                 logging.error('Unable to make next XY movement.')
                 return False
-            self.set_xy(inlet_location)
+            self.hardware.set_xy(xy=inlet_location)
             time.sleep(2)
             return check_flags()
 
@@ -1522,14 +1522,14 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if voltage_level:
-                self.set_voltage(voltage_level)
+                self.hardware.set_voltage(voltage_level)
 
             if pressure_state:
-                self.rinse_pressure(off=False)
+                self.hardware.pressure_rinse_start()
 
             time.sleep(duration)
-            self.set_voltage(0)
-            self.rinse_pressure(off=True)
+            self.hardware.set_voltage(0)
+            self.hardware.pressure_rinse_stop()
 
             return True
 
@@ -1544,10 +1544,10 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if pressure_state:
-                self.rinse_pressure(off=False)
+                self.hardware.pressure_rinse_start()
 
             time.sleep(duration)
-            self.rinse_pressure(off=True)
+            self.hardware.pressure_rinse_stop()
 
             return True
 
@@ -1565,15 +1565,15 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if step['SingleCell']:
-                self.focus()
-                self.find_cell()
+                logging.error('Unsupported: Single Cell')
+                return False
 
             if voltage_level:
-                self.set_voltage(voltage_level)
+                self.hardware.set_voltage(voltage_level)
 
             time.sleep(duration)
-            self.set_voltage(0)
-            self.rinse_pressure(off=True)
+            self.hardware.set_voltage(0)
+            self.hardware.pressure_rinse_stop()
 
             return True
 

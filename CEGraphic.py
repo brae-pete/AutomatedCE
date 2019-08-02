@@ -2896,4 +2896,3 @@ class PermissionsMessageUI(QtWidgets.QDialog):
 class InputMessageUI(QtWidgets.QDialog):
     def __init__(self, message=None):
         print(message)
-a
