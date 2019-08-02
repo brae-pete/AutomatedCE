@@ -1593,7 +1593,6 @@ class RunScreenController:
                     if not state:
                         return False
 
-                    logging.error(step['OutletTravel'])
                     state = move_outlet(step['OutletTravel'])
                     if not state:
                         return False
