@@ -979,6 +979,7 @@ class RunScreenController:
         self._set_callbacks()
 
     def _set_callbacks(self):
+        """Assigns callbacks to all widgets and signals for the run screen."""
         if self.hardware.xy_stage_control:
             self.screen.xy_up.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value()*self._xy_step_size]))
             self.screen.xy_down.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, -self.screen.xy_step_size.value()*self._xy_step_size]))
@@ -1212,6 +1213,21 @@ class RunScreenController:
             for well in self.insert.wells:
                 self.screen.live_feed_scene.add_shape(well.shape, well.bound_box)
 
+    def _laser_timer(self, start_time):
+        while True:
+            if self._laser_on.is_set():
+                _laser_rem_time = self.hardware.laser_max_time - (time.time() - start_time)
+                if _laser_rem_time > 0:
+                    self.screen.laser_timer.setText('{:.1f}s'.format(_laser_rem_time))
+                    time.sleep(1)
+                else:
+                    self._laser_on.clear()
+            else:
+                self.screen.laser_timer.setText('0s')
+                self.screen.laser_fire_check.setEnabled(False)
+                self.screen.laser_fire_check.setChecked(False)
+                break
+
     # Hardware Control Function
 
     def stop_laser(self):  # keeper
@@ -1272,24 +1288,9 @@ class RunScreenController:
             if response:
                 self._laser_on.set()
                 self.screen.laser_fire_check.setEnabled(True)
-                threading.Thread(target=self.laser_timer, args=(time.time(),)).start()
+                threading.Thread(target=self._laser_timer, args=(time.time(),)).start()
             else:
                 logging.error('Error starting laser. Make sure laser_standby() in hardware class is defined correctly.')
-
-    def laser_timer(self, start_time):
-        while True:
-            if self._laser_on.is_set():
-                _laser_rem_time = self.hardware.laser_max_time - (time.time() - start_time)
-                if _laser_rem_time > 0:
-                    self.screen.laser_timer.setText('{:.1f}s'.format(_laser_rem_time))
-                    time.sleep(1)
-                else:
-                    self._laser_on.clear()
-            else:
-                self.screen.laser_timer.setText('0s')
-                self.screen.laser_fire_check.setEnabled(False)
-                self.screen.laser_fire_check.setChecked(False)
-                break
 
     def check_system(self):
         if self.hardware.xy_stage_control and self.hardware.outlet_control and self.hardware.pressure_control and \
