@@ -1446,7 +1446,7 @@ class RunScreenController:
 
     def end_sequence(self):
         logging.info('Stopping run ...')
-        self.set_voltage(0)
+        self.hardware.set_voltage(0)
         self._stop_thread_flag.set()
 
     def run(self):
