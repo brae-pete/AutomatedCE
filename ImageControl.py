@@ -30,10 +30,10 @@ contents = os.listdir(cwd)
 
 if "config" in contents:
     CONFIG_FOLDER = os.path.join(cwd, "config")
-elif "BarracudaQt" in contents:
-    contents = os.listdir(os.path.join(contents, "BarracudaQt"))
+elif "CEGraphic" in contents:
+    contents = os.listdir(os.path.join(contents, "CEGraphic"))
     if "config" in contents:
-        os.chdir(os.path.join(contents, "BarracudaQt"))
+        os.chdir(os.path.join(contents, "CEGraphic"))
         CONFIG_FOLDER = os.path.join(os.getcwd(), "config")
     else:
         CONFIG_FOLDER = os.getcwd()
@@ -81,21 +81,21 @@ class ImageControl:
     def get_recent_image(self, size=None):
         """Returns most recent image from the camera"""
         if self.home:
-            time.sleep(0.05)
-            return True
-        time.sleep(0.05)
+            time.sleep(0.25)
 
-        if not size:
-            size = 128, 128
-
+        time.sleep(0.1)
         if self.mmc.getRemainingImageCount() > 0:
             img = self.mmc.getLastImage()
-            # img = self.image_conversion(np.float32(img))
+            ims = img.shape
+            img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]  # img = np.float32(img)
+            img = cv2.resize(img, (0, 0), fx=0.25, fy=0.25)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # img = self.image_conversion(img)
+
             try:
                 img = pilImage.fromarray(img, 'L')
-            except:  # fixme, pin down the exceptions we want to include here, don't use broad.
+            except:
                 img = pilImage.fromarray(img)
-            img.thumbnail(size)
             return img
 
     @staticmethod

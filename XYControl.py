@@ -28,10 +28,10 @@ contents = os.listdir(cwd)
 
 if "config" in contents:
     CONFIG_FOLDER = os.path.join(cwd, "config")
-elif "BarracudaQt" in contents:
-    contents = os.listdir(os.path.join(cwd, "BarracudaQt"))
+elif "CEGraphic" in contents:
+    contents = os.listdir(os.path.join(cwd, "CEGraphic"))
     if "config" in contents:
-        os.chdir(os.path.join(cwd, "BarracudaQt"))
+        os.chdir(os.path.join(cwd, "CEGraphic"))
         CONFIG_FOLDER = os.path.join(os.getcwd(), "config")
     else:
         CONFIG_FOLDER = os.getcwd()

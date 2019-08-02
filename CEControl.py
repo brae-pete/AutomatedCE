@@ -6,11 +6,10 @@ import threading
 import logging
 import time
 
-# GUI Framework
-import BarracudaQt
-
-# Classes for the CE systems.
-import CESystems
+# Custom modules for CE
+import CESystems  # Hardware system classes
+import CEObjects  # CE-specific classes
+import CEGraphic  # GUI classes
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -19,99 +18,16 @@ import numpy as np
 HOME = False
 
 
-# Possible Model Classes
-
-class CERepository:
-    def __init__(self):
-        self.methods = None
-        self.inserts = None
-        self.sequences = None
-
-
-class Well:
-    def __init__(self, location, label=None, contents=None, shape=None, bounding_box=None):
-        self.location = location
-        self.label = label
-        self.contents = contents
-        self.shape = shape
-        self.bound_box = bounding_box
-
-    def __str__(self):
-        return '{} at {} - SHAPE {} - BBOX {}'.format(self.label, self.location, self.shape, self.bound_box)
-
-
-class Insert:
-    def __init__(self, wells=None, label=None):
-        self.wells = wells
-        self.label = label
-
-    def __str__(self):
-        separator = ','
-        wells = ['{}'.format(str(well)) for well in self.wells]
-        return_wells = separator.join(wells)
-        return return_wells
-
-    def get_well_xy(self, label):
-        for well in self.wells:
-            if well.label == label:
-                return well.location
-        else:
-            return None
-
-    def get_next_well_xy(self, label, increment):
-        tolerance = 2
-        for well in self.wells:
-            if well.label == label:
-                wrong_wells = [well]
-                next_well = None
-                for _ in range(increment):
-                    x, y, *_ = well.bound_box
-                    dy = 312
-                    for other_well in self.wells:
-                        ox, oy, *_ = other_well.bound_box
-                        if 0 < (y - oy) < dy and abs(ox - x) < tolerance and other_well not in wrong_wells:
-                            next_well = other_well
-                            dy = y - oy
-                    else:
-                        if next_well:
-                            wrong_wells.append(next_well)
-                            continue
-                        dx = 584
-                        for other_well in self.wells:
-                            ox, oy, *_ = other_well.bound_box
-                            if 0 < (ox - x) < dx and abs(oy - y) < tolerance and other_well not in wrong_wells:
-                                next_well = other_well
-                                dx = ox - x
-                    wrong_wells.append(next_well)
-                if next_well:
-                    return next_well.location
-        else:
-            return None
-
-
-class Method:
-    def __init__(self, insert, steps, label=None, ID=None):
-        self.ID = ID
-        self.steps = steps
-        self.insert = insert
-        self.label = label
-
-
-class Sequence:
-    def __init__(self, steps=None):
-        self.steps = steps
-
-
 # Control Classes
 class ProgramController:
     def __init__(self):
         # Initialize system model, system hardware and the GUI
-        self.repository = CERepository()
+        self.repository = CEObjects.CERepository()
         self.hardware = CESystems.BarracudaSystem()
         self.hardware.start_system()
 
         app = QtWidgets.QApplication(sys.argv)
-        self.program_window = BarracudaQt.MainWindow()
+        self.program_window = CEGraphic.MainWindow()
 
         # Connect the views to the controllers.
         self.gs_screen = self.program_window.getting_started_screen
@@ -165,7 +81,7 @@ class GettingStartedScreenController:
             return None
 
         if os.path.splitext(file_path)[1] != ext:
-            BarracudaQt.ErrorMessageUI(error_message='Invalid File Extension')
+            CEGraphic.ErrorMessageUI(error_message='Invalid File Extension')
             return None
 
         return file_path
@@ -225,9 +141,14 @@ class InsertScreenController:
         self.screen.load_insert_action.triggered.connect(lambda: self.load_insert())
         self.screen.clear_area_action.triggered.connect(lambda: self.clear_area())
         self.screen.joystick_action.triggered.connect(lambda: self.joystick())
+        self.screen.init_grid_action.triggered.connect(lambda: self._calibrate_xy())
         self.screen.insert_table.currentCellChanged.connect(lambda: self.highlight_well())
         self.screen.select_file.released.connect(lambda: self.select_file())
         self.screen.save_file.released.connect(lambda: self.save_insert())
+
+    def _calibrate_xy(self):
+        self.hardware.xy_stage_upper_left = self.hardware.get_xy()
+        self._stage_offset = self.hardware.xy_stage_upper_left
 
     def highlight_well(self):
         """ Prompts the view to highlight the well whose cell in the table is selected. """
@@ -236,10 +157,10 @@ class InsertScreenController:
             # Convert from the '({}, {})' format to [f, f]
             try:
                 event_location = [float(x) for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
-                location = [(event_location[0] * self._um2pix * self._stage_inversion[0]) + (self._stage_offset[0] * self._um2pix),
-                            (event_location[1] * self._um2pix * self._stage_inversion[1]) - (self._stage_offset[1] * self._um2pix)]
+                location = [(self.hardware.xy_stage_size[0] - event_location[0]) * self._um2pix,
+                            (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
             except ValueError:  # The user changed the table contents to an invalid coordinate
-                BarracudaQt.ErrorMessageUI(error_message='Well location is invalid.')
+                CEGraphic.ErrorMessageUI(error_message='Well location is invalid.')
             else:
                 self.screen.image_frame.highlight_item(location)
 
@@ -247,13 +168,19 @@ class InsertScreenController:
         """ Prompts shapes to be created in the view via the joystick method. """
         # The event we are sending holds the current coordinates of the stage and converts them to pixel
         event_location = self.hardware.get_xy()
-        event = [(event_location[0] * self._um2pix * self._stage_inversion[0]) + (self._stage_offset[0] * self._um2pix),
-                 (event_location[1] * self._um2pix * self._stage_inversion[1]) - (self._stage_offset[1] * self._um2pix)]
+        logging.info(event_location)
+        event_location = [event_location[0]-self.hardware.xy_stage_upper_left[0],
+                          event_location[1]-self.hardware.xy_stage_upper_left[1]]
+        logging.info(event_location)
+        logging.info(self.hardware.xy_stage_upper_left)
+        # We want the pixel location of the objective relative to the stage.
+        event = [(self.hardware.xy_stage_size[0] - event_location[0]) * self._um2pix,
+                 (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
         logging.info(event)
 
         # If the user is trying to create and array or circle but hasn't specified radius, simply throw error.
         if not self.screen.circle_radius_input.text() and self.screen.image_frame.draw_shape != 'RECT':
-            BarracudaQt.ErrorMessageUI(error_message='Radius not specified.')
+            CEGraphic.ErrorMessageUI(error_message='Radius not specified.')
             return
 
         if self.screen.image_frame.draw_shape == 'CIRCLE':  # Only need to know radius of well.
@@ -383,7 +310,7 @@ class InsertScreenController:
             return
 
         if os.path.splitext(file_path)[1] != '.ins':
-            BarracudaQt.ErrorMessageUI(error_message='Invalid File Extension')
+            CEGraphic.ErrorMessageUI(error_message='Invalid File Extension')
             return
 
         self.screen.file_name.setText(file_path)
@@ -397,7 +324,7 @@ class InsertScreenController:
             return
 
         if os.path.splitext(open_file_path)[1] != '.ins':
-            BarracudaQt.ErrorMessageUI(error_message='Invalid file chosen')
+            CEGraphic.ErrorMessageUI(error_message='Invalid file chosen')
             return
 
         with open(open_file_path, 'rb') as open_file:
@@ -405,7 +332,7 @@ class InsertScreenController:
                 self.insert = pickle.load(open_file)
             except pickle.UnpicklingError:
                 message = 'Could not read in data from {}'.format(open_file_path)
-                BarracudaQt.ErrorMessageUI(message)
+                CEGraphic.ErrorMessageUI(message)
             else:
                 self.screen.image_frame.clear()
                 self.screen.insert_table.clearContents()
@@ -442,17 +369,17 @@ class InsertScreenController:
             location = self.screen.insert_table.item(row_index, 1)
 
             event_location = [float(x) for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
-            pixel_location = [(event_location[0] * self._um2pix * self._stage_inversion[0]) + (self._stage_offset[0] * self._um2pix),
-                              (event_location[1] * self._um2pix * self._stage_inversion[1]) - (self._stage_offset[1] * self._um2pix)]
+            pixel_location = [(self.hardware.xy_stage_size[0] - event_location[0]) * self._um2pix,
+                              (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
 
             label = self.screen.insert_table.item(row_index, 0).text()
             bounding_box = self.screen.image_frame.get_bounding_rect(pixel_location)
             shape = self.screen.image_frame.get_shape(pixel_location)
 
-            new_well = Well(label=label, location=event_location, bounding_box=bounding_box, shape=shape)
+            new_well = CEObjects.Well(label=label, location=event_location, bounding_box=bounding_box, shape=shape)
             wells.append(new_well)
 
-        self.insert = Insert(wells=wells, label='Default')
+        self.insert = CEObjects.Insert(wells=wells, label='Default')
 
 
 class MethodScreenController:
@@ -474,9 +401,9 @@ class MethodScreenController:
         self.screen.image_view.setSceneRect(0, 0, 584, 312)
         self.screen.image_frame.controller = self
 
-        self.dialogs = {'Separate': BarracudaQt.SeparateDialog,
-                        'Rinse': BarracudaQt.RinseDialog,
-                        'Inject': BarracudaQt.InjectDialog}
+        self.dialogs = {'Separate': CEGraphic.SeparateDialog,
+                        'Rinse': CEGraphic.RinseDialog,
+                        'Inject': CEGraphic.InjectDialog}
 
         self.method = None
         self.insert = None
@@ -503,7 +430,7 @@ class MethodScreenController:
                             self._step_well.setCurrentText(well.label)
                             self._selecting = False
                         self.screen.well_label.setText(well.label)
-                        self.screen.well_location.setText(str([x/self._um2pix for x in well.location]))
+                        self.screen.well_location.setText(str(well.location))
                         break
 
     def step_well_change(self, combobox):
@@ -537,6 +464,8 @@ class MethodScreenController:
         self.screen.insert_table.setItem(row_count, 4, blank_duration)
 
         inlet_travel = QtWidgets.QDoubleSpinBox()
+        inlet_travel.setMaximum(10)
+        inlet_travel.setMinimum(-10)
         if inlet_travel_input:
             inlet_travel.setValue(inlet_travel_input)
         else:
@@ -545,6 +474,8 @@ class MethodScreenController:
         self.screen.insert_table.setCellWidget(row_count, 7, inlet_travel)
 
         outlet_travel = QtWidgets.QDoubleSpinBox()
+        outlet_travel.setMaximum(25)
+        outlet_travel.setMinimum(-25)
         if outlet_travel_input:
             outlet_travel.setValue(outlet_travel_input)
         else:
@@ -735,7 +666,7 @@ class MethodScreenController:
             return
 
         if os.path.splitext(open_file_path)[1] != '.ins':  # Checks for appropriate extension
-            BarracudaQt.ErrorMessageUI(error_message='Invalid file chosen')
+            CEGraphic.ErrorMessageUI(error_message='Invalid file chosen')
             return
 
         with open(open_file_path, 'rb') as open_file:
@@ -743,7 +674,7 @@ class MethodScreenController:
                 self.insert = pickle.load(open_file)
             except pickle.UnpicklingError:  # Errors due to file corruption or wrong files with right ext.
                 message = 'Could not read in data from {}'.format(open_file_path)
-                BarracudaQt.ErrorMessageUI(message)
+                CEGraphic.ErrorMessageUI(message)
             else:
                 self.screen.image_frame.clear()  # Clear image frame for new insert.
                 self.screen.file_name.setText(open_file_path)
@@ -783,7 +714,7 @@ class MethodScreenController:
             return
 
         if os.path.splitext(open_file_path)[1] != '.ins':  # Checks current file for correct extension.
-            BarracudaQt.ErrorMessageUI(error_message='Invalid file chosen')
+            CEGraphic.ErrorMessageUI(error_message='Invalid file chosen')
             return
 
         with open(open_file_path, 'rb') as open_file:
@@ -791,7 +722,7 @@ class MethodScreenController:
                 self.insert = pickle.load(open_file)
             except pickle.UnpicklingError:  # Errors due to file corruption or wrong files with right ext.
                 message = 'Could not read in data from {}'.format(open_file_path)
-                BarracudaQt.ErrorMessageUI(message)
+                CEGraphic.ErrorMessageUI(message)
             else:
                 self.screen.image_frame.clear()
 
@@ -831,7 +762,7 @@ class MethodScreenController:
 
         if os.path.splitext(open_file_path)[1] != '.met':
             message = 'Invalid file chosen.'
-            BarracudaQt.ErrorMessageUI(message)
+            CEGraphic.ErrorMessageUI(message)
             return
 
         self.screen.file_name_save.setText(open_file_path)
@@ -841,7 +772,7 @@ class MethodScreenController:
                 data = pickle.load(open_file)
             except pickle.UnpicklingError:
                 message = 'Could not read in data from {}.'.format(open_file_path)
-                BarracudaQt.ErrorMessageUI(message)
+                CEGraphic.ErrorMessageUI(message)
             else:
                 self.method = data
                 self.populate_table(data)
@@ -863,7 +794,7 @@ class MethodScreenController:
             try:
                 pickle.dump(self.method, saved_file)
             except pickle.PicklingError:  # Shouldn't occur unless the user really screws up.
-                BarracudaQt.ErrorMessageUI(error_message='Could not save the method.')
+                CEGraphic.ErrorMessageUI(error_message='Could not save the method.')
 
     def select_file(self):
         file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Select a file', os.getcwd(),
@@ -874,7 +805,7 @@ class MethodScreenController:
             return
 
         if os.path.splitext(file_path)[1] != '.met':
-            BarracudaQt.ErrorMessageUI(error_message='Invalid File Extension')
+            CEGraphic.ErrorMessageUI(error_message='Invalid File Extension')
             return
 
         self.screen.file_name_save.setText(file_path)
@@ -912,7 +843,7 @@ class MethodScreenController:
                 data['Duration'] = self.screen.insert_table.item(n, 4).text()
                 n += 1
 
-        self.method = Method(steps=self._form_data, insert=self.insert)
+        self.method = CEObjects.Method(steps=self._form_data, insert=self.insert)
 
 
 class SequenceScreenController:
@@ -975,7 +906,7 @@ class SequenceScreenController:
 
         if os.path.splitext(open_file_path)[1] != '.met':  # Check file for correct extension.
             message = 'Invalid file chosen.'
-            BarracudaQt.ErrorMessageUI(message)
+            CEGraphic.ErrorMessageUI(message)
             return
 
         with open(open_file_path, 'rb') as open_file:
@@ -983,7 +914,7 @@ class SequenceScreenController:
                 data = pickle.load(open_file)
             except pickle.UnpicklingError:  # Should not occur unless user really screws up.
                 message = 'Could not read in data from {}.'.format(open_file_path)
-                BarracudaQt.ErrorMessageUI(message)
+                CEGraphic.ErrorMessageUI(message)
             else:
                 self.add_row(filename=os.path.split(open_file_path)[1], method=open_file_path)
 
@@ -1035,7 +966,7 @@ class RunScreenController:
         self.screen.live_feed_scene.setSceneRect(0, 0, 512, 384)
 
         # Set up logging window in the run screen.
-        self.log_handler = BarracudaQt.QPlainTextEditLogger(self.screen.output_window)
+        self.log_handler = CEGraphic.QPlainTextEditLogger(self.screen.output_window)
         self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(self.log_handler)
         logging.getLogger().setLevel(logging.INFO)
@@ -1049,82 +980,82 @@ class RunScreenController:
 
     def _set_callbacks(self):
         if self.hardware.xy_stage_control:
-            self.screen.xy_up.released.connect(lambda: self.set_y(step=self.screen.xy_step_size.value()))
-            self.screen.xy_down.released.connect(lambda: self.set_y(step=-self.screen.xy_step_size.value()))
-            self.screen.xy_right.released.connect(lambda: self.set_x(step=self.screen.xy_step_size.value()))
-            self.screen.xy_left.released.connect(lambda: self.set_x(step=-self.screen.xy_step_size.value()))
+            self.screen.xy_up.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value()*self._xy_step_size]))
+            self.screen.xy_down.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, -self.screen.xy_step_size.value()*self._xy_step_size]))
+            self.screen.xy_right.released.connect(lambda: self.hardware.set_xy(rel_xy=[self.screen.xy_step_size.value()*self._xy_step_size, 0]))
+            self.screen.xy_left.released.connect(lambda: self.hardware.set_xy(rel_xy=[-self.screen.xy_step_size.value()*self._xy_step_size, 0]))
             self.screen.xy_x_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.xy_y_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.xy_x_value.unselected.connect(lambda: self._value_display_interact(selected=False))
             self.screen.xy_y_value.unselected.connect(lambda: self._value_display_interact(selected=False))
-            self.screen.xy_x_value.returnPressed.connect(lambda: self.set_x(x=float(self.screen.xy_x_value.text())))
-            self.screen.xy_y_value.returnPressed.connect(lambda: self.set_y(y=float(self.screen.xy_y_value.text())))
-            self.screen.xy_set_origin.released.connect(lambda: self.set_xy_home())
-            self.screen.xy_origin.released.connect(lambda: self.set_xy(home=True))
-            self.screen.xy_stop.released.connect(lambda: self.stop_xy_stage())
+            self.screen.xy_x_value.returnPressed.connect(lambda: self.hardware.set_xy(xy=[float(self.screen.xy_x_value.text()), self.hardware.get_xy()[1]]))
+            self.screen.xy_y_value.returnPressed.connect(lambda: self.hardware.set_xy(xy=[self.hardware.get_xy()[0], float(self.screen.xy_y_value.text())]))
+            self.screen.xy_set_origin.released.connect(lambda: self.hardware.set_xy_home())
+            self.screen.xy_origin.released.connect(lambda: self.hardware.home_xy())
+            self.screen.xy_stop.released.connect(lambda: self.hardware.stop_xy())
         else:
             self.screen.enable_xy_stage_form(False)
 
         if self.hardware.objective_control:
-            self.screen.objective_up.released.connect(lambda: self.set_objective(step=self.screen.objective_step_size.value()))
-            self.screen.objective_down.released.connect(lambda: self.set_objective(step=-self.screen.objective_step_size.value()))
-            self.screen.objective_value.returnPressed.connect(lambda: self.set_objective(height=float(self.screen.objective_value.text())))
-            self.screen.objective_stop.released.connect(lambda: self.stop_objective())
+            self.screen.objective_up.released.connect(lambda: self.hardware.set_objective(rel_h=self.screen.objective_step_size.value()))
+            self.screen.objective_down.released.connect(lambda: self.hardware.set_objective(rel_h=-self.screen.objective_step_size.value()))
+            self.screen.objective_value.returnPressed.connect(lambda: self.hardware.set_objective(h=float(self.screen.objective_value.text())))
+            self.screen.objective_stop.released.connect(lambda: self.hardware.stop_objective())
             self.screen.objective_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.objective_value.unselected.connect(lambda: self._value_display_interact(selected=False))
-            self.screen.objective_set_home.released.connect(lambda: self.set_objective_home())
-            self.screen.objective_home.released.connect(lambda: self.set_objective(home=True))
+            self.screen.objective_set_home.released.connect(lambda: self.hardware.set_objective_home())
+            self.screen.objective_home.released.connect(lambda: self.hardware.home_objective())
         else:
             self.screen.enable_objective_form(False)
 
         if self.hardware.outlet_control:
-            self.screen.outlet_up.released.connect(lambda: self.set_outlet(step=self.screen.outlet_step_size.value()))
-            self.screen.outlet_down.released.connect(lambda: self.set_outlet(step=-self.screen.outlet_step_size.value()))
-            self.screen.outlet_value.returnPressed.connect(lambda: self.set_outlet(height=float(self.screen.outlet_value.text())))
-            self.screen.outlet_stop.released.connect(lambda: self.stop_outlet())
+            self.screen.outlet_up.released.connect(lambda: self.hardware.set_outlet(rel_h=self.screen.outlet_step_size.value()))
+            self.screen.outlet_down.released.connect(lambda: self.hardware.set_outlet(rel_h=-self.screen.outlet_step_size.value()))
+            self.screen.outlet_value.returnPressed.connect(lambda: self.hardware.set_outlet(h=float(self.screen.outlet_value.text())))
+            self.screen.outlet_stop.released.connect(lambda: self.hardware.stop_outlet())
             self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
-            self.screen.outlet_set_home.released.connect(lambda: self.set_outlet_home())
-            self.screen.outlet_home.released.connect(lambda: self.set_outlet(home=True))
+            self.screen.outlet_set_home.released.connect(lambda: self.hardware.set_outlet_home())
+            self.screen.outlet_home.released.connect(lambda: self.hardware.home_outlet())
         else:
             self.screen.enable_outlet_form(False)
 
         if self.hardware.pressure_control:
-            self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.rinse_pressure(off=False))
-            self.screen.pressure_rinse_state.negative_selected.connect(lambda: self.rinse_pressure(off=True))
-            self.screen.pressure_valve_state.positive_selected.connect(lambda: self.pressure_valve(closed=False))
-            self.screen.pressure_valve_state.negative_selected.connect(lambda: self.pressure_valve(closed=True))
-            self.screen.pressure_off.released.connect(lambda: self.stop_pressure())
+            self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.hardware.pressure_rinse_start())
+            self.screen.pressure_rinse_state.negative_selected.connect(lambda: self.hardware.pressure_rinse_stop())
+            self.screen.pressure_valve_state.positive_selected.connect(lambda: self.hardware.pressure_valve_open())
+            self.screen.pressure_valve_state.negative_selected.connect(lambda: self.hardware.pressure_valve_close())
+            self.screen.pressure_off.released.connect(lambda: self.hardware.stop_pressure())
         else:
             self.screen.enable_pressure_form(False)
 
         if self.hardware.z_stage_control:
-            self.screen.z_up.released.connect(lambda: self.set_z(step=self.screen.z_step_size.value()))
-            self.screen.z_down.released.connect(lambda: self.set_z(step=-self.screen.z_step_size.value()))
-            self.screen.z_value.returnPressed.connect(lambda: self.set_z(height=float(self.screen.z_value.text())))
-            self.screen.z_stop.released.connect(lambda: self.stop_z_stage())
+            self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
+            self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
+            self.screen.z_value.returnPressed.connect(lambda: self.hardware.set_z(h=float(self.screen.z_value.text())))
+            self.screen.z_stop.released.connect(lambda: self.hardware.stop_z())
             self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.z_value.unselected.connect(lambda: self._value_display_interact(selected=False))
-            self.screen.z_set_home.released.connect(lambda: self.set_z_home())
-            self.screen.z_home.released.connect(lambda: self.set_z(home=True))
+            self.screen.z_set_home.released.connect(lambda: self.hardware.set_z_home())
+            self.screen.z_home.released.connect(lambda: self.hardware.home_z())
         else:
             self.screen.enable_z_stage_form(False)
 
         if self.hardware.laser_control:
-            self.screen.laser_pfn.valueChanged.connect(lambda: self.set_pfn(value=self.screen.laser_pfn.value()))
-            self.screen.laser_attenuation.valueChanged.connect(lambda: self.set_attenuation(value=self.screen.laser_attenuation.value()))
-            self.screen.laser_burst_count.valueChanged.connect(lambda: self.set_burst(count=self.screen.laser_burst_count.value()))
+            self.screen.laser_pfn.valueChanged.connect(lambda: self.hardware.set_laser_parameters(pfn=self.screen.laser_pfn.value()))
+            self.screen.laser_attenuation.valueChanged.connect(lambda: self.hardware.set_laser_parameters(att=self.screen.laser_attenuation.value()))
+            self.screen.laser_burst_count.valueChanged.connect(lambda: self.hardware.set_laser_parameters(burst=self.screen.laser_burst_count.value()))
             self.screen.laser_fire.released.connect(lambda: self.fire_laser())
             self.screen.laser_standby.released.connect(lambda: self.laser_on())
-            self.screen.laser_stop.released.connect(lambda: self.stop_fire())
+            self.screen.laser_stop.released.connect(lambda: self.hardware.laser_stop())
             self.screen.laser_off.released.connect(lambda: self.stop_laser())
-            self.screen.laser_check.released.connect(lambda: threading.Thread(target=self.check_laser).start())
+            self.screen.laser_check.released.connect(lambda: threading.Thread(target=self.hardware.laser_check).start())
         else:
             self.screen.enable_laser_form(False)
 
         if self.hardware.daq_board_control:
-            self.screen.voltage_value.valueChanged.connect(lambda: self.set_voltage(value=self.screen.voltage_value.value()))
-            self.screen.voltage_off.released.connect(lambda: self.stop_voltage())
+            self.screen.voltage_value.valueChanged.connect(lambda: self.hardware.set_voltage(self.screen.voltage_value.value()))
+            self.screen.voltage_off.released.connect(lambda: self.hardware.stop_voltage())
         else:
             self.screen.enable_voltage_form(False)
 
@@ -1154,7 +1085,7 @@ class RunScreenController:
                 self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
                 self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
             else:
-                logging.error('Error reading XY position. Make sure get_xy() in hardware class is defined.')
+                logging.error('Live updates of stage/motor positions disabled.')
                 return
 
         if self.hardware.z_stage_control:
@@ -1162,7 +1093,7 @@ class RunScreenController:
             if value is not None:
                 self.screen.z_value.setText("{:.3f}".format(float(value)))
             else:
-                logging.error('Error reading Z position. Make sure get_z() in hardware class is defined.')
+                logging.error('Live updates of stage/motor positions disabled.')
                 return
 
         if self.hardware.outlet_control:
@@ -1171,7 +1102,7 @@ class RunScreenController:
             if value is not None:
                 self.screen.outlet_value.setText("{:.3f}".format(float(value)))
             else:
-                logging.error('Error reading outlet position. Make sure get_outlet() in hardware class is defined.')
+                logging.error('Live updates of stage/motor positions disabled.')
                 return
 
         if self.hardware.objective_control:
@@ -1180,7 +1111,7 @@ class RunScreenController:
             if value is not None:
                 self.screen.objective_value.setText("{:.3f}".format(float(value)))
             else:
-                logging.error('Error reading objective position. Make sure get_objective in hardware class is defined.')
+                logging.error('Live updates of stage/motor positions disabled.')
                 return
 
         threading.Thread(target=self._update_stages, daemon=True).start()
@@ -1230,10 +1161,11 @@ class RunScreenController:
 
                 self.screen.feed_updated.emit()
                 time.sleep(.25)
+
             elif self.hardware.xy_stage_control:
                 event_location = self.hardware.get_xy()
-                self._event = [(event_location[0] * self._stage_inversion[0] + self._stage_offset[0]) * self._um2pix,
-                               (event_location[1] * self._stage_inversion[1] - self._stage_offset[1]) * self._um2pix]
+                self._event = [(self.hardware.xy_stage_size[0] - event_location[0]) * self._um2pix,
+                               (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
 
                 self.screen.xy_updated.emit()
                 time.sleep(.25)
@@ -1280,173 +1212,13 @@ class RunScreenController:
             for well in self.insert.wells:
                 self.screen.live_feed_scene.add_shape(well.shape, well.bound_box)
 
-    # Hardware Control Functions
-    def set_x(self, x=None, step=None):
-        if step:
-            step = [step*self._xy_step_size, 0]
-        elif x:
-            position = self.hardware.get_xy()
-            x = [x, position[1]]
+    # Hardware Control Function
 
-        executed = self.hardware.set_xy(xy=x, rel_xy=step)
-        if not executed:
-            logging.error('Error moving XY stage. Make sure set_xy() in hardware class is defined.')
-
-        if self._stop.is_set():
-            self._stop.clear()
-
-    def set_y(self, y=None, step=None):
-        if step:
-            step = [0, step*self._xy_step_size]
-        elif y:
-            position = self.hardware.get_xy()
-            y = [position[0], y]
-
-        executed = self.hardware.set_xy(xy=y, rel_xy=step)
-        if not executed:
-            logging.error('Error moving XY stage. Make sure set_xy() in hardware class is defined.')
-
-        if self._stop.is_set():
-            self._stop.clear()
-
-    def set_xy(self, xy=None, home=None):
-        if home:
-            executed = self.hardware.home_xy()
-            if not executed:
-                logging.error('Error going home on XY stage. Make sure home_xy() is defined in hardware class.')
-            return
-
-        executed = self.hardware.set_xy(xy=xy)
-        if not executed:
-            logging.error('Error moving XY stage. Make sure set_xy() in hardware class is defined.')
-
-        if self._stop.is_set():
-            self._stop.clear()
-
-    def set_xy_home(self):
-        executed = self.hardware.set_xy_home()
-        if not executed:
-            logging.error('Error setting home on XY stage. Make sure set_xy_home() is defined in hardware class.')
-
-    def set_z(self, height=None, step=None, home=None):
-        if home:
-            executed = self.hardware.home_z()
-            if not executed:
-                logging.error('Error going home on Z stage. Make sure home_z() is defined in hardware class.')
-            return
-
-        executed = self.hardware.set_z(z=height, rel_z=step)
-        if not executed:
-            logging.error('Error moving Z stage. Make sure set_z() in hardware class is defined.')
-
-        if self._stop.is_set():
-            self._stop.clear()
-
-    def set_z_home(self):
-        executed = self.hardware.set_z_home()
-        if not executed:
-            logging.error('Error setting home on Z stage. Make sure set_z_home() is defined in hardware class.')
-
-    def set_objective(self, height=None, step=None, home=None):
-        if home:
-            executed = self.hardware.home_objective()
-            if not executed:
-                logging.error('Error going home on objective. Make sure home_objective() is defined in hardware.')
-            return
-
-        executed = self.hardware.set_objective(h=height, rel_h=step)
-        if not executed:
-            logging.error('Error moving objective. Make sure set_objective() in hardware class is defined.')
-
-        if self._stop.is_set():
-            self._stop.clear()
-
-    def set_objective_home(self):
-        executed = self.hardware.set_objective_home()
-        if not executed:
-            logging.error('Error setting objective home. Make sure set_objective_home() is defined in hardware class')
-
-    def focus(self, cell=None, capillary=None):
-        pass
-
-    def set_outlet(self, height=None, step=None, home=None):
-        if home:
-            executed = self.hardware.home_outlet()
-            if not executed:
-                logging.error('Error going home on outlet. Make sure home_outlet() is defined in hardware class.')
-            return
-
-        executed = self.hardware.set_outlet(h=height, rel_h=step)
-        if not executed:
-            logging.error('Error moving outlet. Make sure set_outlet() in hardware class is defined.')
-
-        if self._stop.is_set():
-            self._stop.clear()
-
-    def set_outlet_home(self):
-        executed = self.hardware.set_outlet_home()
-        if not executed:
-            logging.error('Error setting home on outlet. Make sure set_outlet_home() is defined in hardware class.')
-
-    def set_voltage(self, value):
-        executed = self.hardware.set_voltage(value)
-        if not executed:
-            logging.error('Error setting voltage. Make sure set_voltage() in hardware class is defined.')
-
-    def set_pfn(self, value):
-        executed = self.hardware.set_laser_parameters(pfn=value)
-        if not executed:
-            logging.error('Error setting laser parameter. Maker sure set_laser_parameters is defined in hardware class')
-
-    def set_attenuation(self, value):
-        executed = self.hardware.set_laser_parameters(att=value)
-        if not executed:
-            logging.error('Error setting laser parameter. Maker sure set_laser_parameters is defined in hardware class')
-
-    def set_burst(self, count):
-        executed = self.hardware.set_laser_parameters(burst=count)
-        if not executed:
-            logging.error('Error setting laser parameter. Maker sure set_laser_parameters is defined in hardware class')
-
-    def stop_xy_stage(self):
-        logging.warning('Stopping XY stage.')
-        executed = self.hardware.stop_xy()
-        if not executed:
-            logging.error('Error stopping XY stage. Make sure stop_xy() in hardware class is defined.')
-
-    def stop_outlet(self):
-        logging.warning('Stopping outlet motor.')
-        executed = self.hardware.stop_outlet()
-        if not executed:
-            logging.error('Error stopping outlet. Make sure stop_outlet() in hardware class is defined.')
-
-    def stop_objective(self):
-        logging.warning('Stopping objective motor.')
-        executed = self.hardware.stop_objective()
-        if not executed:
-            logging.error('Error stopping objective. Make sure stop_objective() in hardware class is defined.')
-
-    def stop_z_stage(self):
-        logging.warning('Stopping Z stage.')
-        executed = self.hardware.stop_z()
-        if not executed:
-            logging.error('Error stopping Z stage. Make sure stop_z() in hardware class is defined.')
-
-    def stop_pressure(self):
-        logging.warning('Stopping pressure.')
-        self.hardware.pressure_control.stopRinsePressure()
-
-    def stop_laser(self):
-        executed = self.hardware.laser_close()
-        if not executed:
-            logging.error('Error closing laser. Make sure laser_close() is properly defined in the hardware class.')
+    def stop_laser(self):  # keeper
+        self.hardware.laser_close()
         self.screen.laser_fire_check.setEnabled(False)
         self.screen.laser_timer.setText('0s')
         self._laser_on.clear()
-
-    def stop_voltage(self):
-        logging.warning('Stopping voltage.')
-        self.hardware.daq_board_control.change_voltage(0)
 
     def stop_all(self):
         # # fixme, write a nested function in here for each device.
@@ -1471,31 +1243,7 @@ class RunScreenController:
         self.hardware.image_control.close()
         sys.exit()
 
-    def rinse_pressure(self, off):
-        if not off:
-            logging.info('Applying rinse pressure.')
-            executed = self.hardware.pressure_rinse_start()
-            if not executed:
-                logging.error('Error rinsing pressure. Make sure pressure_rinse_start is defined in the hardware class')
-        else:
-            logging.info('Stopping rinse pressure.')
-            executed = self.hardware.pressure_rinse_stop()
-            if not executed:
-                logging.error('Error rinsing pressure. Make sure pressure_rinse_stop is defined in the hardware class.')
-
-    def pressure_valve(self, closed):
-        if not closed:
-            logging.info('Opening pressure valve.')
-            executed = self.hardware.pressure_valve_open()
-            if not executed:
-                logging.error('Error opening valve. Make sure pressure_valve_open is defined in the hardware class.')
-        else:
-            logging.info('Closing pressure valve.')
-            executed = self.hardware.pressure_valve_close()
-            if not executed:
-                logging.error('Error closing valve. Make sure pressure_valve_close is defined in the hardware class.')
-
-    def fire_laser(self):
+    def fire_laser(self):  # keeper
         def fire():
             pfn = self.screen.laser_pfn.value()
             attenuation = self.screen.laser_attenuation.value()
@@ -1515,7 +1263,7 @@ class RunScreenController:
     def voltage_on(self):
         pass
 
-    def laser_on(self):
+    def laser_on(self):  # keeper
         if self._laser_poll_flag:
             logging.info('Adding {}s to timer.'.format(self.hardware.laser_max_time))
             self.hardware.laser_max_time += self.hardware.laser_max_time
@@ -1543,16 +1291,6 @@ class RunScreenController:
                 self.screen.laser_fire_check.setChecked(False)
                 break
 
-    def stop_fire(self):
-        executed = self.hardware.laser_stop()
-        if not executed:
-            logging.error('Error stopping laser. Make sure laser_stop() is properly defined in the hardware class.')
-
-    def check_laser(self):
-        executed = self.hardware.laser_check()
-        if not executed:
-            logging.error('Error checking laser status. Make sure laser_check() is defined in the hardware class.')
-
     def check_system(self):
         if self.hardware.xy_stage_control and self.hardware.outlet_control and self.hardware.pressure_control and \
                 self.hardware.daq_board_control:  # fixme
@@ -1571,7 +1309,7 @@ class RunScreenController:
 
         if os.path.splitext(open_file_path)[1] != '.met':
             message = 'Invalid file chosen.'
-            BarracudaQt.ErrorMessageUI(message)
+            CEGraphic.ErrorMessageUI(message)
             return
 
         with open(open_file_path, 'rb') as open_file:
@@ -1579,12 +1317,12 @@ class RunScreenController:
                 data = pickle.load(open_file)
             except pickle.UnpicklingError:
                 message = 'Could not read in data from {}.'.format(open_file_path)
-                BarracudaQt.ErrorMessageUI(message)
+                CEGraphic.ErrorMessageUI(message)
             else:
                 if self.insert:
                     logging.info('insertloaded')
                     if self.insert.label != data.insert.label and self.insert.wells != data.insert.wells:
-                        BarracudaQt.ErrorMessageUI('The insert for this method does not match the insert for previously'
+                        CEGraphic.ErrorMessageUI('The insert for this method does not match the insert for previously'
                                                    ' loaded methods.')
                         return
                 else:
@@ -1623,6 +1361,74 @@ class RunScreenController:
         add_button.released.connect(lambda: self.add_method())
         self.screen.sequence_display.setCellWidget(row_count, 0, add_button)
 
+    # Neural Net Functions
+    def focus(self):
+        """Focuses the objective."""
+        def prepare_image(resized_image):
+            # Images are already resized, now change to array and resize again to (1, 1, height, width)
+            return resized_image
+
+        def user_focused():
+            focus_stop_flag.set()
+            self.hardware.objective_focus = self.hardware.get_objective()
+
+        def continue_focusing():
+            focus_pause_flag.clear()
+
+        def cancel_focusing():
+            focus_stop_flag.set()
+            focus_pause_flag.clear()
+
+        def prompt_user():
+            message = '10+ Attempts made at focusing. Manually focus objective and click \'Okay,\' or click \'Keep ' \
+                      'Trying\' to \nallow the network to continue focusing or cancel the run.'
+            CEGraphic.PermissionsMessageUI(permissions_message=message, pos_function=user_focused,
+                                           other_function=continue_focusing, other_label='Keep Trying',
+                                           neg_function=cancel_focusing)
+            focus_pause_flag.set()
+            while focus_pause_flag.is_set():
+                time.sleep(2)
+
+        focus_stop_flag = threading.Event()
+        focus_pause_flag = threading.Event()
+        attempts = 1
+        while True:
+            # Get an image and run the network to get a predicted distance from focus.
+            image = self.hardware.get_image()
+            image = prepare_image(image)
+            distance = self.hardware.focus_network.run(image)
+
+            # Move the objective according to predicted distance.
+            self.set_objective(step=-distance)
+
+            # Get a current image and run the network again to get a new predicted distance.
+            image = self.hardware.get_image()
+            image = prepare_image(image)
+            distance_new = self.hardware.focus_network.run(image)
+
+            # If the absolute value of the new distance is greater than that of the of the first, then the sign on the
+            # first was probably incorrect so move back to the initial position and then in the opposite direction.
+            if abs(distance_new) > abs(distance):
+                self.set_objective(step=2*distance)
+
+            # If the network predicts we are at zero, stop and record current position as the focus point.
+            elif distance_new == 0:
+                self.hardware.objective_focus = self.hardware.get_objective()
+                return
+
+            # If the attempts to get in focus exceed 10, prompt the user to choose: a) allow network to keep trying,
+            # b) manually set focus, or c) cancel the run.
+            if attempts > 10:
+                prompt_user()
+                attempts = 1
+
+            # If the stop flag is set then exit the focusing program.
+            if focus_stop_flag.is_set():
+                logging.info('Auto-Focusing stopped.')
+                return
+
+            attempts += 1
+
     # Run Control Functions
     def start_sequence(self):
         if self._pause_flag.is_set():
@@ -1640,6 +1446,7 @@ class RunScreenController:
 
     def end_sequence(self):
         logging.info('Stopping run ...')
+        self.hardware.set_voltage(0)
         self._stop_thread_flag.set()
 
     def run(self):
@@ -1670,12 +1477,12 @@ class RunScreenController:
             return True
 
         def move_inlet(inlet_travel):
-            self.set_z(step=inlet_travel)
+            self.hardware.set_z(rel_z=inlet_travel)
             time.sleep(2)
             return check_flags()
 
         def move_outlet(outlet_travel):
-            self.set_outlet(step=outlet_travel)
+            self.hardware.set_outlet(rel_h=outlet_travel)
             time.sleep(2)
             return check_flags()
 
@@ -1683,7 +1490,7 @@ class RunScreenController:
             if inlet_location is None:
                 logging.error('Unable to make next XY movement.')
                 return False
-            self.set_xy(inlet_location)
+            self.hardware.set_xy(xy=inlet_location)
             time.sleep(2)
             return check_flags()
 
@@ -1715,14 +1522,14 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if voltage_level:
-                self.set_voltage(voltage_level)
+                self.hardware.set_voltage(voltage_level)
 
             if pressure_state:
-                self.rinse_pressure(off=False)
+                self.hardware.pressure_rinse_start()
 
             time.sleep(duration)
-            self.set_voltage(0)
-            self.rinse_pressure(off=True)
+            self.hardware.set_voltage(0)
+            self.hardware.pressure_rinse_stop()
 
             return True
 
@@ -1737,10 +1544,10 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if pressure_state:
-                self.rinse_pressure(off=False)
+                self.hardware.pressure_rinse_start()
 
             time.sleep(duration)
-            self.rinse_pressure(off=True)
+            self.hardware.pressure_rinse_stop()
 
             return True
 
@@ -1758,15 +1565,15 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if step['SingleCell']:
-                self.focus()
-                self.find_cell()
+                logging.error('Unsupported: Single Cell')
+                return False
 
             if voltage_level:
-                self.set_voltage(voltage_level)
+                self.hardware.set_voltage(voltage_level)
 
             time.sleep(duration)
-            self.set_voltage(0)
-            self.rinse_pressure(off=True)
+            self.hardware.set_voltage(0)
+            self.hardware.pressure_rinse_stop()
 
             return True
 
@@ -1851,4 +1658,24 @@ class SystemScreenController:
         self.repository = repository
 
 
-pc = ProgramController()
+class NetworkController:
+    def __init__(self):
+        pass
+
+    def _prep_image_focus(self):
+        pass
+
+    def _prep_image_find(self):
+        pass
+
+    def focus(self):
+        pass
+
+    def find(self):
+        pass
+
+    def get_cell(self):
+        pass
+
+    def get_distance(self):
+        pass
