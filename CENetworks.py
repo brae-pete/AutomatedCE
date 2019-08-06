@@ -5,15 +5,20 @@ from __future__ import absolute_import
 # Standard Library Modules
 import pickle
 import logging
-
-# Installed Modules
-import numpy as np
-import cv2
+import time
 import random
 import copy
 import threading
 import itertools
 import math
+
+# Installed Modules
+import numpy as np
+import cv2
+import onnx
+from onnx_tf.backend import prepare
+from skimage.transform import resize
+from keras.preprocessing.image import img_to_array, load_img
 from keras import backend as K
 from keras.models import Model, load_model
 from keras.engine import Layer, InputSpec
@@ -87,8 +92,14 @@ class BarracudaCellDetector:
 
         return real_x1, real_y1, real_x2, real_y2
 
-    def _run_rpn(self, image_array):
-        pass
+    def _run_rpn(self, original_image):
+        image_array, ratio = self._format_image(original_image, self._model_config)
+
+        if K.image_dim_ordering() == 'tf':
+            image_array = np.transpose(image_array, (0, 2, 3, 1))
+
+        # get the feature maps and output from the RPN
+        [Y1, Y2, F] = self._model_rpn.predict(image_array)
 
     def _run_classifier(self, rpns):
         pass
@@ -109,7 +120,7 @@ class BarracudaCellDetector:
         else:
             return True
 
-    def get_cells(self, original_image):
+    def get_cells(self, original_image, debug=False):
         if original_image is None:
             return None
 
@@ -123,19 +134,6 @@ class BarracudaCellDetector:
 
         class_mapping = {v: k for k, v in class_mapping.items()}
         class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
-
-        num_features = 1024
-
-        if K.image_dim_ordering() == 'th':
-            input_shape_img = (3, None, None)
-            input_shape_features = (num_features, None, None)
-        else:
-            input_shape_img = (None, None, 3)
-            input_shape_features = (None, None, num_features)
-
-        all_imgs = []
-
-        classes = {}
 
         bbox_threshold = 0.8
 
@@ -204,21 +202,21 @@ class BarracudaCellDetector:
 
         all_dets = []
 
-        for key in bboxes:
-            bbox = np.array(bboxes[key])
+        bbox = np.array(bboxes['cell'])
 
-            new_boxes, new_probs = non_max_suppression_fast(bbox, np.array(probs[key]),
-                                                            overlap_thresh=0.5)
+        new_boxes, new_probs = non_max_suppression_fast(bbox, np.array(probs['cell']),
+                                                        overlap_thresh=0.5)
+        if debug:
             for jk in range(new_boxes.shape[0]):
                 (x1, y1, x2, y2) = new_boxes[jk, :]
 
                 (real_x1, real_y1, real_x2, real_y2) = self._get_real_coordinates(ratio, x1, y1, x2, y2)
 
                 cv2.rectangle(original_image, (real_x1, real_y1), (real_x2, real_y2), (
-                    int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])), 2)
+                    int(class_to_color['cell'][0]), int(class_to_color['cell'][1]), int(class_to_color['cell'][2])), 2)
 
-                textLabel = '{}: {}'.format(key, int(100 * new_probs[jk]))
-                all_dets.append((key, 100 * new_probs[jk]))
+                textLabel = '{}: {}'.format('cell', int(100 * new_probs[jk]))
+                all_dets.append(('cell', 100 * new_probs[jk]))
 
                 (retval, baseLine) = cv2.getTextSize(textLabel, cv2.FONT_HERSHEY_COMPLEX, 1, 1)
                 textOrg = (real_x1, real_y1 - 0)
@@ -229,110 +227,54 @@ class BarracudaCellDetector:
                               (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (255, 255, 255), -1)
                 cv2.putText(original_image, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
-        cv2.imshow('img', original_image)
-        cv2.waitKey(0)
+            cv2.imshow('img', original_image)
+            cv2.waitKey(0)
+
+        return new_boxes, new_probs
 
 
 class BarracudaFocusClassifier:
-    def __init__(self, net_file=None):
-        pass
+    _focus_increment = 3  # µm, 39 increments total (19 above and below 0)
+    _in_focus_index = 18
+    _default_focus_network_file = r'config\focus_net.onnx'
+    _focus_network = None
+
+    def __init__(self, net_file=None, load=False):
+        self.focus_network_file = net_file if net_file else self._default_focus_network_file
+
+        if load:
+            self.prepare_model()
+
+    @staticmethod
+    def _prepare_image(image):
+        image = img_to_array(image)
+        image = image[:, :, 0]
+        image = resize(image, (384, 512))
+        return_image = np.zeros((1, 1, 384, 512))
+        return_image[0][0] = image
+        return return_image
 
     def prepare_model(self):
-        pass
-
-    def get_focus(self, image):
-        pass
-
-
-def calc_iou(R, img_data, C, class_mapping):
-    bboxes = img_data['bboxes']
-    (width, height) = (img_data['width'], img_data['height'])
-    # get image dimensions for resizing
-    (resized_width, resized_height) = get_new_img_size(width, height, C.im_size)
-
-    gta = np.zeros((len(bboxes), 4))
-
-    for bbox_num, bbox in enumerate(bboxes):
-        # get the GT box coordinates, and resize to account for image resizing
-        gta[bbox_num, 0] = int(round(bbox['x1'] * (resized_width / float(width)) / C.rpn_stride))
-        gta[bbox_num, 1] = int(round(bbox['x2'] * (resized_width / float(width)) / C.rpn_stride))
-        gta[bbox_num, 2] = int(round(bbox['y1'] * (resized_height / float(height)) / C.rpn_stride))
-        gta[bbox_num, 3] = int(round(bbox['y2'] * (resized_height / float(height)) / C.rpn_stride))
-
-    x_roi = []
-    y_class_num = []
-    y_class_regr_coords = []
-    y_class_regr_label = []
-    IoUs = []  # for debugging only
-
-    for ix in range(R.shape[0]):
-        (x1, y1, x2, y2) = R[ix, :]
-        x1 = int(round(x1))
-        y1 = int(round(y1))
-        x2 = int(round(x2))
-        y2 = int(round(y2))
-
-        best_iou = 0.0
-        best_bbox = -1
-        for bbox_num in range(len(bboxes)):
-            curr_iou = iou([gta[bbox_num, 0], gta[bbox_num, 2], gta[bbox_num, 1], gta[bbox_num, 3]],
-                           [x1, y1, x2, y2])
-            if curr_iou > best_iou:
-                best_iou = curr_iou
-                best_bbox = bbox_num
-
-        if best_iou < C.classifier_min_overlap:
-            continue
+        try:
+            self._focus_network = onnx.load(self.focus_network_file)
+            self._focus_network = prepare(self._focus_network)
+        except OSError:
+            logging.error('Error loading networks.')
+            return False
         else:
-            w = x2 - x1
-            h = y2 - y1
-            x_roi.append([x1, y1, w, h])
-            IoUs.append(best_iou)
+            return True
 
-            if C.classifier_min_overlap <= best_iou < C.classifier_max_overlap:
-                # hard negative example
-                cls_name = 'bg'
-            elif C.classifier_max_overlap <= best_iou:
-                cls_name = bboxes[best_bbox]['class']
-                cxg = (gta[best_bbox, 0] + gta[best_bbox, 1]) / 2.0
-                cyg = (gta[best_bbox, 2] + gta[best_bbox, 3]) / 2.0
+    def get_focus(self, original_image):
+        if self._focus_network is None:
+            self.prepare_model()
 
-                cx = x1 + w / 2.0
-                cy = y1 + h / 2.0
+        image_array = self._prepare_image(original_image)
+        output = self._focus_network.run(image_array)
+        index = np.argmax(output.softmax[0])
+        focus = (index - self._in_focus_index)*self._focus_increment
+        score = max(output.softmax[0])
 
-                tx = (cxg - cx) / float(w)
-                ty = (cyg - cy) / float(h)
-                tw = np.log((gta[best_bbox, 1] - gta[best_bbox, 0]) / float(w))
-                th = np.log((gta[best_bbox, 3] - gta[best_bbox, 2]) / float(h))
-            else:
-                print('roi = {}'.format(best_iou))
-                raise RuntimeError
-
-        class_num = class_mapping[cls_name]
-        class_label = len(class_mapping) * [0]
-        class_label[class_num] = 1
-        y_class_num.append(copy.deepcopy(class_label))
-        coords = [0] * 4 * (len(class_mapping) - 1)
-        labels = [0] * 4 * (len(class_mapping) - 1)
-        if cls_name != 'bg':
-            label_pos = 4 * class_num
-            sx, sy, sw, sh = C.classifier_regr_std
-            coords[label_pos:4 + label_pos] = [sx * tx, sy * ty, sw * tw, sh * th]
-            labels[label_pos:4 + label_pos] = [1, 1, 1, 1]
-            y_class_regr_coords.append(copy.deepcopy(coords))
-            y_class_regr_label.append(copy.deepcopy(labels))
-        else:
-            y_class_regr_coords.append(copy.deepcopy(coords))
-            y_class_regr_label.append(copy.deepcopy(labels))
-
-    if len(x_roi) == 0:
-        return None, None, None, None
-
-    X = np.array(x_roi)
-    Y1 = np.array(y_class_num)
-    Y2 = np.concatenate([np.array(y_class_regr_label), np.array(y_class_regr_coords)], axis=1)
-
-    return np.expand_dims(X, axis=0), np.expand_dims(Y1, axis=0), np.expand_dims(Y2, axis=0), IoUs
+        return focus, score
 
 
 def apply_regr(x, y, w, h, tx, ty, tw, th):
@@ -1194,14 +1136,24 @@ class Config:
         self.model_path = 'model_frcnn.vgg.hdf5' if not config else config.model_path
 
 
-image = cv2.imread(
-    r'C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\BarracudaQt\netutil\zStacksZeros\s_image100_0.png')
-bar = BarracudaCellDetector()
+image2 = cv2.imread(r'netutil\zStacksZeros\s_image100_0.png')
+
+# bar = BarracudaCellDetector()
+# t = time.time()
+# bar.prepare_model()
+# print('Time to prepare cell detector :: {}'.format(time.time() - t))
+# t = time.time()
+# results = bar.get_cells(image2)
+# print('Time to run cell detector :: {}'.format(time.time() - t))
+#
+# print(results)
+
+bar = BarracudaFocusClassifier()
+t = time.time()
 bar.prepare_model()
-# c = bar._model_config
-# c.num_rois = 32
-# with open(bar._default_network_config_file, 'wb') as fp:
-#     pickle.dump(c, fp)
+print('Time to prepare focus network :: {}'.format(time.time() - t))
+t = time.time()
+results = bar.get_focus(image2)
+print('Time to run focus network :: {}'.format(time.time() - t))
 
-
-bar.get_cells(image)
+print(results)
