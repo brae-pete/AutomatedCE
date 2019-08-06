@@ -4,16 +4,15 @@ import logging
 import time
 import ctypes
 
-# Custom Hardware Modules
-import DAQControl
-import ImageControl
-import OutletControl
-import XYControl
-import ZStageControl
-import ObjectiveControl
-import LaserControl
-import PressureControl
-
+# Custom Hardware Modules  fixme do a dynamic import so only those modules necessary are imported.
+from hardware import DAQControl
+from hardware import ImageControl
+from hardware import OutletControl
+from hardware import XYControl
+from hardware import ZStageControl
+from hardware import ObjectiveControl
+from hardware import LaserControl
+from hardware import PressureControl
 
 HOME = False
 
