@@ -19,6 +19,7 @@ from keras.models import Model, load_model
 from keras.engine import Layer, InputSpec
 from keras import initializers, regularizers
 from keras.engine.topology import Layer
+
 if K.backend() == 'tensorflow':
     import tensorflow as tf
 
@@ -86,6 +87,12 @@ class BarracudaCellDetector:
 
         return real_x1, real_y1, real_x2, real_y2
 
+    def _run_rpn(self, image_array):
+        pass
+
+    def _run_classifier(self, rpns):
+        pass
+
     def prepare_model(self):
         try:
             self._model_rpn = load_model(self.rpn_file,
@@ -103,7 +110,7 @@ class BarracudaCellDetector:
             return True
 
     def get_cells(self, original_image):
-        if not original_image:
+        if original_image is None:
             return None
 
         if not self._model_rpn or not self._model_classifier or not self._model_config:
@@ -115,9 +122,7 @@ class BarracudaCellDetector:
             class_mapping['bg'] = len(class_mapping)
 
         class_mapping = {v: k for k, v in class_mapping.items()}
-        print(class_mapping)
         class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
-        self._model_config.num_rois = 4
 
         num_features = 1024
 
@@ -154,6 +159,8 @@ class BarracudaCellDetector:
 
         for jk in range(R.shape[0] // self._model_config.num_rois + 1):
             rois = np.expand_dims(R[self._model_config.num_rois * jk:self._model_config.num_rois * (jk + 1), :], axis=0)
+            # print(rois.shape, jk, self._model_config.num_rois, R.shape[0])
+            # break
             if rois.shape[1] == 0:
                 break
 
@@ -455,9 +462,11 @@ def non_max_suppression_fast(boxes, probs, overlap_thresh=0.9, max_boxes=300):
     return boxes, probs
 
 
-def rpn_to_roi(rpn_layer, regr_layer, anchor_sizes, anchor_ratios, rpn_stride,
-               std_scaling, dim_ordering, use_regr=True, max_boxes=300, overlap_thresh=0.9):
-    regr_layer = regr_layer / std_scaling
+def rpn_to_roi(rpn_layer, regr_layer, C, dim_ordering, use_regr=True, max_boxes=300, overlap_thresh=0.9):
+    regr_layer = regr_layer / C.std_scaling
+
+    anchor_sizes = C.anchor_box_scales
+    anchor_ratios = C.anchor_box_ratios
 
     assert rpn_layer.shape[0] == 1
 
@@ -476,8 +485,8 @@ def rpn_to_roi(rpn_layer, regr_layer, anchor_sizes, anchor_ratios, rpn_stride,
     for anchor_size in anchor_sizes:
         for anchor_ratio in anchor_ratios:
 
-            anchor_x = (anchor_size * anchor_ratio[0]) / rpn_stride
-            anchor_y = (anchor_size * anchor_ratio[1]) / rpn_stride
+            anchor_x = (anchor_size * anchor_ratio[0]) / C.rpn_stride
+            anchor_y = (anchor_size * anchor_ratio[1]) / C.rpn_stride
             if dim_ordering == 'th':
                 regr = regr_layer[0, 4 * curr_layer:4 * curr_layer + 4, :, :]
             else:
@@ -1185,5 +1194,14 @@ class Config:
         self.model_path = 'model_frcnn.vgg.hdf5' if not config else config.model_path
 
 
-bar = BarracudaCellDetector(load=True)
+image = cv2.imread(
+    r'C:\Users\kalec\Documents\Research_Allbritton\BarracudaQt\BarracudaQt\netutil\zStacksZeros\s_image100_0.png')
+bar = BarracudaCellDetector()
+bar.prepare_model()
+# c = bar._model_config
+# c.num_rois = 32
+# with open(bar._default_network_config_file, 'wb') as fp:
+#     pickle.dump(c, fp)
 
+
+bar.get_cells(image)

@@ -1,3 +1,5 @@
 import CEControl
 
-pc = CEControl.ProgramController()
+if __name__ == '__main__':
+    from CENetworks import Config
+    pc = CEControl.ProgramController()
