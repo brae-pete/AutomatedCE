@@ -14,6 +14,9 @@ from hardware import ObjectiveControl
 from hardware import LaserControl
 from hardware import PressureControl
 
+# Network Module
+import CENetworks
+
 HOME = False
 
 
@@ -256,6 +259,9 @@ class BarracudaSystem(BaseSystem):
     xy_stage_upper_left = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
     xy_stage_inversion = [-1, -1]
 
+    _focus_network = CENetworks.BarracudaFocusClassifier()
+    _find_network = CENetworks.BarracudaCellDetector()
+
     def __init__(self):
         super(BarracudaSystem, self).__init__()
         self.laser_max_time = 600
@@ -307,6 +313,19 @@ class BarracudaSystem(BaseSystem):
         self.close_xy()
         self.close_z()
         return True
+
+    def prepare_networks(self):
+        self._focus_network.prepare_model()
+        self._find_network.prepare_model()
+
+    def get_focus(self, image=None):
+        return self._focus_network.get_focus(image)
+
+    def get_cells(self, image=None):
+        return self._find_network.get_cells(image)
+
+    def get_network_status(self):
+        return self._focus_network.loaded and self._find_network.loaded
 
     def get_image(self):
         with self._camera_lock:

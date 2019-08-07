@@ -1365,10 +1365,6 @@ class RunScreenController:
     # Neural Net Functions
     def focus(self):
         """Focuses the objective."""
-        def prepare_image(resized_image):
-            # Images are already resized, now change to array and resize again to (1, 1, height, width)
-            return resized_image
-
         def user_focused():
             focus_stop_flag.set()
             self.hardware.objective_focus = self.hardware.get_objective()
@@ -1390,32 +1386,46 @@ class RunScreenController:
             while focus_pause_flag.is_set():
                 time.sleep(2)
 
+        if self.hardware.system_id != 'BARRACUDA':
+            logging.error('Cannot auto focus on this system.')
+            return False
+
+        if not self.hardware.get_network_status():
+            logging.info('Loading networks. Takes up to 15-20 seconds normally.')
+            threading.Thread(target=self.hardware.prepare_networks).start()
+            start_time = time.time()
+            while not self.hardware.get_network_status():
+                if (time.time() - start_time) > 30:
+                    logging.error('Networks took too long to load.')
+                    return False
+                time.sleep(3)
+            logging.info('Networks loaded.')
+
         focus_stop_flag = threading.Event()
         focus_pause_flag = threading.Event()
         attempts = 1
+
         while True:
             # Get an image and run the network to get a predicted distance from focus.
             image = self.hardware.get_image()
-            image = prepare_image(image)
-            distance = self.hardware.focus_network.run(image)
+            distance, score = self.hardware.get_focus(image)
 
             # Move the objective according to predicted distance.
-            self.set_objective(step=-distance)
+            self.hardware.set_objective(rel_h=-distance)
 
             # Get a current image and run the network again to get a new predicted distance.
             image = self.hardware.get_image()
-            image = prepare_image(image)
-            distance_new = self.hardware.focus_network.run(image)
+            distance_new, score = self.hardware.get_focus(image)
 
             # If the absolute value of the new distance is greater than that of the of the first, then the sign on the
             # first was probably incorrect so move back to the initial position and then in the opposite direction.
             if abs(distance_new) > abs(distance):
-                self.set_objective(step=2*distance)
+                self.hardware.set_objective(rel_h=2*distance)
 
             # If the network predicts we are at zero, stop and record current position as the focus point.
             elif distance_new == 0:
                 self.hardware.objective_focus = self.hardware.get_objective()
-                return
+                return True
 
             # If the attempts to get in focus exceed 10, prompt the user to choose: a) allow network to keep trying,
             # b) manually set focus, or c) cancel the run.
@@ -1426,9 +1436,22 @@ class RunScreenController:
             # If the stop flag is set then exit the focusing program.
             if focus_stop_flag.is_set():
                 logging.info('Auto-Focusing stopped.')
-                return
+                return False
 
             attempts += 1
+
+    def find_cell(self):
+        cell_not_found = True
+        start_time = time.time()
+        max_time = 60
+
+        while cell_not_found:
+            if time.time() - start_time > max_time:
+                logging.info('Cell not found.')
+                return False
+
+            image = self.hardware.get_image()
+            cell_boxes, scores = self.hardware.get_cells(image)
 
     # Run Control Functions
     def start_sequence(self):

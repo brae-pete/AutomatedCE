@@ -36,6 +36,7 @@ class BarracudaCellDetector:
     _model_rpn = None
     _model_classifier = None
     _model_config = None
+    loaded = False
 
     def __init__(self, rpn_file=None, classifier_file=None, config_file=None, load=False):
         self.rpn_file = rpn_file if rpn_file else self._default_model_rpn_file
@@ -118,6 +119,7 @@ class BarracudaCellDetector:
             logging.error('Error loading networks.')
             return False
         else:
+            self.loaded = True
             return True
 
     def get_cells(self, original_image, debug=False):
@@ -237,7 +239,9 @@ class BarracudaFocusClassifier:
     _focus_increment = 3  # µm, 39 increments total (19 above and below 0)
     _in_focus_index = 18
     _default_focus_network_file = r'config\focus_net.onnx'
+    _default_image_path = r'recentImg.png'
     _focus_network = None
+    loaded = False
 
     def __init__(self, net_file=None, load=False):
         self.focus_network_file = net_file if net_file else self._default_focus_network_file
@@ -247,6 +251,7 @@ class BarracudaFocusClassifier:
 
     @staticmethod
     def _prepare_image(image):
+        """Take the image provided and return an array the network can work with."""
         image = img_to_array(image)
         image = image[:, :, 0]
         image = resize(image, (384, 512))
@@ -255,6 +260,7 @@ class BarracudaFocusClassifier:
         return return_image
 
     def prepare_model(self):
+        """Load the model from file."""
         try:
             self._focus_network = onnx.load(self.focus_network_file)
             self._focus_network = prepare(self._focus_network)
@@ -262,11 +268,16 @@ class BarracudaFocusClassifier:
             logging.error('Error loading networks.')
             return False
         else:
+            self.loaded = True
             return True
 
-    def get_focus(self, original_image):
+    def get_focus(self, original_image=None):
+        """Get distance from focus and prediction score based on original image."""
         if self._focus_network is None:
             self.prepare_model()
+
+        if original_image is None:
+            original_image = cv2.imread(self._default_image_path)
 
         image_array = self._prepare_image(original_image)
         output = self._focus_network.run(image_array)
@@ -1136,8 +1147,10 @@ class Config:
         self.model_path = 'model_frcnn.vgg.hdf5' if not config else config.model_path
 
 
-image2 = cv2.imread(r'netutil\zStacksZeros\s_image100_0.png')
-
+# image2 = cv2.imread(r'netutil\zStacksZeros\s_image100_0.png')
+# image3 = cv2.imread(r'netutil\zStacksZeros\s_image101_0.png')
+# image4 = cv2.imread(r'netutil\zStacksZeros\s_image102_0.png')
+#
 # bar = BarracudaCellDetector()
 # t = time.time()
 # bar.prepare_model()
@@ -1145,15 +1158,29 @@ image2 = cv2.imread(r'netutil\zStacksZeros\s_image100_0.png')
 # t = time.time()
 # results = bar.get_cells(image2)
 # print('Time to run cell detector :: {}'.format(time.time() - t))
-#
 # print(results)
-
-bar = BarracudaFocusClassifier()
-t = time.time()
-bar.prepare_model()
-print('Time to prepare focus network :: {}'.format(time.time() - t))
-t = time.time()
-results = bar.get_focus(image2)
-print('Time to run focus network :: {}'.format(time.time() - t))
-
-print(results)
+# t = time.time()
+# results = bar.get_cells(image3)
+# print('Time to run cell detector :: {}'.format(time.time() - t))
+# print(results)
+# t = time.time()
+# results = bar.get_cells(image4)
+# print('Time to run cell detector :: {}'.format(time.time() - t))
+# print(results)
+#
+# bar = BarracudaFocusClassifier()
+# t = time.time()
+# bar.prepare_model()
+# print('Time to prepare focus network :: {}'.format(time.time() - t))
+# t = time.time()
+# results = bar.get_focus(image2)
+# print('Time to run focus network :: {}'.format(time.time() - t))
+# print(results)
+# t = time.time()
+# results = bar.get_focus(image3)
+# print('Time to run focus network :: {}'.format(time.time() - t))
+# print(results)
+# t = time.time()
+# results = bar.get_focus(image4)
+# print('Time to run focus network :: {}'.format(time.time() - t))
+# print(results)

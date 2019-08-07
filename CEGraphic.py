@@ -956,6 +956,8 @@ class RunScreen(QtWidgets.QMainWindow):
 
     def clear_feed_scene(self):
         # fixme, has to be done twice because not all items are removed with one go, not sure why.
+        self.live_feed_scene.remove_crosshairs()
+
         for item in self.live_feed_scene.items():
             if item != self.feed_pointer:
                 self.live_feed_scene.removeItem(item)
