@@ -1067,6 +1067,8 @@ class AnimatedPushButton(QtWidgets.QPushButton):
 
 
 class GraphicsScene(QtWidgets.QGraphicsScene):
+    calibrating_crosshairs = QtCore.pyqtSignal()
+
     def __init__(self, parent=None):
         super(GraphicsScene, self).__init__(parent)
         self.controller = None
@@ -1081,6 +1083,8 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                            'RAREA': self.draw_clear_rect,
                            'SELECT': self.select_item}
         self.joystick = False
+        self.calibrating = False
+        self.crosshair_location = None
 
         self._selecting = False
         self._clearing = False
@@ -1271,6 +1275,11 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
         pass
 
     def draw_crosshairs(self, event):
+        if self.calibrating:
+            self.calibrating_crosshairs.emit()
+
+        self.crosshair_location = event
+
         crosshair_width = 2
         crosshair_length = 12
         center_radius = 4
@@ -2852,11 +2861,11 @@ class ErrorMessageUI(QtWidgets.QDialog):
 
 
 class PermissionsMessageUI(QtWidgets.QDialog):
-    def __init__(self, permissions_message=None, pos_function=None, neg_function=None, other_function=None, other_label=None):
+    def __init__(self, permissions_message=None, pos_function=None, neg_function=None, other_function=None, other_label=None, pos_label=None):
         super(PermissionsMessageUI, self).__init__()
         self.setWindowTitle('Permission')
         message = QtWidgets.QLabel(permissions_message)
-        self.pos_button = QtWidgets.QPushButton('Okay')
+        self.pos_button = QtWidgets.QPushButton('Okay') if not pos_label else QtWidgets.QPushButton(pos_label)
         self.neg_button = QtWidgets.QPushButton('Cancel')
 
         self.setMinimumWidth(300)

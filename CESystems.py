@@ -289,20 +289,20 @@ class BarracudaSystem(BaseSystem):
         pass
 
     def start_system(self):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        self.image_control = ImageControl.ImageControl(home=HOME)
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
+        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
+        # self.image_control = ImageControl.ImageControl(home=HOME)
+        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
+        #
+        # self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
+        #                                              current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
+        #                                              voltage_control=self._daq_voltage_control)
+        #
+        # self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
+        # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
-        self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
-                                                     current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
-                                                     voltage_control=self._daq_voltage_control)
-
-        self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
-        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
-
-        self._start_daq()
+        # self._start_daq()
         pass
 
     def close_system(self):

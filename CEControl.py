@@ -933,6 +933,7 @@ class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
     _pixel2um = None
+    _first_calibration_point = None
     _xy_step_size = 1  # 1 is µm, mm would be 1000
     _clearance_height = 10
     _run_thread = None
@@ -981,6 +982,9 @@ class RunScreenController:
 
     def _set_callbacks(self):
         """Assigns callbacks to all widgets and signals for the run screen."""
+        self.screen.temp_calibrate_button.released.connect(lambda: self.calibrate_system(True))
+        self.screen.live_feed_scene.calibrating_crosshairs.connect(lambda: self.calibrate_system(False))
+
         if self.hardware.xy_stage_control:
             self.screen.xy_up.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value()*self._xy_step_size]))
             self.screen.xy_down.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, -self.screen.xy_step_size.value()*self._xy_step_size]))
@@ -1230,6 +1234,44 @@ class RunScreenController:
                 break
 
     # Hardware Control Function
+    def calibrate_system(self, start):
+        if start:
+            if not self.screen.live_feed_scene.calibrating:
+                message = 'Follow the instructions in the output window to calibrate the system.'
+                CEGraphic.PermissionsMessageUI(message)
+
+                message = 'Calibrating Instructions' \
+                          '1. Move XY Stage to the upper left corner and click "Set Home" under XY Stage Control.\n' \
+                          '2. If you are doing single cell analysis, focus the objective (manually or automatically.\n' \
+                          '3. Once focused, select an object on the live feed.\n' \
+                          '4. Move the XY stage until the object is on the opposite side of the live feed.\n' \
+                          '5. Reselect the object.\n'
+                logging.info(message)
+            else:
+                logging.info('Ending Calibration')
+
+            self.screen.live_feed_scene.calibrating = not self.screen.live_feed_scene.calibrating
+        else:
+            if not self._first_calibration_point:
+                logging.info('First calibration point.')
+                self._first_calibration_point = [self.hardware.get_xy(), self.screen.live_feed_scene.crosshair_location]
+
+            else:
+                logging.info('Second calibration point.')
+                second_calibration_point = [self.hardware.get_xy(), self.screen.live_feed_scene.crosshair_location]
+
+                pixel_dx = second_calibration_point[1][0] - self._first_calibration_point[1][0]
+                meter_dx = second_calibration_point[0][0] - self._first_calibration_point[0][0]
+                pixel_dy = second_calibration_point[1][1] - self._first_calibration_point[1][1]
+                meter_dy = second_calibration_point[0][1] - self._first_calibration_point[0][1]
+                pixel_d = np.sqrt(pixel_dx**2 + pixel_dy**2)
+                meter_d = np.sqrt(meter_dx**2 + meter_dy**2)
+
+                self._pixel2um = meter_d / pixel_d
+
+                self._first_calibration_point = None
+                self.screen.live_feed_scene.calibrating = False
+                logging.info('Conversion is {}'.format(self._pixel2um))
 
     def stop_laser(self):  # keeper
         self.hardware.laser_close()
