@@ -955,7 +955,6 @@ class RunScreen(QtWidgets.QMainWindow):
             return QtGui.QPixmap('recentImg.png')
 
     def clear_feed_scene(self):
-        # fixme, has to be done twice because not all items are removed with one go, not sure why.
         self.live_feed_scene.remove_crosshairs()
 
         for item in self.live_feed_scene.items():
@@ -1192,6 +1191,7 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                 self._current_rect_item = None
             else:
                 highlighted_item.setZValue(-200)
+                self.draw_crosshairs(location)
 
     def draw_rect(self, event):
         if not self.joystick:

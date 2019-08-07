@@ -932,6 +932,7 @@ class SequenceScreenController:
 class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
+    _pixel2um = None
     _xy_step_size = 1  # 1 is µm, mm would be 1000
     _clearance_height = 10
     _run_thread = None
