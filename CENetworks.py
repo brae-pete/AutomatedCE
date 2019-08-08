@@ -11,6 +11,7 @@ import copy
 import threading
 import itertools
 import math
+import os
 
 # Installed Modules
 import numpy as np
@@ -116,7 +117,7 @@ class BarracudaCellDetector:
                 self._model_config = pickle.load(fp)
 
         except (OSError, ValueError):
-            logging.error('Error loading networks.')
+            logging.error('Error loading networks from {} and {}.'.format(self.rpn_file, self.classifier_file))
             return False
         else:
             self.loaded = True
@@ -265,7 +266,7 @@ class BarracudaFocusClassifier:
             self._focus_network = onnx.load(self.focus_network_file)
             self._focus_network = prepare(self._focus_network)
         except OSError:
-            logging.error('Error loading networks.')
+            logging.error('Error loading networks from {}.'.format(self.focus_network_file))
             return False
         else:
             self.loaded = True
@@ -278,14 +279,28 @@ class BarracudaFocusClassifier:
 
         if original_image is None:
             original_image = cv2.imread(self._default_image_path)
+            if original_image is None:
+                logging.error('No image provided or found.')
+                return None
 
         image_array = self._prepare_image(original_image)
         output = self._focus_network.run(image_array)
+
+        # Network returns an array of all distances with the probability of each. Find distance with highest.
         index = np.argmax(output.softmax[0])
         focus = (index - self._in_focus_index)*self._focus_increment
+        # other = output.softmax[output.softmax != focus]
+        # index = np.argmax(other)
+        # focus = (index - self._in_focus_index) * self._focus_increment
+
         score = max(output.softmax[0])
 
         return focus, score
+
+
+# All code below is provided courtesy of Kevin Bardool and can be found at:
+# https://github.com/kbardool/keras-frcnn
+# Minor alterations made to fit our project.
 
 
 def apply_regr(x, y, w, h, tx, ty, tw, th):
@@ -1168,19 +1183,23 @@ class Config:
 # print('Time to run cell detector :: {}'.format(time.time() - t))
 # print(results)
 #
-# bar = BarracudaFocusClassifier()
-# t = time.time()
-# bar.prepare_model()
-# print('Time to prepare focus network :: {}'.format(time.time() - t))
-# t = time.time()
-# results = bar.get_focus(image2)
-# print('Time to run focus network :: {}'.format(time.time() - t))
-# print(results)
-# t = time.time()
-# results = bar.get_focus(image3)
-# print('Time to run focus network :: {}'.format(time.time() - t))
-# print(results)
-# t = time.time()
-# results = bar.get_focus(image4)
-# print('Time to run focus network :: {}'.format(time.time() - t))
-# print(results)
+bar = BarracudaFocusClassifier()
+t = time.time()
+bar.prepare_model()
+print('Time to prepare focus network :: {}'.format(time.time() - t))
+
+count = 1
+files = os.listdir(r"D:\zStacksResizedRinsed")
+random.shuffle(files)
+
+for image_file in files:
+    if count > 50:
+        break
+    t = time.time()
+    image = cv2.imread(r'D:\zStacksResizedRinsed\{}'.format(image_file))
+
+    print(image_file)
+    print(bar.get_focus(image))
+    print('Time to run focus network :: {}\n'.format(time.time() - t))
+
+    count += 1

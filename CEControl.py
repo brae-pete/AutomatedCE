@@ -409,9 +409,9 @@ class MethodScreenController:
         self.insert = None
 
         self.add_step(self._well_labels, self._well_labels)
-        self.set_callbacks()
+        self._set_callbacks()
 
-    def set_callbacks(self):
+    def _set_callbacks(self):
         self.screen.select_file.released.connect(lambda: self.load_insert())
         self.screen.image_frame.selectionChanged.connect(lambda: self.selecting())
         self.screen.reload_button.released.connect(lambda: self.reload_insert())
@@ -1068,6 +1068,7 @@ class RunScreenController:
         if self.hardware.image_control:
             self.screen.live_option.positive_selected.connect(lambda: self._switch_feed(True))
             self.screen.live_option.negative_selected.connect(lambda: self._switch_feed(False))
+            self.screen.focus_feed.released.connect(lambda: self.focus())
         else:
             self.screen.enable_live_feed(False)
 
@@ -1429,6 +1430,9 @@ class RunScreenController:
             while focus_pause_flag.is_set():
                 time.sleep(2)
 
+        if not self.hardware.image_control:
+            return None
+
         if self.hardware.system_id != 'BARRACUDA':
             logging.error('Cannot auto focus on this system.')
             return False
@@ -1484,17 +1488,39 @@ class RunScreenController:
             attempts += 1
 
     def find_cell(self):
-        cell_not_found = True
+        if not self.hardware.image_control:
+            return None
+
         start_time = time.time()
         max_time = 60
+        min_separation = 10
+        iterations = 1
 
-        while cell_not_found:
+        while True:
             if time.time() - start_time > max_time:
                 logging.info('Cell not found.')
-                return False
+                return None
 
             image = self.hardware.get_image()
             cell_boxes, scores = self.hardware.get_cells(image)
+            cell_boxes *= self._pixel2um
+
+            for cell in cell_boxes:
+                cell_radius = np.sqrt((cell[2]/2)**2 + (cell[3]/2)**2)
+                for other_cell in cell_boxes:
+                    if other_cell != cell:
+                        other_cell_radius = np.sqrt((other_cell[2]/2)**2 + (other_cell[3]/2)**2)
+                        centroid_separation = np.sqrt((cell[0]+cell[2]/2-other_cell[0]-other_cell[2]/2)**2 +
+                                                      (cell[1]+cell[3]/2-other_cell[1]-other_cell[3]/2)**2)
+                        cell_separation = centroid_separation - cell_radius - other_cell_radius
+                        if cell_separation < min_separation:
+                            break
+                else:
+                    return cell
+            else:
+                self.hardware.set_xy(rel_xy=[50*(-1**iterations+1)*(int((iterations+1) % 2)),
+                                             50*(-1**iterations)*(int(iterations % 2))])
+                iterations += 1
 
     # Run Control Functions
     def start_sequence(self):

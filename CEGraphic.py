@@ -833,6 +833,7 @@ class RunScreen(QtWidgets.QMainWindow):
 
     def init_insert_view(self):
         self.live_option = SwitchButton(w1='Live', w2='Insert', width=80)
+        self.focus_feed = QtWidgets.QPushButton('Temp Focus Button')
         self.live_feed_scene = GraphicsScene()
         self.live_feed_scene.setSceneRect(0, 0, 512, 384)
         self.live_feed_view = QtWidgets.QGraphicsView()
@@ -846,6 +847,7 @@ class RunScreen(QtWidgets.QMainWindow):
         control_widget = QtWidgets.QWidget()
         control_layout = QtWidgets.QHBoxLayout()
         control_layout.addWidget(self.live_option)
+        control_layout.addWidget(self.focus_feed)
         control_layout.addStretch()
         control_widget.setLayout(control_layout)
         live_feed_control.setWidget(control_widget)
