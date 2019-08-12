@@ -1230,13 +1230,17 @@ class RunScreenController:
             self.hardware.stop_feed()
             self._new_pixmap = self.screen.update_pixmap(camera=False)
             self.screen.feed_updated.emit()
+            time.sleep(.1)
             self._load_insert()
             self._live_feed.clear()
+            time.sleep(.1)
         else:
             logging.info('Switching to live feed.')
             self.screen.clear_feed_scene()
+            time.sleep(.1)
             self.hardware.start_feed()
             self._live_feed.set()
+            time.sleep(.1)
 
     def _load_insert(self):
         """Loads the insert for the method onto the live view."""
@@ -1615,6 +1619,9 @@ class RunScreenController:
     def run_method(self, method, repetitions):
         def check_flags():
             while self._pause_flag.is_set():
+                if self._stop_thread_flag.is_set():
+                    self._plot_data.clear()
+                    return False
                 self._plot_data.clear()
                 time.sleep(1)
                 continue
@@ -1713,10 +1720,15 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if step['SingleCell']:
-                self._pause_flag.set()
-                state = check_flags()
-                if not state:
-                    return False
+                if step['AutoSingleCell']:
+                    logging.info('Focusing, locating and lysing cell.')
+                    pass
+                else:
+                    logging.info('Run is paused. Locate and lyse cell.')
+                    self._pause_flag.set()
+                    state_n = check_flags()
+                    if not state_n:
+                        return False
 
             if pressure_state:
                 self.hardware.pressure_rinse_start()
