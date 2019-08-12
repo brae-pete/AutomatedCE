@@ -8,7 +8,7 @@ import time
 
 # Custom modules for CE
 import CESystems  # Hardware system classes
-import CEObjects  # CE-specific classes
+import CEObjects  # CE-specific data structures
 import CEGraphic  # GUI classes
 
 # Installed modules
@@ -16,6 +16,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
 
 HOME = False
+
+# fixme have the program not load and start the systems on startup (for obvious reasons)
 
 
 # Control Classes
@@ -985,7 +987,7 @@ class RunScreenController:
         self.screen.temp_calibrate_button.released.connect(lambda: self.calibrate_system(True))
         self.screen.live_feed_scene.calibrating_crosshairs.connect(lambda: self.calibrate_system(False))
 
-        if self.hardware.xy_stage_control:
+        if self.hardware.hasXYControl:
             self.screen.xy_up.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value()*self._xy_step_size]))
             self.screen.xy_down.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, -self.screen.xy_step_size.value()*self._xy_step_size]))
             self.screen.xy_right.released.connect(lambda: self.hardware.set_xy(rel_xy=[self.screen.xy_step_size.value()*self._xy_step_size, 0]))
@@ -1002,7 +1004,7 @@ class RunScreenController:
         else:
             self.screen.enable_xy_stage_form(False)
 
-        if self.hardware.objective_control:
+        if self.hardware.hasObjectiveControl:
             self.screen.objective_up.released.connect(lambda: self.hardware.set_objective(rel_h=self.screen.objective_step_size.value()))
             self.screen.objective_down.released.connect(lambda: self.hardware.set_objective(rel_h=-self.screen.objective_step_size.value()))
             self.screen.objective_value.returnPressed.connect(lambda: self.hardware.set_objective(h=float(self.screen.objective_value.text())))
@@ -1014,7 +1016,7 @@ class RunScreenController:
         else:
             self.screen.enable_objective_form(False)
 
-        if self.hardware.outlet_control:
+        if self.hardware.hasOutletControl:
             self.screen.outlet_up.released.connect(lambda: self.hardware.set_outlet(rel_h=self.screen.outlet_step_size.value()))
             self.screen.outlet_down.released.connect(lambda: self.hardware.set_outlet(rel_h=-self.screen.outlet_step_size.value()))
             self.screen.outlet_value.returnPressed.connect(lambda: self.hardware.set_outlet(h=float(self.screen.outlet_value.text())))
@@ -1026,7 +1028,7 @@ class RunScreenController:
         else:
             self.screen.enable_outlet_form(False)
 
-        if self.hardware.pressure_control:
+        if self.hardware.hasPressureControl:
             self.screen.pressure_rinse_state.positive_selected.connect(lambda: self.hardware.pressure_rinse_start())
             self.screen.pressure_rinse_state.negative_selected.connect(lambda: self.hardware.pressure_rinse_stop())
             self.screen.pressure_valve_state.positive_selected.connect(lambda: self.hardware.pressure_valve_open())
@@ -1035,7 +1037,7 @@ class RunScreenController:
         else:
             self.screen.enable_pressure_form(False)
 
-        if self.hardware.z_stage_control:
+        if self.hardware.hasInletControl:
             self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
             self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
             self.screen.z_value.returnPressed.connect(lambda: self.hardware.set_z(h=float(self.screen.z_value.text())))
@@ -1047,7 +1049,7 @@ class RunScreenController:
         else:
             self.screen.enable_z_stage_form(False)
 
-        if self.hardware.laser_control:
+        if self.hardware.hasLaserControl:
             self.screen.laser_pfn.valueChanged.connect(lambda: self.hardware.set_laser_parameters(pfn=self.screen.laser_pfn.value()))
             self.screen.laser_attenuation.valueChanged.connect(lambda: self.hardware.set_laser_parameters(att=self.screen.laser_attenuation.value()))
             self.screen.laser_burst_count.valueChanged.connect(lambda: self.hardware.set_laser_parameters(burst=self.screen.laser_burst_count.value()))
@@ -1059,13 +1061,13 @@ class RunScreenController:
         else:
             self.screen.enable_laser_form(False)
 
-        if self.hardware.daq_board_control:
+        if self.hardware.hasVoltageControl:
             self.screen.voltage_value.valueChanged.connect(lambda: self.hardware.set_voltage(self.screen.voltage_value.value()))
             self.screen.voltage_off.released.connect(lambda: self.hardware.stop_voltage())
         else:
             self.screen.enable_voltage_form(False)
 
-        if self.hardware.image_control:
+        if self.hardware.hasCameraControl:
             self.screen.live_option.positive_selected.connect(lambda: self._switch_feed(True))
             self.screen.live_option.negative_selected.connect(lambda: self._switch_feed(False))
             self.screen.focus_feed.released.connect(lambda: self.focus())
@@ -1083,10 +1085,11 @@ class RunScreenController:
         self.screen.xy_updated.connect(lambda: self.screen.live_feed_scene.draw_crosshairs(self._event))
 
     def _start_updating_display(self):
+        """Initializes all the processes for updating the live display (stage positions, live feed, etc)"""
         threading.Thread(target=self._update_live_feed, daemon=True).start()
         threading.Thread(target=self._update_plot, daemon=True).start()
 
-        if self.hardware.xy_stage_control:
+        if self.hardware.hasXYControl:
             value = self.hardware.get_xy()
             if value is not None:
                 self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
@@ -1095,7 +1098,7 @@ class RunScreenController:
                 logging.error('Live updates of stage/motor positions disabled.')
                 return
 
-        if self.hardware.z_stage_control:
+        if self.hardware.hasInletControl:
             value = self.hardware.get_z()
             if value is not None:
                 self.screen.z_value.setText("{:.3f}".format(float(value)))
@@ -1103,7 +1106,7 @@ class RunScreenController:
                 logging.error('Live updates of stage/motor positions disabled.')
                 return
 
-        if self.hardware.outlet_control:
+        if self.hardware.hasOutletControl:
             value = self.hardware.get_outlet()
             logging.info(value)
             if value is not None:
@@ -1112,7 +1115,7 @@ class RunScreenController:
                 logging.error('Live updates of stage/motor positions disabled.')
                 return
 
-        if self.hardware.objective_control:
+        if self.hardware.hasObjectiveControl:
             value = self.hardware.get_objective()
             logging.info(value)
             if value is not None:
@@ -1124,6 +1127,7 @@ class RunScreenController:
         threading.Thread(target=self._update_stages, daemon=True).start()
 
     def _value_display_interact(self, selected=False):
+        """Pauses or starts value update on stage positions when user clicks on or clicks off the edit box."""
         logging.info(selected)
         if selected:
             self._stop.set()
@@ -1131,35 +1135,37 @@ class RunScreenController:
             self._stop.clear()
 
     def _update_stages(self):
+        """Updates the live positions of the stages and motors in the edit boxes."""
         while True:
             if self._stop.is_set():
                 time.sleep(4*self._update_delay)
                 continue
 
-            if self.hardware.xy_stage_control:
+            if self.hardware.hasXYControl:
                 value = self.hardware.get_xy()
                 self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
                 self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
                 time.sleep(self._update_delay)
 
-            if self.hardware.z_stage_control:
+            if self.hardware.hasInletControl:
                 value = self.hardware.get_z()
                 self.screen.z_value.setText("{:.3f}".format(float(value)))
                 time.sleep(self._update_delay)
 
-            if self.hardware.objective_control:
+            if self.hardware.hasObjectiveControl:
                 value = self.hardware.get_objective()
                 self.screen.objective_value.setText("{:.3f}".format(float(value)))
                 time.sleep(self._update_delay)
 
-            if self.hardware.outlet_control:
+            if self.hardware.hasOutletControl:
                 value = self.hardware.get_outlet()
                 self.screen.outlet_value.setText("{:.3f}".format(float(value)))
                 time.sleep(self._update_delay)
 
     def _update_live_feed(self):
+        """Loads either the new image for the live feed or moves the crosshairs on the insert view."""
         while True:
-            if self._live_feed.is_set() and self.hardware.image_control:
+            if self._live_feed.is_set() and self.hardware.hasCameraControl:
                 image = self.hardware.get_image()
 
                 if image is None:
@@ -1169,7 +1175,7 @@ class RunScreenController:
                 self.screen.feed_updated.emit()
                 time.sleep(.25)
 
-            elif self.hardware.xy_stage_control:
+            elif self.hardware.hasXYControl:
                 event_location = self.hardware.get_xy()
                 self._event = [(self.hardware.xy_stage_size[0] - event_location[0]) * self._um2pix,
                                (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
@@ -1180,27 +1186,28 @@ class RunScreenController:
                 break
 
     def _update_plot(self):
+        """Updates the plots with new data from the DAQ."""
         # self._plot_data.set()  # fixme
+        if self.hardware.hasVoltageControl:
+            while True:
+                rfu = self.hardware.daq_board_control.data['ai3']
+                kv = self.hardware.daq_board_control.data['ai1']
+                ua = self.hardware.daq_board_control.data['ai2']
 
-        while True:
-            rfu = self.hardware.daq_board_control.data['ai3']
-            kv = self.hardware.daq_board_control.data['ai1']
-            ua = self.hardware.daq_board_control.data['ai2']
+                if self._plot_data.is_set():
+                    threading.Thread(target=self.screen.update_plots, args=(rfu, ua)).start()
 
-            if self._plot_data.is_set():
-                threading.Thread(target=self.screen.update_plots, args=(rfu, ua)).start()
+                if len(kv) > 4:
+                    try:
+                        kv = np.mean(kv[-4:-1])
+                        ua = np.mean(ua[-4:-1])
+                    except IndexError:
+                        return
 
-            if len(kv) > 4:
-                try:
-                    kv = np.mean(kv[-4:-1])
-                    ua = np.mean(ua[-4:-1])
-                    # logging.info('Voltage = {}, Current = {}'.format(kv, ua))
-                except IndexError:
-                    return
-
-            time.sleep(.25)
+                time.sleep(.25)
 
     def _switch_feed(self, live):
+        """Switches the feed between live feed from camera or insert view with live XY position."""
         if not live:
             logging.info('Switching to insert view.')
             self.hardware.stop_feed()
@@ -1215,11 +1222,13 @@ class RunScreenController:
             self._live_feed.set()
 
     def _load_insert(self):
+        """Loads the insert for the method onto the live view."""
         if self.insert:
             for well in self.insert.wells:
                 self.screen.live_feed_scene.add_shape(well.shape, well.bound_box)
 
     def _laser_timer(self, start_time):
+        """Countdown timer for laser device."""
         while True:
             if self._laser_on.is_set():
                 _laser_rem_time = self.hardware.laser_max_time - (time.time() - start_time)
@@ -1236,6 +1245,10 @@ class RunScreenController:
 
     # Hardware Control Function
     def calibrate_system(self, start):
+        """Walks user through the necessary system calibrations that can't be done automatically."""
+        if not self.hardware.hasXYControl:
+            return
+
         if start:
             if not self.screen.live_feed_scene.calibrating:
                 message = 'Follow the instructions in the output window to calibrate the system.'
@@ -1275,35 +1288,42 @@ class RunScreenController:
                 logging.info('Conversion is {}'.format(self._pixel2um))
 
     def stop_laser(self):  # keeper
+        """Stops laser as well as alters appropriate items on the view."""
         self.hardware.laser_close()
         self.screen.laser_fire_check.setEnabled(False)
         self.screen.laser_timer.setText('0s')
         self._laser_on.clear()
 
     def stop_all(self):
-        # # fixme, write a nested function in here for each device.
-        # logging.warning('Emergency stop on all hardware devices.')
-        # # Done in order of "If the next one would be the last one that executes properly, which would I want it to be"
-        # if self.hardware.laser_control:
-        #     self.stop_laser()
-        # if self.hardware.daq_board_control:
-        #     self.stop_voltage()
-        # if self.hardware.xy_stage_control:
-        #     self.stop_xy_stage()
-        # if self.hardware.objective_control:
-        #     self.stop_objective()
-        # if self.hardware.z_stage_control:
-        #     self.stop_z_stage()
-        # if self.hardware.outlet_control:
-        #     self.stop_outlet()
-        # if self.hardware.pressure_control:
-        #     self.stop_pressure()
-        # if self.hardware.image_control:
-        #     self.hardware.image_control.close()
-        self.hardware.image_control.close()
+        """Stops and closes all hardware devices. Exits program."""
+        if self.hardware.hasLaserControl:
+            threading.Thread(target=self.hardware.laser_close).start()
+
+        if self.hardware.hasVoltageControl:
+            threading.Thread(target=self.hardware.close_voltage).start()
+
+        if self.hardware.hasXYControl:
+            threading.Thread(target=self.hardware.close_xy).start()
+
+        if self.hardware.hasOutletControl:
+            threading.Thread(target=self.hardware.close_outlet).start()
+
+        if self.hardware.hasInletControl:
+            threading.Thread(target=self.hardware.close_z).start()
+
+        if self.hardware.hasPressureControl:
+            threading.Thread(target=self.hardware.pressure_close).start()
+
+        if self.hardware.hasObjectiveControl:
+            threading.Thread(target=self.hardware.close_objective).start()
+
+        if self.hardware.hasCameraControl:
+            threading.Thread(target=self.hardware.close_image).start()
+
         sys.exit()
 
-    def fire_laser(self):  # keeper
+    def fire_laser(self):
+        """Fires the laser."""
         def fire():
             pfn = self.screen.laser_pfn.value()
             attenuation = self.screen.laser_attenuation.value()
@@ -1320,10 +1340,8 @@ class RunScreenController:
 
         threading.Thread(target=fire, daemon=True).start()  # Separate thread because it takes a few seconds.
 
-    def voltage_on(self):
-        pass
-
-    def laser_on(self):  # keeper
+    def laser_on(self):
+        """Turns on laser."""
         if self._laser_poll_flag:
             logging.info('Adding {}s to timer.'.format(self.hardware.laser_max_time))
             self.hardware.laser_max_time += self.hardware.laser_max_time
@@ -1337,6 +1355,7 @@ class RunScreenController:
                 logging.error('Error starting laser. Make sure laser_standby() in hardware class is defined correctly.')
 
     def check_system(self):
+        """Performs any available system checks and logs output."""
         if self.hardware.xy_stage_control and self.hardware.outlet_control and self.hardware.pressure_control and \
                 self.hardware.daq_board_control:  # fixme
             return True
@@ -1455,7 +1474,7 @@ class RunScreenController:
         while True:
             # Get an image and run the network to get a predicted distance from focus.
             image = self.hardware.get_image()
-            distance, score = self.hardware.get_focus(image)
+            distance, _ = self.hardware.get_focus(image)
 
             # Move the objective according to predicted distance.
             self.hardware.set_objective(rel_h=-distance)
@@ -1488,12 +1507,16 @@ class RunScreenController:
             attempts += 1
 
     def find_cell(self):
-        if not self.hardware.image_control:
+        if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
             return None
+        else:
+            focused = self.focus()
+            if not focused:
+                return None
 
         start_time = time.time()
-        max_time = 60
-        min_separation = 10
+        max_time = 60  # s
+        min_separation = 10  # µm
         iterations = 1
 
         while True:
@@ -1520,6 +1543,10 @@ class RunScreenController:
             else:
                 self.hardware.set_xy(rel_xy=[50*(-1**iterations+1)*(int((iterations+1) % 2)),
                                              50*(-1**iterations)*(int(iterations % 2))])
+                focused = self.focus()
+                if not focused:
+                    return None
+
                 iterations += 1
 
     # Run Control Functions
@@ -1593,15 +1620,14 @@ class RunScreenController:
 
             if step['SeparationTypeVoltageRadio']:
                 voltage_level = float(step['ValuesVoltageEdit'])
-            elif step['SeparationTypeCurrentRadio']():
+            elif step['SeparationTypeCurrentRadio']:
                 logging.error('Unsupported: Separation with current')
                 return False
             elif step['SeparationTypePowerRadio']:
                 logging.error('Unsupported: Separation with power')
                 return False
             elif step['SeparationTypePressureRadio']:
-                logging.error('Unsupported: Separation with pressure')
-                return False
+                pressure_state = True
             elif step['SeparationTypeVacuumRadio']:
                 logging.error('Unsupported: Separation with vacuum')
                 return False
@@ -1645,12 +1671,12 @@ class RunScreenController:
             return True
 
         def inject():
+            pressure_state = False
             voltage_level = None
             if step['InjectionTypeVoltageRadio']:
                 voltage_level = float(step['ValuesVoltageEdit'])
             elif step['InjectionTypePressureRadio']:
-                logging.error('Unsupported: Injection with pressure.')
-                return False
+                pressure_state = True
             elif step['InjectionTypeVacuumRadio']:
                 logging.error('Unsupported: Injection with vacuum.')
                 return False
@@ -1658,8 +1684,17 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if step['SingleCell']:
-                logging.error('Unsupported: Single Cell')
-                return False
+                cell_box = self.find_cell()
+                if cell_box:
+                    cell_location = [cell_box[0]+cell_box[2]/2, cell_box[1]+cell_box[3]]
+                    state_n = move_xy_stage(cell_location)
+                    if not state_n:
+                        return False
+                else:
+                    return False
+
+            if pressure_state:
+                self.hardware.pressure_rinse_start()
 
             if voltage_level:
                 self.hardware.set_voltage(voltage_level)
@@ -1690,11 +1725,15 @@ class RunScreenController:
                     if not state:
                         return False
 
-                    cycles = int(step['TrayPositionsIncrementEdit'])
-                    if rep+1 > cycles:
-                        state = move_xy_stage(self.insert.get_next_well_xy(step['Inlet'], int(np.floor(rep/cycles))))
-                    else:
+                    try:
+                        cycles = int(step['TrayPositionsIncrementEdit'])
+                    except ValueError:
                         state = move_xy_stage(self.insert.get_well_xy(step['Inlet']))
+                    else:
+                        if rep+1 > cycles:
+                            state = move_xy_stage(self.insert.get_next_well_xy(step['Inlet'], int(np.floor(rep/cycles))))
+                        else:
+                            state = move_xy_stage(self.insert.get_well_xy(step['Inlet']))
                     if not state:
                         return False
 

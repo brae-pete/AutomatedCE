@@ -48,12 +48,14 @@ class BarracudaCellDetector:
             self.prepare_model()
 
     def _format_image(self, image, config):
+        """Formats the image to match the network input."""
         image, ratio = self._format_image_size(image, config)
         image = self._format_img_channels(image, config)
         return image, ratio
 
     @staticmethod
     def _format_image_size(image, config):
+        """Resizes input image."""
         img_min_side = float(config.im_size)
         height, width, _ = image.shape
 
