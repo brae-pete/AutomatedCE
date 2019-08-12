@@ -1185,23 +1185,23 @@ class Config:
 # print('Time to run cell detector :: {}'.format(time.time() - t))
 # print(results)
 #
-bar = BarracudaFocusClassifier()
-t = time.time()
-bar.prepare_model()
-print('Time to prepare focus network :: {}'.format(time.time() - t))
-
-count = 1
-files = os.listdir(r"D:\zStacksResizedRinsed")
-random.shuffle(files)
-
-for image_file in files:
-    if count > 50:
-        break
-    t = time.time()
-    image = cv2.imread(r'D:\zStacksResizedRinsed\{}'.format(image_file))
-
-    print(image_file)
-    print(bar.get_focus(image))
-    print('Time to run focus network :: {}\n'.format(time.time() - t))
-
-    count += 1
+# bar = BarracudaFocusClassifier()
+# t = time.time()
+# bar.prepare_model()
+# print('Time to prepare focus network :: {}'.format(time.time() - t))
+#
+# count = 1
+# files = os.listdir(r"D:\zStacksResizedRinsed")
+# random.shuffle(files)
+#
+# for image_file in files:
+#     if count > 50:
+#         break
+#     t = time.time()
+#     image = cv2.imread(r'D:\zStacksResizedRinsed\{}'.format(image_file))
+#
+#     print(image_file)
+#     print(bar.get_focus(image))
+#     print('Time to run focus network :: {}\n'.format(time.time() - t))
+#
+#     count += 1

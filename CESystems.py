@@ -24,18 +24,17 @@ class BaseSystem:
     """Interface controllers will interact with to control the different hardware systems."""
     _system_id = None
 
-    # Supported hardware checks for the program controllers
-    hasCameraControl = False
-    hasXYControl = False
-    hasInletControl = False
-    hasOutletControl = False
-    hasVoltageControl = False
-    hasPressureControl = False
-    hasObjectiveControl = False
-    hasLaserControl = False
-
     def __init__(self):
-        self.laser_max_time = None  # Needs to be defined for RunControllerScreen laser timer.
+        self.z_stage_control = None
+        self.outlet_control = None
+        self.objective_control = None
+        self.image_control = None
+        self.xy_stage_control = None
+        self.daq_board_control = None
+        self.laser_control = None
+        self.pressure_control = None
+
+        self.laser_max_time = None
 
     def calibrate_system(self, permissions_gui):
         """Calibrates the system."""
@@ -265,14 +264,6 @@ class BarracudaSystem(BaseSystem):
 
     def __init__(self):
         super(BarracudaSystem, self).__init__()
-        self.hasCameraControl = True
-        self.hasInletControl = True
-        self.hasLaserControl = True
-        self.hasObjectiveControl = True
-        self.hasOutletControl = True
-        self.hasVoltageControl = True
-        self.hasPressureControl = True
-        self.hasXYControl = True
         self.laser_max_time = 600
 
     def _start_daq(self):
@@ -298,18 +289,18 @@ class BarracudaSystem(BaseSystem):
         pass
 
     def start_system(self):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
+        # self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        # self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        # self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
         self.image_control = ImageControl.ImageControl(home=HOME)
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
-
+        # self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
+        #
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
                                                      voltage_control=self._daq_voltage_control)
-
-        self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
-        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
+        #
+        # self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
+        # self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
         self._start_daq()
         pass
@@ -361,7 +352,6 @@ class BarracudaSystem(BaseSystem):
         return True
 
     def close_xy(self):
-        self.xy_stage_control.stop()
         self.xy_stage_control.close()
         return True
 
@@ -485,7 +475,7 @@ class BarracudaSystem(BaseSystem):
         return True
 
     def close_voltage(self):
-        self.daq_board_control.change_voltage(0)
+        pass
 
     def set_voltage(self, v=None):
         self._start_daq()
@@ -569,6 +559,11 @@ class BarracudaSystem(BaseSystem):
     def pressure_valve_close(self):
         self.pressure_control.close_valve()
         return True
+
+
+class FinchSystem(BaseSystem):
+    def __init__(self):
+        super(FinchSystem, self).__init__()
 
 
 # NEEDS:

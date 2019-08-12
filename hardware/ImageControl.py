@@ -58,7 +58,12 @@ class ImageControl:
 
     def open(self):
         """Opens the MMC resources"""
-        self.mmc.loadSystemConfiguration(CONFIG_FILE)
+        try:
+            self.mmc.loadSystemConfiguration(CONFIG_FILE)
+        except MMCorePy.CMMError:
+            self.close()
+            time.sleep(1)
+            self.mmc.loadSystemConfiguration(CONFIG_FILE)
 
     def close(self):
         self.mmc.unloadAllDevices()
