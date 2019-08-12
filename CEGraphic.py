@@ -26,8 +26,9 @@ CUSTOM = True
 
 # Class for main gui
 class MainWindow(QtWidgets.QTabWidget):
-    def __init__(self):
+    def __init__(self, parent):
         QtWidgets.QTabWidget.__init__(self)
+        self.parent = parent
         self.setWindowTitle('Barracuda CE')
         self.setTabBar(MainTabBar())
         # if CUSTOM:
@@ -82,6 +83,9 @@ class MainWindow(QtWidgets.QTabWidget):
         temp_layout = QtWidgets.QVBoxLayout()
         temp_layout.addWidget(self.system_screen)
         system_tab.setLayout(temp_layout)
+
+    def closeEvent(self):
+        self.parent.close_program()
 
 
 class MainTabBar(QtWidgets.QTabBar):

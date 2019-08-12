@@ -31,7 +31,7 @@ class ProgramController:
         self.hardware.start_system()
 
         app = QtWidgets.QApplication(sys.argv)
-        self.program_window = CEGraphic.MainWindow()
+        self.program_window = CEGraphic.MainWindow(self)
 
         # Connect the views to the controllers.
         self.gs_screen = self.program_window.getting_started_screen
@@ -54,6 +54,9 @@ class ProgramController:
 
         self.program_window.show()
         sys.exit(app.exec_())
+
+    def close_program(self):
+        self.r_control.stop_all()
 
 
 class GettingStartedScreenController:
