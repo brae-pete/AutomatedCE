@@ -561,11 +561,6 @@ class BarracudaSystem(BaseSystem):
         return True
 
 
-class FinchSystem(BaseSystem):
-    def __init__(self):
-        super(FinchSystem, self).__init__()
-
-
 # NEEDS:
 # A motor for the outlet (don't really need encoder), and a z stage for the inlet and a
 # pressure control device (preferably the same one used on the Barracuda system)

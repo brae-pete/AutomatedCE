@@ -22,6 +22,8 @@ HOME = False
 
 # Control Classes
 class ProgramController:
+    """Builds the pieces of the program and puts them together. Ooooooh we could probably just make this a function
+    now that I think about it. Class is cooler though. hmmm"""
     def __init__(self):
         # Initialize system model, system hardware and the GUI
         self.repository = CEObjects.CERepository()
@@ -149,11 +151,10 @@ class InsertScreenController:
         self.screen.save_file.released.connect(lambda: self.save_insert())
 
     def _calibrate_xy(self):
-        self.hardware.xy_stage_upper_left = self.hardware.get_xy()
-        self._stage_offset = self.hardware.xy_stage_upper_left
+        self._stage_offset = self.hardware.get_xy()
 
     def highlight_well(self):
-        """ Prompts the view to highlight the well whose cell in the table is selected. """
+        """ Prompts the screen to highlight the well whose cell in the table is selected. """
         location = self.screen.insert_table.item(self.screen.insert_table.currentRow(), 1)
         if location:  # This check is necessary in case the last well is deleted.
             # Convert from the '({}, {})' format to [f, f]
@@ -213,6 +214,7 @@ class InsertScreenController:
         self.screen.image_frame.joystick = False  # Returns image frame to mouse functionality.
 
     def add_wells(self, location):
+        """Adds well at location to table."""
         if self.screen.image_frame.draw_shape == 'CIRCLE':
             self._add_row(location, pixels=False)
 
@@ -274,36 +276,42 @@ class InsertScreenController:
                 break
 
     def draw_circle(self):
+        """Adjusts settings and inputs on screen for drawing a circle."""
         self.screen.image_frame.draw_shape = 'CIRCLE'
         self.screen.circle_radius_input.setEnabled(True)
         self.screen.num_circles_horizontal_input.setEnabled(False)
         self.screen.num_circles_vertical_input.setEnabled(False)
 
     def draw_rectangle(self):
+        """Adjusts settings and inputs on screen for drawing a rectangle."""
         self.screen.image_frame.draw_shape = 'RECT'
         self.screen.circle_radius_input.setEnabled(False)
         self.screen.num_circles_horizontal_input.setEnabled(False)
         self.screen.num_circles_vertical_input.setEnabled(False)
 
     def draw_array(self):
+        """Adjusts settings and inputs on screen for drawing an array of circles."""
         self.screen.image_frame.draw_shape = 'ARRAY'
         self.screen.circle_radius_input.setEnabled(True)
         self.screen.num_circles_horizontal_input.setEnabled(True)
         self.screen.num_circles_vertical_input.setEnabled(True)
 
     def clear_object(self):
+        """Adjusts settings and inputs on screen for deleting an object."""
         self.screen.image_frame.draw_shape = 'REMOVE'
         self.screen.circle_radius_input.setEnabled(False)
         self.screen.num_circles_horizontal_input.setEnabled(False)
         self.screen.num_circles_vertical_input.setEnabled(False)
 
     def clear_area(self):
+        """Adjusts settings and inputs on screen for clearing a specified area."""
         self.screen.image_frame.draw_shape = 'RAREA'
         self.screen.circle_radius_input.setEnabled(False)
         self.screen.num_circles_horizontal_input.setEnabled(False)
         self.screen.num_circles_vertical_input.setEnabled(False)
 
     def select_file(self):
+        """Prompts user for insert file to eventually save to."""
         file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Select a file', os.getcwd(),
                                                           'INSERT(*.ins)')
         if file_path[0]:
@@ -318,6 +326,7 @@ class InsertScreenController:
         self.screen.file_name.setText(file_path)
 
     def load_insert(self):
+        """Prompts user for an insert file and loads the wells from that insert."""
         open_file_path = QtWidgets.QFileDialog.getOpenFileNames(self.screen, 'Choose previous session',
                                                                 os.getcwd(), 'INSERT(*.ins)')
         if open_file_path[0]:
@@ -347,6 +356,7 @@ class InsertScreenController:
                     self._add_row(well.location, well.label, pixels=False)
 
     def save_insert(self):
+        """Saves current insert in the previously selected file or opens a prompt if one is not selected."""
         if not self.screen.file_name.text():
             saved_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Specify file',
                                                                     os.getcwd(), 'INSERT(*.ins)')[0]
@@ -364,6 +374,7 @@ class InsertScreenController:
                 return
 
     def create_insert(self):
+        """Creates an insert object based on the current well objects."""
         row_count = self.screen.insert_table.rowCount()
         wells = []
 
@@ -414,6 +425,7 @@ class MethodScreenController:
         self._set_callbacks()
 
     def _set_callbacks(self):
+        """Assigns callback functions to widgets and signals in the screen."""
         self.screen.select_file.released.connect(lambda: self.load_insert())
         self.screen.image_frame.selectionChanged.connect(lambda: self.selecting())
         self.screen.reload_button.released.connect(lambda: self.reload_insert())
@@ -422,6 +434,7 @@ class MethodScreenController:
         self.screen.load_file_method.released.connect(lambda: self.load_method())
 
     def selecting(self):
+        """If the user is selecting an inlet for the step this function assigns the selected inlet."""
         if self.screen.image_frame.selectedItems():
             item = self.screen.image_frame.selectedItems()[0]
             if type(item) != QtWidgets.QGraphicsPixmapItem:
@@ -436,6 +449,7 @@ class MethodScreenController:
                         break
 
     def step_well_change(self, combobox):
+        """Handles the user selecting 'Select' as an inlet option, setting appropriate variables."""
         if combobox.currentText() == 'Select' and not self._populating_table:
             self._selecting = True
             self._step_well = combobox
@@ -443,6 +457,7 @@ class MethodScreenController:
     def add_step(self, inlets, outlets, action_input=None, inlet_input=None, outlet_input=None,
                  time_input=None, value_input=None, duration_input=None, summary_input=None,
                  inlet_travel_input=None, outlet_travel_input=None):
+        """Adds a new step to the table for the user to fill out."""
         if not self._populating_table:
             self._form_data.extend([{}])
         actions = ['Select', 'Separate', 'Rinse', 'Inject']
@@ -528,6 +543,7 @@ class MethodScreenController:
             self.screen.insert_table.setCellWidget(row_count-1, 0, remove_button)
 
     def remove_step(self):
+        """Removes the specified row from the table."""
         current_row = self.screen.insert_table.currentRow()
         self._form_data.remove(self._form_data[current_row])
         self.screen.insert_table.removeRow(current_row)
@@ -799,6 +815,7 @@ class MethodScreenController:
                 CEGraphic.ErrorMessageUI(error_message='Could not save the method.')
 
     def select_file(self):
+        """Prompts the user to select a file to eventually save to."""
         file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Select a file', os.getcwd(),
                                                           'METHOD(*.met)')
         if file_path[0]:
@@ -813,6 +830,7 @@ class MethodScreenController:
         self.screen.file_name_save.setText(file_path)
 
     def populate_table(self, method):
+        """Populates table with new insert."""
         self._populating_table = True
 
         self.screen.insert_table.clearContents()
@@ -1141,26 +1159,22 @@ class RunScreenController:
                 time.sleep(4*self._update_delay)
                 continue
 
-            if self.hardware.hasXYControl:
-                value = self.hardware.get_xy()
-                self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
-                self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
-                time.sleep(self._update_delay)
+            value = self.hardware.get_xy()
+            self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+            self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+            time.sleep(self._update_delay)
 
-            if self.hardware.hasInletControl:
-                value = self.hardware.get_z()
-                self.screen.z_value.setText("{:.3f}".format(float(value)))
-                time.sleep(self._update_delay)
+            value = self.hardware.get_z()
+            self.screen.z_value.setText("{:.3f}".format(float(value)))
+            time.sleep(self._update_delay)
 
-            if self.hardware.hasObjectiveControl:
-                value = self.hardware.get_objective()
-                self.screen.objective_value.setText("{:.3f}".format(float(value)))
-                time.sleep(self._update_delay)
+            value = self.hardware.get_objective()
+            self.screen.objective_value.setText("{:.3f}".format(float(value)))
+            time.sleep(self._update_delay)
 
-            if self.hardware.hasOutletControl:
-                value = self.hardware.get_outlet()
-                self.screen.outlet_value.setText("{:.3f}".format(float(value)))
-                time.sleep(self._update_delay)
+            value = self.hardware.get_outlet()
+            self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+            time.sleep(self._update_delay)
 
     def _update_live_feed(self):
         """Loads either the new image for the live feed or moves the crosshairs on the insert view."""
@@ -1296,25 +1310,35 @@ class RunScreenController:
 
     def stop_all(self):
         """Stops and closes all hardware devices. Exits program."""
+        self._stop_thread_flag.set()
+        self._stop.set()
+
         if self.hardware.hasLaserControl:
+            logging.warning('Stopping Laser')
             threading.Thread(target=self.hardware.laser_close).start()
 
         if self.hardware.hasVoltageControl:
+            logging.warning('Stopping Voltage')
             threading.Thread(target=self.hardware.close_voltage).start()
 
         if self.hardware.hasXYControl:
+            logging.warning('Stopping XY')
             threading.Thread(target=self.hardware.close_xy).start()
 
         if self.hardware.hasOutletControl:
+            logging.warning('Stopping Outlet')
             threading.Thread(target=self.hardware.close_outlet).start()
 
         if self.hardware.hasInletControl:
+            logging.warning('Stopping Inlet')
             threading.Thread(target=self.hardware.close_z).start()
 
         if self.hardware.hasPressureControl:
+            logging.warning('Stopping Pressure')
             threading.Thread(target=self.hardware.pressure_close).start()
 
         if self.hardware.hasObjectiveControl:
+            logging.warning('Stopping Objective')
             threading.Thread(target=self.hardware.close_objective).start()
 
         if self.hardware.hasCameraControl:
@@ -1788,26 +1812,3 @@ class SystemScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
-
-
-class NetworkController:
-    def __init__(self):
-        pass
-
-    def _prep_image_focus(self):
-        pass
-
-    def _prep_image_find(self):
-        pass
-
-    def focus(self):
-        pass
-
-    def find(self):
-        pass
-
-    def get_cell(self):
-        pass
-
-    def get_distance(self):
-        pass

@@ -2002,7 +2002,7 @@ class RinseDialog(QtWidgets.QDialog):
         wid.setFixedWidth(60)
         row.addWidget(wid)
 
-        wid = QtWidgets.QLabel('min')
+        wid = QtWidgets.QLabel('s')
         row.addWidget(wid)
 
         row.addStretch()
@@ -2146,7 +2146,7 @@ class RinseDialog(QtWidgets.QDialog):
         self.form_data['AtTimeEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
-        row.addWidget(QtWidgets.QLabel('min'))
+        row.addWidget(QtWidgets.QLabel('s'))
         row.addStretch()
         layout.addRow(row)
 
@@ -2360,7 +2360,7 @@ class SeparateDialog(QtWidgets.QDialog):
         self.form_data['ValuesDurationEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
-        row.addWidget(QtWidgets.QLabel('min'))
+        row.addWidget(QtWidgets.QLabel('s'))
         row.addStretch()
         layout.addRow(row)
 
@@ -2370,7 +2370,7 @@ class SeparateDialog(QtWidgets.QDialog):
         self.form_data['ValuesRampTimeEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
-        row.addWidget(QtWidgets.QLabel('min'))
+        row.addWidget(QtWidgets.QLabel('s'))
         row.addStretch()
         layout.addRow(row)
 
@@ -2499,7 +2499,7 @@ class SeparateDialog(QtWidgets.QDialog):
         self.form_data['AtTimeEdit'] = wid.text
         wid.setFixedWidth(60)
         row.addWidget(wid)
-        row.addWidget(QtWidgets.QLabel('min'))
+        row.addWidget(QtWidgets.QLabel('s'))
         row.addStretch()
         layout.addRow(row)
 
@@ -2722,7 +2722,7 @@ class InjectDialog(QtWidgets.QDialog):
         wid.setFixedWidth(60)
         row.addWidget(wid)
 
-        wid = QtWidgets.QLabel('min')
+        wid = QtWidgets.QLabel('s')
         row.addWidget(wid)
 
         row.addStretch()
