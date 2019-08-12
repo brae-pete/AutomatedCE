@@ -1700,6 +1700,7 @@ class RunScreenController:
         def inject():
             pressure_state = False
             voltage_level = None
+
             if step['InjectionTypeVoltageRadio']:
                 voltage_level = float(step['ValuesVoltageEdit'])
             elif step['InjectionTypePressureRadio']:
@@ -1711,13 +1712,9 @@ class RunScreenController:
             duration = float(step['ValuesDurationEdit'])
 
             if step['SingleCell']:
-                cell_box = self.find_cell()
-                if cell_box:
-                    cell_location = [cell_box[0]+cell_box[2]/2, cell_box[1]+cell_box[3]]
-                    state_n = move_xy_stage(cell_location)
-                    if not state_n:
-                        return False
-                else:
+                self._pause_flag.set()
+                state = check_flags()
+                if not state:
                     return False
 
             if pressure_state:

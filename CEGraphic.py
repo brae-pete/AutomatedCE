@@ -84,7 +84,7 @@ class MainWindow(QtWidgets.QTabWidget):
         temp_layout.addWidget(self.system_screen)
         system_tab.setLayout(temp_layout)
 
-    def closeEvent(self):
+    def closeEvent(self, *args, **kwargs):
         self.parent.close_program()
 
 
