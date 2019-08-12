@@ -1345,6 +1345,7 @@ class RunScreenController:
             threading.Thread(target=self.hardware.close_objective).start()
 
         if self.hardware.hasCameraControl:
+            logging.warning('Stopping Camera')
             threading.Thread(target=self.hardware.close_image).start()
 
         sys.exit()

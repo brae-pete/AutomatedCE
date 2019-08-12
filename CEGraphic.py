@@ -2548,8 +2548,9 @@ class InjectDialog(QtWidgets.QDialog):
         self.tray_positions_form = QtWidgets.QGroupBox('Tray Positions')
         self.init_tray_positions_form()
 
-        single_cell_check = QtWidgets.QCheckBox()
-        self.form_data['SingleCell'] = single_cell_check.isChecked
+        self.single_cells_form = QtWidgets.QGroupBox('Single Cell')
+        self.init_single_cell_form()
+
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         if pos_function:
             button_box.accepted.connect(lambda: pos_function('Inject', self.form_data))
@@ -2571,8 +2572,7 @@ class InjectDialog(QtWidgets.QDialog):
         form_layout.addLayout(left_column)
         form_layout.addLayout(right_column)
         main_layout.addLayout(form_layout)
-        bottom_options.addWidget(single_cell_check)
-        bottom_options.addWidget(QtWidgets.QLabel('Single Cell'))
+        bottom_options.addWidget(self.single_cells_form)
         bottom_options.addStretch()
         bottom_options.addWidget(button_box)
         main_layout.addLayout(bottom_options)
@@ -2838,6 +2838,36 @@ class InjectDialog(QtWidgets.QDialog):
         # layout.addRow(row)
 
         self.tray_positions_form.setLayout(layout)
+
+    def init_single_cell_form(self):
+        def enable_options(enabled):
+            auto_check.setEnabled(enabled)
+            manual_check.setEnabled(enabled)
+
+        layout = QtWidgets.QFormLayout()
+
+        single_cell_check = QtWidgets.QCheckBox()
+        auto_check = QtWidgets.QCheckBox()
+        manual_check = QtWidgets.QCheckBox()
+
+        auto_check.setEnabled(False)
+        manual_check.setEnabled(False)
+        single_cell_check.stateChanged.connect(lambda: enable_options(single_cell_check.isChecked()))
+
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(single_cell_check)
+        row.addWidget(QtWidgets.QLabel('Single Cell'))
+        row.addWidget(auto_check)
+        row.addWidget(QtWidgets.QLabel('Auto'))
+        row.addWidget(manual_check)
+        row.addWidget(QtWidgets.QLabel('Manual'))
+        layout.addRow(row)
+
+        self.form_data['SingleCell'] = single_cell_check.isChecked
+        self.form_data['AutoSingleCell'] = auto_check.isChecked
+        self.form_data['ManualSingleCell'] = manual_check.isChecked
+
+        self.single_cells_form.setLayout(layout)
 
 
 class ErrorMessageUI(QtWidgets.QDialog):
