@@ -1619,9 +1619,8 @@ class RunScreenController:
                 logging.info('Cell not found.')
                 return None
 
-            # image = self.hardware.get_image()  # fixme, needs to be read by cv2
             cell_data = self.hardware.get_cells()
-            logging.info(cell_data)
+            # logging.info(cell_data)
 
             if cell_data is None:
                 return None
@@ -1636,26 +1635,25 @@ class RunScreenController:
                 cell_boxes = adjusted_cell_boxes
 
             cell_boxes = [[float(y) * float(self._pixel2um) for y in x] for x in cell_boxes]
-            logging.info(cell_boxes)
+            # logging.info(cell_boxes)
 
             for cell in cell_boxes:
                 cell_radius = np.sqrt(((cell[2]-cell[0])/2)**2 + ((cell[3]-cell[1])/2)**2)
                 centroid = [(cell[2]-cell[0])/2 + cell[0], (cell[3]-cell[1])/2 + cell[1], cell_radius]
-                # self.screen.live_feed_scene.draw_circle(centroid, single=True)
-                # self.screen.live_feed_scene.draw_rect(cell, single=True)
+
                 for other_cell in cell_boxes:
                     if other_cell != cell:
                         other_cell_radius = np.sqrt(((other_cell[2]-other_cell[0])/2)**2 + ((other_cell[3]-other_cell[1])/2)**2)
                         centroid_separation = np.sqrt((cell[0]+cell[2]/2-other_cell[0]-other_cell[2]/2)**2 +
                                                       (cell[1]+cell[3]/2-other_cell[1]-other_cell[3]/2)**2)
                         cell_separation = centroid_separation - cell_radius - other_cell_radius
-                        logging.info('{},{},{},{}'.format(cell_separation, centroid_separation, cell_radius, other_cell_radius))
+                        # logging.info('{},{},{},{}'.format(cell_separation, centroid_separation, cell_radius, other_cell_radius))
                         if cell_separation < min_separation:
                             break
                 else:
-                    logging.info(cell)
-                    logging.info(centroid)
-                    self.hardware.set_xy(rel_xy=[centroid[1], -centroid[0]])
+                    # logging.info(cell)
+                    # logging.info(centroid)
+                    self.hardware.set_xy(rel_xy=[centroid[1], -centroid[0]])  # fixme
                     return cell
 
             return True
