@@ -94,7 +94,7 @@ class BarracudaCellDetector:
         real_x2 = int(round(x2 // ratio))
         real_y2 = int(round(y2 // ratio))
 
-        return real_x1, real_y1, real_x2, real_y2
+        return [real_x1, real_y1, real_x2, real_y2]
 
     def _run_rpn(self, original_image):
         image_array, ratio = self._format_image(original_image, self._model_config)
@@ -109,6 +109,9 @@ class BarracudaCellDetector:
         pass
 
     def prepare_model(self):
+        if self._model_classifier and self._model_rpn and self._model_config:
+            return True
+
         try:
             self._model_rpn = load_model(self.rpn_file,
                                          custom_objects={'FixedBatchNormalization': FixedBatchNormalization})
@@ -117,7 +120,6 @@ class BarracudaCellDetector:
                                                                 'FixedBatchNormalization': FixedBatchNormalization})
             with open(self.config_file, 'rb') as fp:
                 self._model_config = pickle.load(fp)
-
         except (OSError, ValueError):
             logging.error('Error loading networks from {} and {}.'.format(self.rpn_file, self.classifier_file))
             return False
@@ -127,7 +129,12 @@ class BarracudaCellDetector:
 
     def get_cells(self, original_image, debug=False):
         if original_image is None:
-            return None
+            original_image = cv2.imread(r'recentImg.png')
+            if original_image is None:
+                time.sleep(.25)
+                original_image = cv2.imread(r'recentImg.png')
+                if original_image is None:
+                    return None
 
         if not self._model_rpn or not self._model_classifier or not self._model_config:
             self.prepare_model()
@@ -207,35 +214,46 @@ class BarracudaCellDetector:
 
         all_dets = []
 
-        bbox = np.array(bboxes['cell'])
+        try:
+            # logging.info(bboxes)
+            bbox = np.array(bboxes['cell'])
+        except KeyError:
+            logging.info('No cells')
+            return None
 
         new_boxes, new_probs = non_max_suppression_fast(bbox, np.array(probs['cell']),
                                                         overlap_thresh=0.5)
-        if debug:
-            for jk in range(new_boxes.shape[0]):
-                (x1, y1, x2, y2) = new_boxes[jk, :]
+        logging.info('before get_rc {}'.format(new_boxes))
+        logging.info('ratio {}'.format(ratio))
 
-                (real_x1, real_y1, real_x2, real_y2) = self._get_real_coordinates(ratio, x1, y1, x2, y2)
+        ratioed_boxes = []
+        for jk in range(new_boxes.shape[0]):
+            (x1, y1, x2, y2) = new_boxes[jk, :]
 
-                cv2.rectangle(original_image, (real_x1, real_y1), (real_x2, real_y2), (
-                    int(class_to_color['cell'][0]), int(class_to_color['cell'][1]), int(class_to_color['cell'][2])), 2)
+            x = (self._get_real_coordinates(ratio, x1, y1, x2, y2))
+            logging.info(x)
+            ratioed_boxes.append(x)
 
-                textLabel = '{}: {}'.format('cell', int(100 * new_probs[jk]))
-                all_dets.append(('cell', 100 * new_probs[jk]))
+            # cv2.rectangle(original_image, (real_x1, real_y1), (real_x2, real_y2), (
+            #    int(class_to_color['cell'][0]), int(class_to_color['cell'][1]), int(class_to_color['cell'][2])), 2)
+            #
+            # textLabel = '{}: {}'.format('cell', int(100 * new_probs[jk]))
+            # all_dets.append(('cell', 100 * new_probs[jk]))
+            #
+            # (retval, baseLine) = cv2.getTextSize(textLabel, cv2.FONT_HERSHEY_COMPLEX, 1, 1)
+            # textOrg = (real_x1, real_y1 - 0)
+            #
+            # cv2.rectangle(original_image, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
+            #               (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (0, 0, 0), 2)
+            # cv2.rectangle(original_image, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
+            #               (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (255, 255, 255), -1)
+            # cv2.putText(original_image, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
-                (retval, baseLine) = cv2.getTextSize(textLabel, cv2.FONT_HERSHEY_COMPLEX, 1, 1)
-                textOrg = (real_x1, real_y1 - 0)
+            # cv2.imshow('img', original_image)
+            # cv2.waitKey(0)
 
-                cv2.rectangle(original_image, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
-                              (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (0, 0, 0), 2)
-                cv2.rectangle(original_image, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
-                              (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (255, 255, 255), -1)
-                cv2.putText(original_image, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
-
-            cv2.imshow('img', original_image)
-            cv2.waitKey(0)
-
-        return new_boxes, new_probs
+        logging.info('before return {}'.format(ratioed_boxes))
+        return ratioed_boxes, new_probs
 
 
 class BarracudaFocusClassifier:
@@ -1164,16 +1182,17 @@ class Config:
         self.model_path = 'model_frcnn.vgg.hdf5' if not config else config.model_path
 
 
-# image2 = cv2.imread(r'netutil\zStacksZeros\s_image100_0.png')
-# image3 = cv2.imread(r'netutil\zStacksZeros\s_image101_0.png')
-# image4 = cv2.imread(r'netutil\zStacksZeros\s_image102_0.png')
-#
+# image2 = cv2.imread(r'recentImg.png')
+# # image3 = cv2.imread(r'netutil\zStacksZeros\s_image101_0.png')
+# # image4 = cv2.imread(r'netutil\zStacksZeros\s_image102_0.png')
+# #
 # bar = BarracudaCellDetector()
 # t = time.time()
 # bar.prepare_model()
 # print('Time to prepare cell detector :: {}'.format(time.time() - t))
 # t = time.time()
-# results = bar.get_cells(image2)
+# results = bar.get_cells(image2, debug=True)
+
 # print('Time to run cell detector :: {}'.format(time.time() - t))
 # print(results)
 # t = time.time()

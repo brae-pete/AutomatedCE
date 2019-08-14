@@ -445,6 +445,12 @@ class RunScreen(QtWidgets.QMainWindow):
         self.temp_calibrate_layout.addStretch()
         self.temp_calibrate_button = QtWidgets.QPushButton('Calibrate FIXME')
         self.temp_calibrate_layout.addWidget(self.temp_calibrate_button)
+        self.temp_find_button = QtWidgets.QPushButton('FIND FIXME')
+        self.temp_calibrate_layout.addWidget(self.temp_find_button)
+        self.temp_pixel_conversion_button = QtWidgets.QPushButton('CONVERSION FIXME')
+        self.temp_calibrate_layout.addWidget(self.temp_pixel_conversion_button)
+        self.temp_laser_set = QtWidgets.QPushButton('LASER FIXME')
+        self.temp_calibrate_layout.addWidget(self.temp_laser_set)
         self.temp_calibrate_layout.addStretch()
 
         main_layout = QtWidgets.QVBoxLayout()
@@ -1203,7 +1209,17 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                 highlighted_item.setZValue(-200)
                 self.draw_crosshairs(location)
 
-    def draw_rect(self, event):
+    def draw_rect(self, event, single=False):
+        if single:
+            self._current_rect_item = QtWidgets.QGraphicsRectItem()
+            self._current_rect_item.setBrush(QtCore.Qt.red)
+            self._current_rect_item.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, False)
+            self._current_rect_item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
+            self.addItem(self._current_rect_item)
+            r = QtCore.QRectF(QtCore.QPointF(event[0], event[1]), QtCore.QPointF(event[2], event[3]))
+            self._current_rect_item.setRect(r)
+            return
+
         if not self.joystick:
             self._current_rect_item = QtWidgets.QGraphicsRectItem()
             self._current_rect_item.setBrush(QtCore.Qt.red)
@@ -1224,7 +1240,17 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
             self._current_rect_item.setRect(r)
         self._current_rect_item.setZValue(200)
 
-    def draw_circle(self, event):
+    def draw_circle(self, event, single=False):
+        if single:
+            self._current_ellipse_item = QtWidgets.QGraphicsEllipseItem()
+            self._current_ellipse_item.setBrush(QtCore.Qt.red)
+            self._current_ellipse_item.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, False)
+            self._current_ellipse_item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
+            self.addItem(self._current_ellipse_item)
+            r = QtCore.QRectF(event[0] - event[2], event[1] - event[2], event[2] * 2, event[2] * 2)
+            self._current_ellipse_item.setRect(r)
+            return
+
         if not self.joystick:
             self._current_ellipse_item = QtWidgets.QGraphicsEllipseItem()
             self._current_ellipse_item.setBrush(QtCore.Qt.red)
@@ -1281,10 +1307,8 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
         pass
 
     def draw_crosshairs(self, event):
-        if self.calibrating:
-            self.calibrating_crosshairs.emit()
-
         self.crosshair_location = event
+        self.calibrating_crosshairs.emit()
 
         crosshair_width = 2
         crosshair_length = 12

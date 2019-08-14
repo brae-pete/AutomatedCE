@@ -22,7 +22,7 @@ HOME = False
 
 class BaseSystem:
     """Interface controllers will interact with to control the different hardware systems."""
-    _system_id = None
+    system_id = None
 
     # Supported hardware checks for the program controllers
     hasCameraControl = False
@@ -232,7 +232,7 @@ class BaseSystem:
 
 
 class BarracudaSystem(BaseSystem):
-    _system_id = 'BARRACUDA'
+    system_id = 'BARRACUDA'
     _z_stage_com = "COM4"
     _outlet_com = "COM7"
     _objective_com = "COM8"
@@ -574,7 +574,7 @@ class BarracudaSystem(BaseSystem):
 # A motor for the outlet (don't really need encoder), and a z stage for the inlet and a
 # pressure control device (preferably the same one used on the Barracuda system)
 class OstrichSystem(BaseSystem):
-    _system_id = 'OSTRICH'
+    system_id = 'OSTRICH'
 
     _daq_dev = "/Dev1/"  # fixme not sure what to put here ("/Dev1/" is from Barracuda)
     _daq_voltage_control = 'ao1'

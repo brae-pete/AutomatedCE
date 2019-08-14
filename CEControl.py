@@ -955,7 +955,9 @@ class SequenceScreenController:
 class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
-    _pixel2um = None
+    _pixel2um = 1
+    _calibrating_ratio = False
+    _setting_laser = False
     _first_calibration_point = None
     _xy_step_size = 1  # 1 is µm, mm would be 1000
     _clearance_height = 10
@@ -968,6 +970,7 @@ class RunScreenController:
     _pause_flag = threading.Event()
     _live_feed = threading.Event()
     _plot_data = threading.Event()
+    _laser_position = None
 
     _stop.set()
     _stop.clear()
@@ -1005,8 +1008,11 @@ class RunScreenController:
 
     def _set_callbacks(self):
         """Assigns callbacks to all widgets and signals for the run screen."""
+        self.screen.temp_find_button.released.connect(lambda: self.find_cell())
         self.screen.temp_calibrate_button.released.connect(lambda: self.calibrate_system(True))
-        self.screen.live_feed_scene.calibrating_crosshairs.connect(lambda: self.calibrate_system(False))
+        self.screen.live_feed_scene.calibrating_crosshairs.connect(lambda: self._screen_selection())
+        self.screen.temp_pixel_conversion_button.released.connect(lambda: self._calibrating_image_ratio(False))
+        self.screen.temp_laser_set.released.connect(lambda: self._setting_laser_position(False))
 
         if self.hardware.hasXYControl:
             self.screen.xy_up.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value()*self._xy_step_size]))
@@ -1264,6 +1270,49 @@ class RunScreenController:
                 self.screen.laser_fire_check.setChecked(False)
                 break
 
+    def _calibrating_image_ratio(self, crosshair_set=False):
+        if crosshair_set:
+            if self._first_calibration_point:
+                logging.info('Second calibration point.')
+                second_calibration_point = [self.hardware.get_xy(), self.screen.live_feed_scene.crosshair_location]
+
+                pixel_dx = second_calibration_point[1][0] - self._first_calibration_point[1][0]
+                meter_dx = second_calibration_point[0][0] - self._first_calibration_point[0][0]
+                pixel_dy = second_calibration_point[1][1] - self._first_calibration_point[1][1]
+                meter_dy = second_calibration_point[0][1] - self._first_calibration_point[0][1]
+                pixel_d = np.sqrt(pixel_dx ** 2 + pixel_dy ** 2)
+                meter_d = np.sqrt(meter_dx ** 2 + meter_dy ** 2)
+                logging.info('{},{},{}'.format(pixel_dx, pixel_dy, pixel_d))
+                logging.info('{},{},{}'.format(meter_dx, meter_dy, meter_d))
+
+                self._pixel2um = meter_d / pixel_d
+
+                self._first_calibration_point = None
+                self.screen.live_feed_scene.calibrating = False
+                logging.info('Conversion is {}'.format(self._pixel2um))
+                self._calibrating_ratio = False
+            else:
+                logging.info('First calibration point.')
+                self._first_calibration_point = [self.hardware.get_xy(), self.screen.live_feed_scene.crosshair_location]
+        else:
+            self._calibrating_ratio = not self._calibrating_ratio
+
+    def _setting_laser_position(self, crosshair_set=False):
+        if crosshair_set:
+            self._laser_position = self.screen.live_feed_scene.crosshair_location
+            logging.info('Setting laser position to {}'.format(self._laser_position))
+            self._setting_laser = False
+        else:
+            self._setting_laser = not self._setting_laser
+
+    def _screen_selection(self):
+        if self._setting_laser:
+            self._setting_laser_position(True)
+        if self._calibrating_ratio:
+            self._calibrating_image_ratio(True)
+        else:
+            logging.info(self.screen.live_feed_scene.crosshair_location)
+
     # Hardware Control Function
     def calibrate_system(self, start):
         """Walks user through the necessary system calibrations that can't be done automatically."""
@@ -1506,7 +1555,9 @@ class RunScreenController:
         while True:
             # Get an image and run the network to get a predicted distance from focus.
             image = self.hardware.get_image()
-            distance, _ = self.hardware.get_focus(image)
+            distance, score = self.hardware.get_focus(image)
+            logging.info(distance, score)
+            return False
 
             # Move the objective according to predicted distance.
             self.hardware.set_objective(rel_h=-distance)
@@ -1514,6 +1565,7 @@ class RunScreenController:
             # Get a current image and run the network again to get a new predicted distance.
             image = self.hardware.get_image()
             distance_new, score = self.hardware.get_focus(image)
+            logging.info(distance, score)
 
             # If the absolute value of the new distance is greater than that of the of the first, then the sign on the
             # first was probably incorrect so move back to the initial position and then in the opposite direction.
@@ -1539,12 +1591,16 @@ class RunScreenController:
             attempts += 1
 
     def find_cell(self):
-        if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
-            return None
-        else:
-            focused = self.focus()
-            if not focused:
-                return None
+        # if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
+        #     return None
+        # else:
+        #     focused = self.focus()
+        #     if not focused:
+        #         return None
+        #
+        # return False
+        # fixme
+        self.hardware.prepare_networks()
 
         start_time = time.time()
         max_time = 60  # s
@@ -1556,30 +1612,49 @@ class RunScreenController:
                 logging.info('Cell not found.')
                 return None
 
-            image = self.hardware.get_image()
-            cell_boxes, scores = self.hardware.get_cells(image)
+            # image = self.hardware.get_image()  # fixme, needs to be read by cv2
+            cell_data = self.hardware.get_cells()
+            logging.info(cell_data)
+
+            if cell_data is None:
+                return None
+
+            cell_boxes, score = cell_data  # cell_boxes are in format [xmin, ymin, xmax, ymax]
+
+            if self._laser_position is not None:
+                cell_boxes[:, 0:2] -= self._laser_position
+                cell_boxes[:, 2:4] -= self._laser_position
+
             cell_boxes *= self._pixel2um
+            logging.info(cell_boxes)
 
             for cell in cell_boxes:
-                cell_radius = np.sqrt((cell[2]/2)**2 + (cell[3]/2)**2)
+                cell_radius = np.sqrt(((cell[2]-cell[0])/2)**2 + ((cell[3]-cell[1])/2)**2)
+                centroid = [(cell[2]-cell[0])/2 + cell[0], (cell[3]-cell[1])/2 + cell[1], cell_radius]
+                # self.screen.live_feed_scene.draw_circle(centroid, single=True)
+                self.screen.live_feed_scene.draw_rect(cell, single=True)
                 for other_cell in cell_boxes:
                     if other_cell != cell:
-                        other_cell_radius = np.sqrt((other_cell[2]/2)**2 + (other_cell[3]/2)**2)
+                        other_cell_radius = np.sqrt(((other_cell[2]-other_cell[0])/2)**2 + ((other_cell[3]-other_cell[1])/2)**2)
                         centroid_separation = np.sqrt((cell[0]+cell[2]/2-other_cell[0]-other_cell[2]/2)**2 +
                                                       (cell[1]+cell[3]/2-other_cell[1]-other_cell[3]/2)**2)
                         cell_separation = centroid_separation - cell_radius - other_cell_radius
+                        logging.info('{},{},{},{}'.format(cell_separation, centroid_separation, cell_radius, other_cell_radius))
                         if cell_separation < min_separation:
                             break
                 else:
+                    logging.info(cell)
                     return cell
-            else:
-                self.hardware.set_xy(rel_xy=[50*(-1**iterations+1)*(int((iterations+1) % 2)),
-                                             50*(-1**iterations)*(int(iterations % 2))])
-                focused = self.focus()
-                if not focused:
-                    return None
 
-                iterations += 1
+            return True
+            # else:
+            #     self.hardware.set_xy(rel_xy=[50*(-1**iterations+1)*(int((iterations+1) % 2)),
+            #                                  50*(-1**iterations)*(int(iterations % 2))])
+            #     focused = self.focus()
+            #     if not focused:
+            #         return None
+            #
+            #     iterations += 1
 
     # Run Control Functions
     def start_sequence(self):
