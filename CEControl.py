@@ -955,7 +955,7 @@ class SequenceScreenController:
 class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
-    _pixel2um = 1
+    _pixel2um = 0.48
     _calibrating_ratio = False
     _setting_laser = False
     _first_calibration_point = None
@@ -1591,6 +1591,13 @@ class RunScreenController:
             attempts += 1
 
     def find_cell(self):
+        def adjust_laser(cell_n):
+            x1 = cell_n[0] - self._laser_position[0]
+            y1 = cell_n[1] - self._laser_position[1]
+            x2 = cell_n[2] - self._laser_position[0]
+            y2 = cell_n[3] - self._laser_position[1]
+            return [x1, y1, x2, y2]
+
         # if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
         #     return None
         # else:
@@ -1621,18 +1628,21 @@ class RunScreenController:
 
             cell_boxes, score = cell_data  # cell_boxes are in format [xmin, ymin, xmax, ymax]
 
+            adjusted_cell_boxes = []
             if self._laser_position is not None:
-                cell_boxes[:, 0:2] -= self._laser_position
-                cell_boxes[:, 2:4] -= self._laser_position
+                for cell in cell_boxes:
+                    new_cell = adjust_laser(cell)
+                    adjusted_cell_boxes.append(new_cell)
+                cell_boxes = adjusted_cell_boxes
 
-            cell_boxes *= self._pixel2um
+            cell_boxes = [[float(y) * float(self._pixel2um) for y in x] for x in cell_boxes]
             logging.info(cell_boxes)
 
             for cell in cell_boxes:
                 cell_radius = np.sqrt(((cell[2]-cell[0])/2)**2 + ((cell[3]-cell[1])/2)**2)
                 centroid = [(cell[2]-cell[0])/2 + cell[0], (cell[3]-cell[1])/2 + cell[1], cell_radius]
                 # self.screen.live_feed_scene.draw_circle(centroid, single=True)
-                self.screen.live_feed_scene.draw_rect(cell, single=True)
+                # self.screen.live_feed_scene.draw_rect(cell, single=True)
                 for other_cell in cell_boxes:
                     if other_cell != cell:
                         other_cell_radius = np.sqrt(((other_cell[2]-other_cell[0])/2)**2 + ((other_cell[3]-other_cell[1])/2)**2)
@@ -1644,6 +1654,8 @@ class RunScreenController:
                             break
                 else:
                     logging.info(cell)
+                    logging.info(centroid)
+                    self.hardware.set_xy(rel_xy=[centroid[1], -centroid[0]])
                     return cell
 
             return True

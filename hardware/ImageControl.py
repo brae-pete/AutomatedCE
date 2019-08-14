@@ -95,7 +95,7 @@ class ImageControl:
             img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]  # img = np.float32(img)
             img = cv2.resize(img, (0, 0), fx=0.25, fy=0.25)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # img = self.image_conversion(img)
+            # img = cv2.equalizeHist(img)
 
             try:
                 img = pilImage.fromarray(img, 'L')
