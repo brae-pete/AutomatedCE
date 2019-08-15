@@ -135,7 +135,7 @@ class BarracudaCellDetector:
                     self.loaded = True
                     return True
 
-    def get_cells(self, original_image, debug=False):
+    def get_cells(self, original_image):
         if original_image is None:
             original_image = cv2.imread(self._default_image_path)
             if original_image is None:
@@ -148,16 +148,12 @@ class BarracudaCellDetector:
         if not self._model_rpn or not self._model_classifier or not self._model_config:
             self.prepare_model()
 
-        # tf.keras.backend.clear_session()
-        # K.clear_session()
-
         class_mapping = self._model_config.class_mapping
 
         if 'bg' not in class_mapping:
             class_mapping['bg'] = len(class_mapping)
 
         class_mapping = {v: k for k, v in class_mapping.items()}
-        class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
 
         bbox_threshold = 0.8
 
@@ -181,14 +177,11 @@ class BarracudaCellDetector:
         R[:, 2] -= R[:, 0]
         R[:, 3] -= R[:, 1]
 
-        # apply the spatial pyramid pooling to the proposed regions
         bboxes = {}
         probs = {}
 
         for jk in range(R.shape[0] // self._model_config.num_rois + 1):
             rois = np.expand_dims(R[self._model_config.num_rois * jk:self._model_config.num_rois * (jk + 1), :], axis=0)
-            # print(rois.shape, jk, self._model_config.num_rois, R.shape[0])
-            # break
             if rois.shape[1] == 0:
                 break
 
@@ -220,6 +213,7 @@ class BarracudaCellDetector:
                 (x, y, w, h) = rois[0, ii, :]
 
                 cls_num = np.argmax(p_cls[0, ii, :])
+
                 try:
                     (tx, ty, tw, th) = p_regr[0, ii, 4 * cls_num:4 * (cls_num + 1)]
                     tx /= self._model_config.classifier_regr_std[0]
@@ -229,15 +223,13 @@ class BarracudaCellDetector:
                     x, y, w, h = apply_regr(x, y, w, h, tx, ty, tw, th)
                 except:
                     pass
+
                 bboxes[cls_name].append(
                     [self._model_config.rpn_stride * x, self._model_config.rpn_stride * y,
                      self._model_config.rpn_stride * (x + w), self._model_config.rpn_stride * (y + h)])
                 probs[cls_name].append(np.max(p_cls[0, ii, :]))
 
-        all_dets = []
-
         try:
-            # logging.info(bboxes)
             bbox = np.array(bboxes['cell'])
         except KeyError:
             logging.info('No cells')
@@ -255,24 +247,6 @@ class BarracudaCellDetector:
             x = (self._get_real_coordinates(ratio, x1, y1, x2, y2))
             logging.info(x)
             ratioed_boxes.append(x)
-
-            # cv2.rectangle(original_image, (real_x1, real_y1), (real_x2, real_y2), (
-            #    int(class_to_color['cell'][0]), int(class_to_color['cell'][1]), int(class_to_color['cell'][2])), 2)
-            #
-            # textLabel = '{}: {}'.format('cell', int(100 * new_probs[jk]))
-            # all_dets.append(('cell', 100 * new_probs[jk]))
-            #
-            # (retval, baseLine) = cv2.getTextSize(textLabel, cv2.FONT_HERSHEY_COMPLEX, 1, 1)
-            # textOrg = (real_x1, real_y1 - 0)
-            #
-            # cv2.rectangle(original_image, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
-            #               (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (0, 0, 0), 2)
-            # cv2.rectangle(original_image, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
-            #               (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (255, 255, 255), -1)
-            # cv2.putText(original_image, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
-
-            # cv2.imshow('img', original_image)
-            # cv2.waitKey(0)
 
         logging.info('before return {}'.format(ratioed_boxes))
         return ratioed_boxes, new_probs
@@ -337,9 +311,6 @@ class BarracudaFocusClassifier:
                 if original_image is None:
                     logging.error('Unable to load image from default path {}'.format(self._default_image_path))
                     return None
-
-        # tf.keras.backend.clear_session()
-        # K.clear_session()
 
         image_array = self._prepare_image(original_image)
         with self._graph.as_default():

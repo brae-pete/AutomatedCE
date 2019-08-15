@@ -1610,19 +1610,22 @@ class RunScreenController:
             y2 = cell_n[3] - self._laser_position[1]
             return [x1, y1, x2, y2]
 
-        def smart_move():
+        def smart_move(repetitions):
             if iterations > (repetitions**2 + repetitions):
                 repetitions += 1
 
             if iterations <= repetitions**2:
-                move = [0, 50*(-1)**repetitions]
+                move = [0, 150*(-1)**repetitions]
             else:
-                move = [-50*(-1)**repetitions, 0]
+                move = [-150*(-1)**repetitions, 0]
 
             moved = self.hardware.set_xy(rel_xy=move)
             if not moved:
                 return False
             return True
+
+        repetitions = 1
+        iterations = 1
 
         if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
             return None
@@ -1646,8 +1649,6 @@ class RunScreenController:
         start_time = time.time()
         max_time = 60  # s
         min_separation = 10  # µm
-        iterations = 1
-        repetitions = 1
 
         while True:
             if time.time() - start_time > max_time:
@@ -1690,13 +1691,14 @@ class RunScreenController:
                     # self.hardware.set_xy(rel_xy=[centroid[1], -centroid[0]])
                     # return cell
             else:
-                smart_move()
+                return True
+                smart_move(repetitions)
                 time.sleep(0.25)
                 focused = self.focus()
                 if not focused:
                     return None
 
-                # iterations += 1
+                iterations += 1
 
     # Run Control Functions
     def start_sequence(self):
