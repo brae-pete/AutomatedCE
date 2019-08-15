@@ -1598,15 +1598,14 @@ class RunScreenController:
             y2 = cell_n[3] - self._laser_position[1]
             return [x1, y1, x2, y2]
 
-        # if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
-        #     return None
+        if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
+            return None
         # else:
         #     focused = self.focus()
         #     if not focused:
         #         return None
         #
         # return False
-        # fixme
         self.hardware.prepare_networks()
 
         start_time = time.time()

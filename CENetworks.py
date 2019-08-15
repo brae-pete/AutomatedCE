@@ -34,6 +34,7 @@ class BarracudaCellDetector:
     _default_network_config_file = r"config\barracuda_cell_network_config.cfg"
     _default_model_rpn_file = r"config\cell_detection_model_rpn.h5"
     _default_model_classifier_file = r"config\cell_detection_model_classifier.h5"
+    _default_image_path = r'recentImg.png'
     _model_rpn = None
     _model_classifier = None
     _model_config = None
@@ -129,11 +130,12 @@ class BarracudaCellDetector:
 
     def get_cells(self, original_image, debug=False):
         if original_image is None:
-            original_image = cv2.imread(r'recentImg.png')
+            original_image = cv2.imread(self._default_image_path)
             if original_image is None:
                 time.sleep(.25)
-                original_image = cv2.imread(r'recentImg.png')
+                original_image = cv2.imread(self._default_image_path)
                 if original_image is None:
+                    logging.error('Unable to load image from default path {}'.format(self._default_image_path))
                     return None
 
         if not self._model_rpn or not self._model_classifier or not self._model_config:
@@ -259,7 +261,7 @@ class BarracudaCellDetector:
 class BarracudaFocusClassifier:
     _focus_increment = 3  # µm, 39 increments total (19 above and below 0)
     _in_focus_index = 18
-    _default_focus_network_file = r'config\focus_net.onnx'
+    _default_focus_network_file = r'config\focus_model.onnx'
     _default_image_path = r'recentImg.png'
     _focus_network = None
     loaded = False
@@ -300,8 +302,11 @@ class BarracudaFocusClassifier:
         if original_image is None:
             original_image = cv2.imread(self._default_image_path)
             if original_image is None:
-                logging.error('No image provided or found.')
-                return None
+                time.sleep(.25)
+                original_image = cv2.imread(self._default_image_path)
+                if original_image is None:
+                    logging.error('Unable to load image from default path {}'.format(self._default_image_path))
+                    return None
 
         image_array = self._prepare_image(original_image)
         output = self._focus_network.run(image_array)
@@ -309,9 +314,6 @@ class BarracudaFocusClassifier:
         # Network returns an array of all distances with the probability of each. Find distance with highest.
         index = np.argmax(output.softmax[0])
         focus = (index - self._in_focus_index)*self._focus_increment
-        # other = output.softmax[output.softmax != focus]
-        # index = np.argmax(other)
-        # focus = (index - self._in_focus_index) * self._focus_increment
 
         score = max(output.softmax[0])
 
@@ -1182,7 +1184,7 @@ class Config:
         self.model_path = 'model_frcnn.vgg.hdf5' if not config else config.model_path
 
 
-# image2 = cv2.imread(r'recentImg.png')
+image2 = cv2.imread(r'recentImg.png')
 # # image3 = cv2.imread(r'netutil\zStacksZeros\s_image101_0.png')
 # # image4 = cv2.imread(r'netutil\zStacksZeros\s_image102_0.png')
 # #
@@ -1208,6 +1210,7 @@ class Config:
 # t = time.time()
 # bar.prepare_model()
 # print('Time to prepare focus network :: {}'.format(time.time() - t))
+# print(bar.get_focus(image2))
 #
 # count = 1
 # files = os.listdir(r"D:\zStacksResizedRinsed")
