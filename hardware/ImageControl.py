@@ -103,6 +103,15 @@ class ImageControl:
                 img = pilImage.fromarray(img)
             return img
 
+    def record_recent_image(self, filename):
+        if self.home:
+            time.sleep(0.25)
+        img = self.mmc.getLastImage()
+        ims = img.shape
+        img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        cv2.imwrite(filename, img)
+
     @staticmethod
     def image_conversion(img):
         """ Adjusts the contrast and brightness"""

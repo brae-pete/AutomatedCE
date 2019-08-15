@@ -453,6 +453,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.temp_calibrate_layout.addWidget(self.temp_laser_set)
         self.temp_focus_button = QtWidgets.QPushButton('FOCUS FIXME')
         self.temp_calibrate_layout.addWidget(self.temp_focus_button)
+        self.temp_pic_button = QtWidgets.QPushButton('PIC FIXME')
+        self.temp_calibrate_layout.addWidget(self.temp_pic_button)
         self.temp_calibrate_layout.addStretch()
 
         main_layout = QtWidgets.QVBoxLayout()

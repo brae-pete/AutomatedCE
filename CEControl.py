@@ -971,6 +971,7 @@ class RunScreenController:
     _live_feed = threading.Event()
     _plot_data = threading.Event()
     _laser_position = None
+    _t = 350
 
     _stop.set()
     _stop.clear()
@@ -1014,6 +1015,7 @@ class RunScreenController:
         self.screen.temp_pixel_conversion_button.released.connect(lambda: self._calibrating_image_ratio(False))
         self.screen.temp_laser_set.released.connect(lambda: self._setting_laser_position(False))
         self.screen.temp_focus_button.released.connect(lambda: threading.Thread(target=self.focus).start())
+        self.screen.temp_pic_button.released.connect(lambda: threading.Thread(target=self.take_training_images).start())
 
         if self.hardware.hasXYControl:
             self.screen.xy_up.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value()*self._xy_step_size]))
@@ -1508,6 +1510,48 @@ class RunScreenController:
         self.screen.sequence_display.setCellWidget(row_count, 0, add_button)
 
     # Neural Net Functions
+    def take_training_images(self):
+        logging.info('Taking Images')
+
+        stack = self._t
+        self._t += 1
+        save_location = "zStack_{}_{}_{}.png".format(int(time.time()), stack, 0)
+        increment = 3
+        num_pictures = 40
+        sleepy_time = 0.25
+
+        start_z = self.hardware.get_objective()
+
+        self.hardware.record_image(save_location)
+        # time.sleep(sleepy_time)
+        #
+        # start = self.hardware.get_objective()
+        # for _ in range(1, int(num_pictures / 2)):
+        #     self.hardware.set_objective(self.hardware.get_objective() + increment)
+        #     time.sleep(sleepy_time)
+        #     end = self.hardware.get_objective()
+        #     save_location = "zStack_{}_{}_{}.png".format(int(time.time()), stack, round(end - start))
+        #     logging.info(save_location)
+        #
+        #     self.hardware.record_image(save_location)
+        #     time.sleep(sleepy_time)
+        #
+        # self.hardware.set_objective(start_z)
+        # time.sleep(sleepy_time * 6)
+        #
+        # for _ in range(1, int(num_pictures / 2)):
+        #     self.hardware.set_objective(self.hardware.get_objective() - increment)
+        #     time.sleep(sleepy_time)
+        #     end = self.hardware.get_objective()
+        #     save_location = "zStack_{}_{}_{}.png".format(int(time.time()), stack, round(end - start))
+        #     logging.info(save_location)
+        #
+        #     self.hardware.record_image(save_location)
+        #     time.sleep(sleepy_time)
+        #
+        # self.hardware.set_objective(start_z)
+        # time.sleep(sleepy_time * 6)
+
     def focus(self):
         """Focuses the objective."""
         def user_focused():

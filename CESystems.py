@@ -336,6 +336,10 @@ class BarracudaSystem(BaseSystem):
     def get_network_status(self):
         return self._focus_network.loaded and self._find_network.loaded
 
+    def record_image(self, filename):
+        with self._camera_lock:
+            self.image_control.record_recent_image(filename)
+
     def get_image(self):
         with self._camera_lock:
             image = self.image_control.get_recent_image(size=self.image_size)
