@@ -955,7 +955,7 @@ class SequenceScreenController:
 class RunScreenController:
     _stop = threading.Event()
     _update_delay = 0.125
-    _pixel2um = 0.48
+    _pixel2um = 1
     _calibrating_ratio = False
     _setting_laser = False
     _first_calibration_point = None
@@ -1008,11 +1008,12 @@ class RunScreenController:
 
     def _set_callbacks(self):
         """Assigns callbacks to all widgets and signals for the run screen."""
-        self.screen.temp_find_button.released.connect(lambda: self.find_cell())
+        self.screen.temp_find_button.released.connect(lambda: threading.Thread(target=self.find_cell).start())
         self.screen.temp_calibrate_button.released.connect(lambda: self.calibrate_system(True))
         self.screen.live_feed_scene.calibrating_crosshairs.connect(lambda: self._screen_selection())
         self.screen.temp_pixel_conversion_button.released.connect(lambda: self._calibrating_image_ratio(False))
         self.screen.temp_laser_set.released.connect(lambda: self._setting_laser_position(False))
+        self.screen.temp_focus_button.released.connect(lambda: threading.Thread(target=self.focus).start())
 
         if self.hardware.hasXYControl:
             self.screen.xy_up.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value()*self._xy_step_size]))
@@ -1542,46 +1543,57 @@ class RunScreenController:
             threading.Thread(target=self.hardware.prepare_networks).start()
             start_time = time.time()
             while not self.hardware.get_network_status():
-                if (time.time() - start_time) > 30:
+                if (time.time() - start_time) > 60:
                     logging.error('Networks took too long to load.')
                     return False
                 time.sleep(3)
             logging.info('Networks loaded.')
 
+        focus_tolerance = 6
         focus_stop_flag = threading.Event()
         focus_pause_flag = threading.Event()
         attempts = 1
 
         while True:
             # Get an image and run the network to get a predicted distance from focus.
-            image = self.hardware.get_image()
-            distance, score = self.hardware.get_focus(image)
-            logging.info(distance, score)
-            return False
+            # image = self.hardware.get_image()
+            distance, score = self.hardware.get_focus()
+            logging.info('{}, {}'.format(distance, score))
 
             # Move the objective according to predicted distance.
+            logging.info('First Movement is {}'.format(-distance))
             self.hardware.set_objective(rel_h=-distance)
+            time.sleep(1)
 
             # Get a current image and run the network again to get a new predicted distance.
-            image = self.hardware.get_image()
-            distance_new, score = self.hardware.get_focus(image)
-            logging.info(distance, score)
+            # image = self.hardware.get_image()
+            distance_new, score = self.hardware.get_focus()
+            logging.info('{}, {}'.format(distance_new, score))
 
-            # If the absolute value of the new distance is greater than that of the of the first, then the sign on the
-            # first was probably incorrect so move back to the initial position and then in the opposite direction.
-            if abs(distance_new) > abs(distance):
-                self.hardware.set_objective(rel_h=2*distance)
-
-            # If the network predicts we are at zero, stop and record current position as the focus point.
-            elif distance_new == 0:
+            # If the network predicts we are at or near zero, stop and record current position as the focus point.
+            if focus_tolerance >= distance_new >= -focus_tolerance:
+                logging.info('Focused.')
                 self.hardware.objective_focus = self.hardware.get_objective()
                 return True
 
+            # If the absolute value of the new distance is greater than that of the of the first, then the sign on the
+            # first was probably incorrect so move back to the initial position and then in the opposite direction.
+            if abs(distance_new) >= abs(distance):
+                logging.info('Second Movement is {}'.format(2*distance))
+                # self.hardware.set_objective(rel_h=-distance_new)  # fixme possibly
+                self.hardware.set_objective(rel_h=2*distance)
+                time.sleep(1)
+
             # If the attempts to get in focus exceed 10, prompt the user to choose: a) allow network to keep trying,
             # b) manually set focus, or c) cancel the run.
-            if attempts > 10:
-                prompt_user()
-                attempts = 1
+            if attempts > 5:
+                return False
+                # prompt_user()
+                # attempts = 1
+            elif attempts == 3:
+                self.hardware.set_objective(rel_h=2)
+            elif attempts == 5:
+                self.hardware.set_objective(rel_h=2)
 
             # If the stop flag is set then exit the focusing program.
             if focus_stop_flag.is_set():
@@ -1600,13 +1612,15 @@ class RunScreenController:
 
         if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
             return None
-        # else:
-        #     focused = self.focus()
-        #     if not focused:
-        #         return None
-        #
-        # return False
+        else:
+            focused = self.focus()
+            if not focused:
+                return None
+            time.sleep(1)
+
+        s = time.time()
         self.hardware.prepare_networks()
+        logging.info('Prepared in {}'.format(time.time() - s))
 
         start_time = time.time()
         max_time = 60  # s
@@ -1639,6 +1653,8 @@ class RunScreenController:
             for cell in cell_boxes:
                 cell_radius = np.sqrt(((cell[2]-cell[0])/2)**2 + ((cell[3]-cell[1])/2)**2)
                 centroid = [(cell[2]-cell[0])/2 + cell[0], (cell[3]-cell[1])/2 + cell[1], cell_radius]
+                logging.info('Drawing Rectangle')
+                self.screen.live_feed_scene.draw_rect(cell, single=True)
 
                 for other_cell in cell_boxes:
                     if other_cell != cell:
@@ -1648,12 +1664,13 @@ class RunScreenController:
                         cell_separation = centroid_separation - cell_radius - other_cell_radius
                         # logging.info('{},{},{},{}'.format(cell_separation, centroid_separation, cell_radius, other_cell_radius))
                         if cell_separation < min_separation:
-                            break
+                            logging.info('BREAK! FIXME! IM BROKEN INSIDE')  # should be a break here.
                 else:
                     # logging.info(cell)
                     # logging.info(centroid)
-                    self.hardware.set_xy(rel_xy=[centroid[1], -centroid[0]])  # fixme
-                    return cell
+                    # self.hardware.set_xy(rel_xy=[centroid[1], -centroid[0]])  # fixme
+                    logging.info('RETURN! FIXME! IM BROKEN INSIDE')  # should be a return here.
+                    # return cell
 
             return True
             # else:

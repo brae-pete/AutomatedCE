@@ -451,6 +451,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.temp_calibrate_layout.addWidget(self.temp_pixel_conversion_button)
         self.temp_laser_set = QtWidgets.QPushButton('LASER FIXME')
         self.temp_calibrate_layout.addWidget(self.temp_laser_set)
+        self.temp_focus_button = QtWidgets.QPushButton('FOCUS FIXME')
+        self.temp_calibrate_layout.addWidget(self.temp_focus_button)
         self.temp_calibrate_layout.addStretch()
 
         main_layout = QtWidgets.QVBoxLayout()
@@ -1212,12 +1214,14 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
     def draw_rect(self, event, single=False):
         if single:
             self._current_rect_item = QtWidgets.QGraphicsRectItem()
-            self._current_rect_item.setBrush(QtCore.Qt.red)
+            # self._current_rect_item.setBrush(QtCore.Qt.red)
+            self._current_rect_item.setPen(QtGui.QPen(QtCore.Qt.green))
             self._current_rect_item.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, False)
             self._current_rect_item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
             self.addItem(self._current_rect_item)
             r = QtCore.QRectF(QtCore.QPointF(event[0], event[1]), QtCore.QPointF(event[2], event[3]))
             self._current_rect_item.setRect(r)
+            self._current_rect_item = None
             return
 
         if not self.joystick:

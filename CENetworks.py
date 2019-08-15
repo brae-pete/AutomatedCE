@@ -32,12 +32,14 @@ if K.backend() == 'tensorflow':
 
 class BarracudaCellDetector:
     _default_network_config_file = r"config\barracuda_cell_network_config.cfg"
-    _default_model_rpn_file = r"config\cell_detection_model_rpn.h5"
-    _default_model_classifier_file = r"config\cell_detection_model_classifier.h5"
+    _default_model_rpn_file = r"config\cell_detection_model_rpn_2.h5"
+    _default_model_classifier_file = r"config\cell_detection_model_classifier_2.h5"
     _default_image_path = r'recentImg.png'
     _model_rpn = None
     _model_classifier = None
     _model_config = None
+    _graph = None
+    _session = None
     loaded = False
 
     def __init__(self, rpn_file=None, classifier_file=None, config_file=None, load=False):
@@ -111,22 +113,27 @@ class BarracudaCellDetector:
 
     def prepare_model(self):
         if self._model_classifier and self._model_rpn and self._model_config:
+            logging.info('Model already loaded.')
             return True
 
-        try:
-            self._model_rpn = load_model(self.rpn_file,
-                                         custom_objects={'FixedBatchNormalization': FixedBatchNormalization})
-            self._model_classifier = load_model(self.classifier_file,
-                                                custom_objects={'RoiPoolingConv': RoiPoolingConv,
-                                                                'FixedBatchNormalization': FixedBatchNormalization})
-            with open(self.config_file, 'rb') as fp:
-                self._model_config = pickle.load(fp)
-        except (OSError, ValueError):
-            logging.error('Error loading networks from {} and {}.'.format(self.rpn_file, self.classifier_file))
-            return False
-        else:
-            self.loaded = True
-            return True
+        self._graph = tf.Graph()
+        with self._graph.as_default():
+            self._session = tf.Session()
+            with self._session.as_default():
+                try:
+                    self._model_rpn = load_model(self.rpn_file,
+                                                 custom_objects={'FixedBatchNormalization': FixedBatchNormalization})
+                    self._model_classifier = load_model(self.classifier_file,
+                                                        custom_objects={'RoiPoolingConv': RoiPoolingConv,
+                                                                        'FixedBatchNormalization': FixedBatchNormalization})
+                    with open(self.config_file, 'rb') as fp:
+                        self._model_config = pickle.load(fp)
+                except (OSError, ValueError):
+                    logging.error('Error loading networks from {} and {}.'.format(self.rpn_file, self.classifier_file))
+                    return False
+                else:
+                    self.loaded = True
+                    return True
 
     def get_cells(self, original_image, debug=False):
         if original_image is None:
@@ -141,6 +148,9 @@ class BarracudaCellDetector:
         if not self._model_rpn or not self._model_classifier or not self._model_config:
             self.prepare_model()
 
+        # tf.keras.backend.clear_session()
+        # K.clear_session()
+
         class_mapping = self._model_config.class_mapping
 
         if 'bg' not in class_mapping:
@@ -151,13 +161,19 @@ class BarracudaCellDetector:
 
         bbox_threshold = 0.8
 
+        s = time.time()
         image_array, ratio = self._format_image(original_image, self._model_config)
+        logging.info('Formatted in {}'.format(time.time() - s))
 
         if K.image_dim_ordering() == 'tf':
             image_array = np.transpose(image_array, (0, 2, 3, 1))
 
         # get the feature maps and output from the RPN
-        [Y1, Y2, F] = self._model_rpn.predict(image_array)
+        s = time.time()
+        with self._graph.as_default():
+            with self._session.as_default():
+                [Y1, Y2, F] = self._model_rpn.predict(image_array)
+        logging.info('Prediction in {}'.format(time.time() - s))
 
         R = rpn_to_roi(Y1, Y2, self._model_config, K.image_dim_ordering(), overlap_thresh=0.7)
 
@@ -184,7 +200,11 @@ class BarracudaCellDetector:
                 rois_padded[0, curr_shape[1]:, :] = rois[0, 0, :]
                 rois = rois_padded
 
-            [p_cls, p_regr] = self._model_classifier.predict([F, rois])
+            s = time.time()
+            with self._graph.as_default():
+                with self._session.as_default():
+                    [p_cls, p_regr] = self._model_classifier.predict([F, rois])
+            logging.info('Classification in {}'.format(time.time() - s))
 
             for ii in range(p_cls.shape[1]):
 
@@ -264,6 +284,8 @@ class BarracudaFocusClassifier:
     _default_focus_network_file = r'config\focus_model.onnx'
     _default_image_path = r'recentImg.png'
     _focus_network = None
+    _graph = None
+    _session = None
     loaded = False
 
     def __init__(self, net_file=None, load=False):
@@ -284,15 +306,23 @@ class BarracudaFocusClassifier:
 
     def prepare_model(self):
         """Load the model from file."""
-        try:
-            self._focus_network = onnx.load(self.focus_network_file)
-            self._focus_network = prepare(self._focus_network)
-        except OSError:
-            logging.error('Error loading networks from {}.'.format(self.focus_network_file))
-            return False
-        else:
-            self.loaded = True
+        if self._focus_network is not None:
+            logging.info('Model already loaded.')
             return True
+
+        self._graph = tf.Graph()
+        with self._graph.as_default():
+            self._session = tf.Session()
+            with self._session.as_default():
+                try:
+                    self._focus_network = onnx.load(self.focus_network_file)
+                    self._focus_network = prepare(self._focus_network)
+                except OSError:
+                    logging.error('Error loading networks from {}.'.format(self.focus_network_file))
+                    return False
+                else:
+                    self.loaded = True
+                    return True
 
     def get_focus(self, original_image=None):
         """Get distance from focus and prediction score based on original image."""
@@ -308,8 +338,13 @@ class BarracudaFocusClassifier:
                     logging.error('Unable to load image from default path {}'.format(self._default_image_path))
                     return None
 
+        # tf.keras.backend.clear_session()
+        # K.clear_session()
+
         image_array = self._prepare_image(original_image)
-        output = self._focus_network.run(image_array)
+        with self._graph.as_default():
+            with self._session.as_default():
+                output = self._focus_network.run(image_array)
 
         # Network returns an array of all distances with the probability of each. Find distance with highest.
         index = np.argmax(output.softmax[0])
