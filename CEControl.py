@@ -1610,6 +1610,20 @@ class RunScreenController:
             y2 = cell_n[3] - self._laser_position[1]
             return [x1, y1, x2, y2]
 
+        def smart_move():
+            if iterations > (repetitions**2 + repetitions):
+                repetitions += 1
+
+            if iterations <= repetitions**2:
+                move = [0, 50*(-1)**repetitions]
+            else:
+                move = [-50*(-1)**repetitions, 0]
+
+            moved = self.hardware.set_xy(rel_xy=move)
+            if not moved:
+                return False
+            return True
+
         if not self.hardware.hasCameraControl or not self.hardware.hasXYControl:
             return None
         else:
@@ -1618,14 +1632,22 @@ class RunScreenController:
                 return None
             time.sleep(1)
 
-        s = time.time()
-        self.hardware.prepare_networks()
-        logging.info('Prepared in {}'.format(time.time() - s))
+        if not self.hardware.get_network_status():
+            logging.info('Loading networks. Takes up to 15-20 seconds normally.')
+            threading.Thread(target=self.hardware.prepare_networks).start()
+            start_time = time.time()
+            while not self.hardware.get_network_status():
+                if (time.time() - start_time) > 60:
+                    logging.error('Networks took too long to load.')
+                    return False
+                time.sleep(3)
+            logging.info('Networks loaded.')
 
         start_time = time.time()
         max_time = 60  # s
         min_separation = 10  # µm
         iterations = 1
+        repetitions = 1
 
         while True:
             if time.time() - start_time > max_time:
@@ -1633,7 +1655,6 @@ class RunScreenController:
                 return None
 
             cell_data = self.hardware.get_cells()
-            # logging.info(cell_data)
 
             if cell_data is None:
                 return None
@@ -1648,12 +1669,10 @@ class RunScreenController:
                 cell_boxes = adjusted_cell_boxes
 
             cell_boxes = [[float(y) * float(self._pixel2um) for y in x] for x in cell_boxes]
-            # logging.info(cell_boxes)
 
             for cell in cell_boxes:
                 cell_radius = np.sqrt(((cell[2]-cell[0])/2)**2 + ((cell[3]-cell[1])/2)**2)
                 centroid = [(cell[2]-cell[0])/2 + cell[0], (cell[3]-cell[1])/2 + cell[1], cell_radius]
-                logging.info('Drawing Rectangle')
                 self.screen.live_feed_scene.draw_rect(cell, single=True)
 
                 for other_cell in cell_boxes:
@@ -1662,25 +1681,22 @@ class RunScreenController:
                         centroid_separation = np.sqrt((cell[0]+cell[2]/2-other_cell[0]-other_cell[2]/2)**2 +
                                                       (cell[1]+cell[3]/2-other_cell[1]-other_cell[3]/2)**2)
                         cell_separation = centroid_separation - cell_radius - other_cell_radius
-                        # logging.info('{},{},{},{}'.format(cell_separation, centroid_separation, cell_radius, other_cell_radius))
-                        if cell_separation < min_separation:
-                            logging.info('BREAK! FIXME! IM BROKEN INSIDE')  # should be a break here.
-                else:
-                    # logging.info(cell)
-                    # logging.info(centroid)
-                    # self.hardware.set_xy(rel_xy=[centroid[1], -centroid[0]])  # fixme
-                    logging.info('RETURN! FIXME! IM BROKEN INSIDE')  # should be a return here.
-                    # return cell
 
-            return True
-            # else:
-            #     self.hardware.set_xy(rel_xy=[50*(-1**iterations+1)*(int((iterations+1) % 2)),
-            #                                  50*(-1**iterations)*(int(iterations % 2))])
-            #     focused = self.focus()
-            #     if not focused:
-            #         return None
-            #
-            #     iterations += 1
+                        if cell_separation < min_separation:
+                            pass  # fixme
+                            # break
+                else:
+                    pass  # fixme
+                    # self.hardware.set_xy(rel_xy=[centroid[1], -centroid[0]])
+                    # return cell
+            else:
+                smart_move()
+                time.sleep(0.25)
+                focused = self.focus()
+                if not focused:
+                    return None
+
+                # iterations += 1
 
     # Run Control Functions
     def start_sequence(self):
