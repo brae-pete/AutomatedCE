@@ -255,7 +255,7 @@ class BarracudaCellDetector:
 class BarracudaFocusClassifier:
     _focus_increment = 3  # µm, 39 increments total (19 above and below 0)
     _in_focus_index = 18
-    _default_focus_network_file = r'config\focus_model.onnx'
+    _default_focus_network_file = r'config\focus_model_2.onnx'
     _default_image_path = r'recentImg.png'
     _focus_network = None
     _graph = None
@@ -318,12 +318,26 @@ class BarracudaFocusClassifier:
                 output = self._focus_network.run(image_array)
 
         # Network returns an array of all distances with the probability of each. Find distance with highest.
+        logging.info(output)
+
         index = np.argmax(output.softmax[0])
+
+        average_at_prediction = np.mean(output.softmax[0][index-2:index+3])
+
+        index_difference = index - self._in_focus_index
+        opposite_index = self._in_focus_index - index_difference
+
+        average_at_opposite = np.mean(output.softmax[0][opposite_index-2: opposite_index+3])
+
+        logging.info(output.softmax[0][index-2:index+3])
+        logging.info(output.softmax[0][opposite_index-2: opposite_index+3])
+        logging.info('Predicted Mean: {}, Opposite Mean: {}'.format(average_at_prediction, average_at_opposite))
+
         focus = (index - self._in_focus_index)*self._focus_increment
 
         score = max(output.softmax[0])
 
-        return focus, score
+        return focus, score, average_at_opposite
 
 
 # All code below is provided courtesy of Kevin Bardool and can be found at:

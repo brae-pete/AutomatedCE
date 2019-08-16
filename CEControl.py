@@ -5,6 +5,7 @@ import pickle
 import threading
 import logging
 import time
+import random
 
 # Custom modules for CE
 import CESystems  # Hardware system classes
@@ -1523,34 +1524,34 @@ class RunScreenController:
         start_z = self.hardware.get_objective()
 
         self.hardware.record_image(save_location)
-        # time.sleep(sleepy_time)
-        #
-        # start = self.hardware.get_objective()
-        # for _ in range(1, int(num_pictures / 2)):
-        #     self.hardware.set_objective(self.hardware.get_objective() + increment)
-        #     time.sleep(sleepy_time)
-        #     end = self.hardware.get_objective()
-        #     save_location = "zStack_{}_{}_{}.png".format(int(time.time()), stack, round(end - start))
-        #     logging.info(save_location)
-        #
-        #     self.hardware.record_image(save_location)
-        #     time.sleep(sleepy_time)
-        #
-        # self.hardware.set_objective(start_z)
-        # time.sleep(sleepy_time * 6)
-        #
-        # for _ in range(1, int(num_pictures / 2)):
-        #     self.hardware.set_objective(self.hardware.get_objective() - increment)
-        #     time.sleep(sleepy_time)
-        #     end = self.hardware.get_objective()
-        #     save_location = "zStack_{}_{}_{}.png".format(int(time.time()), stack, round(end - start))
-        #     logging.info(save_location)
-        #
-        #     self.hardware.record_image(save_location)
-        #     time.sleep(sleepy_time)
-        #
-        # self.hardware.set_objective(start_z)
-        # time.sleep(sleepy_time * 6)
+        time.sleep(sleepy_time)
+
+        start = self.hardware.get_objective()
+        for _ in range(1, int(num_pictures / 2)):
+            self.hardware.set_objective(self.hardware.get_objective() + increment)
+            time.sleep(sleepy_time)
+            end = self.hardware.get_objective()
+            save_location = "zStack_{}_{}_{}.png".format(int(time.time()), stack, round(end - start))
+            logging.info(save_location)
+
+            self.hardware.record_image(save_location)
+            time.sleep(sleepy_time)
+
+        self.hardware.set_objective(start_z)
+        time.sleep(sleepy_time * 6)
+
+        for _ in range(1, int(num_pictures / 2)):
+            self.hardware.set_objective(self.hardware.get_objective() - increment)
+            time.sleep(sleepy_time)
+            end = self.hardware.get_objective()
+            save_location = "zStack_{}_{}_{}.png".format(int(time.time()), stack, round(end - start))
+            logging.info(save_location)
+
+            self.hardware.record_image(save_location)
+            time.sleep(sleepy_time)
+
+        self.hardware.set_objective(start_z)
+        time.sleep(sleepy_time * 6)
 
     def focus(self):
         """Focuses the objective."""
@@ -1593,44 +1594,41 @@ class RunScreenController:
                 time.sleep(3)
             logging.info('Networks loaded.')
 
-        focus_tolerance = 6
+        focus_tolerance = 3
+        negative_tolerance = 0.01
         focus_stop_flag = threading.Event()
         focus_pause_flag = threading.Event()
         attempts = 1
+        distances = [None, None, None, None, None, None, None, None, None, None, None]
 
+        s = time.time()
         while True:
             # Get an image and run the network to get a predicted distance from focus.
             # image = self.hardware.get_image()
-            distance, score = self.hardware.get_focus()
-            logging.info('{}, {}'.format(distance, score))
-
-            # Move the objective according to predicted distance.
-            logging.info('First Movement is {}'.format(-distance))
-            self.hardware.set_objective(rel_h=-distance)
-            time.sleep(1)
-
-            # Get a current image and run the network again to get a new predicted distance.
-            # image = self.hardware.get_image()
-            distance_new, score = self.hardware.get_focus()
-            logging.info('{}, {}'.format(distance_new, score))
+            s_2 = time.time()
+            distance, score, negative_score = self.hardware.get_focus()
+            logging.info('{}, {}, {}'.format(distance, score, time.time() - s_2))
+            distances[(attempts-1) % 10] = distance
+            logging.info(distances)
 
             # If the network predicts we are at or near zero, stop and record current position as the focus point.
-            if focus_tolerance >= distance_new >= -focus_tolerance:
-                logging.info('Focused.')
+            if focus_tolerance >= distance >= -focus_tolerance:
+                logging.info('Focused in {}'.format(time.time() - s))
                 self.hardware.objective_focus = self.hardware.get_objective()
                 return True
 
-            # If the absolute value of the new distance is greater than that of the of the first, then the sign on the
-            # first was probably incorrect so move back to the initial position and then in the opposite direction.
-            if abs(distance_new) >= abs(distance):
-                logging.info('Second Movement is {}'.format(2*distance))
-                # self.hardware.set_objective(rel_h=-distance_new)  # fixme possibly
-                self.hardware.set_objective(rel_h=2*distance)
-                time.sleep(1)
+            move = -distance + random.randint(-2, 2)
+            if negative_score > negative_tolerance and distance > 0:
+                move = -move
 
-            # If the attempts to get in focus exceed 10, prompt the user to choose: a) allow network to keep trying,
+            # Move the objective according to predicted distance.
+            logging.info('Movement is {}'.format(move))
+            self.hardware.set_objective(rel_h=move)
+            time.sleep(1)
+
+            # If the attempts to get in focus exceed 5, prompt the user to choose: a) allow network to keep trying,
             # b) manually set focus, or c) cancel the run.
-            if attempts > 5:
+            if attempts > 0:
                 return False
                 # prompt_user()
                 # attempts = 1
