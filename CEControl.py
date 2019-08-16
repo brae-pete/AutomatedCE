@@ -1617,6 +1617,7 @@ class RunScreenController:
                 self.hardware.objective_focus = self.hardware.get_objective()
                 return True
 
+            # Compare the score of the negative of the prediction, if it is high enough change the sign.
             move = -distance + random.randint(-2, 2)
             if negative_score > negative_tolerance and distance > 0:
                 move = -move
@@ -1630,7 +1631,7 @@ class RunScreenController:
             # b) manually set focus, or c) cancel the run.
             if attempts > 0:
                 return False
-                # prompt_user()
+                # prompt_user() fixme
                 # attempts = 1
             elif attempts == 3:
                 self.hardware.set_objective(rel_h=2)
