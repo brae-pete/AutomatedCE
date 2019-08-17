@@ -1315,8 +1315,8 @@ class RunScreenController:
         if self._calibrating_ratio:
             self._calibrating_image_ratio(True)
         else:
-            logging.info(self.screen.live_feed_scene.crosshair_location)
-
+            #logging.info(self.screen.live_feed_scene.crosshair_location)
+            pass
     # Hardware Control Function
     def calibrate_system(self, start):
         """Walks user through the necessary system calibrations that can't be done automatically."""

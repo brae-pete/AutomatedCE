@@ -7,9 +7,10 @@ import serial  # PySerial
 
 
 class Laser:
-    _safety_pfn_limit = 95
+    _safety_pfn_limit = 255
+    _timer_count = 0
 
-    def __init__(self, com="COM6", baudrate=9600, stopbits=1, timeout=0.5, lock=None, home=False):
+    def __init__(self, com="COM6", baudrate=9600, stopbits=1, timeout=0.1, lock=None, home=False):
         self.serial = serial.Serial()
         self.serial.timeout = timeout
         self.serial.baudrate = baudrate
@@ -68,6 +69,19 @@ class Laser:
         if response:
             response = response[0].rsplit('\r'.encode())[0].decode()
         return response
+
+    def test_start(self):
+        self.start()
+        self._test_fire_check()
+
+    def _test_fire_check(self):
+        st = 0
+        self._timer_count +=1
+        if self._timer_count > 20:
+            return
+        self.check_status()
+        threading.Timer(1., self._test_fire_check).start()
+        return
 
     def check_status(self):
         logging.info(' ** LASER SYSTEM STATUS **')
@@ -179,7 +193,7 @@ class Laser:
 
             self.serial.write(self.commands['PULSE_MODE']('?').encode())
             response = self._read_buffer()
-            print('\tPulse Mode set to: {}'.format(response))
+            logging.info('\tPulse Mode set to: {}'.format(response))
 
             self.serial.write(self.commands['PFN_VOLTAGE']('?').encode())
             response = self._read_buffer()
@@ -190,6 +204,12 @@ class Laser:
             logging.info('\tConfiguration: {0:08b}\n'.format(int(response)))
 
     def set_pfn(self, value):  # fixme, check input type here and change accordingly
+        """ Set the laser power function. A number normally around 85-95.
+
+        input: value = String representing an integer of format '000' [ie 3 digits]
+
+        """
+
         try:
             int(value)
         except ValueError:
@@ -197,6 +217,7 @@ class Laser:
             return False
 
         if len(str(value)) != 3 or 0 > int(value) or int(value) > self._safety_pfn_limit:
+            #Is there any reason for the != 3 here?
             # logging.info(len(str(value)) != 3)
             # logging.info(0 > int(value))
             # logging.info(int(value) > self._safety_pfn_limit)
@@ -215,6 +236,10 @@ class Laser:
             return True
 
     def set_attenuation(self, value):
+        """ Laser attenuation. Normally a value between 5 and 20 but can go up to 255
+
+        input: value = String representing an integer of format '000' (ie 3 digits).
+        """
         try:
             int(value)
         except ValueError:
@@ -235,6 +260,7 @@ class Laser:
         else:
             logging.info('Successfully set attenuation to {}'.format(value))
             return True
+
 
     def set_burst(self, value):
         try:
@@ -257,6 +283,28 @@ class Laser:
         else:
             logging.info('Successfully set burst count to {}'.format(value))
             return True
+
+    def set_rep_rate(self, value='010'):
+        try:
+            int(value)
+        except ValueError:
+            logging.error('Invalid Rep Rate value provided - {}. Must be integer between 0001 and 4000'.format(value))
+            return False
+
+        if len(str(value)) != 3 or 1 > int(value) or int(value) > 4000:
+            logging.error('Invalid Rep Rate value provided - {}. Must be integer between 0001 and 4000'.format(value))
+            return False
+
+        with self.lock:
+            self.serial.write(self.commands['LASER_REPETITION_RATE'](value).encode())
+            response = self._read_buffer()
+
+        if response != 'ok':
+            logging.warning('Failed to set rep Rate. Laser Response: {}'.format(response))
+            return False
+        else:
+            logging.info('Successfully set rep rate (Hz) to {}'.format(value))
+        return True
 
     def set_mode(self, value):
         try:
@@ -306,11 +354,15 @@ class Laser:
     def start(self):
         with self.lock:
             logging.warning('Starting laser system.')
+            self.serial.write(self.commands['VERSION_NUMBER']().encode())
+            response = self._read_buffer()
+            logging.info("\t Version: {}".format(response))
 
             self.serial.write(self.commands['SERIAL_MODE']('?').encode())
             response = self._read_buffer()
+            print(str(response))
 
-            if response != 'ok':
+            if str(response) != '0':
                 logging.info('Enabling serial mode for laser.')
                 self.serial.write(self.commands['SERIAL_MODE']('1').encode())
                 response = self._read_buffer()
@@ -380,3 +432,6 @@ class Laser:
 
             logging.info('Laser turned off.')
             return True
+
+if __name__ == "__main__":
+    logging.basicConfig(level = logging.INFO)
