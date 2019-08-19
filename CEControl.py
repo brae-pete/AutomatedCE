@@ -1071,7 +1071,7 @@ class RunScreenController:
         if self.hardware.hasInletControl:
             self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
             self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
-            self.screen.z_value.returnPressed.connect(lambda: self.hardware.set_z(h=float(self.screen.z_value.text())))
+            self.screen.z_value.returnPressed.connect(lambda: self.hardware.set_z(z=float(self.screen.z_value.text())))
             self.screen.z_stop.released.connect(lambda: self.hardware.stop_z())
             self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.z_value.unselected.connect(lambda: self._value_display_interact(selected=False))
