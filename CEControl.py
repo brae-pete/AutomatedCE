@@ -485,8 +485,8 @@ class MethodScreenController:
         self.screen.insert_table.setItem(row_count, 4, blank_duration)
 
         inlet_travel = QtWidgets.QDoubleSpinBox()
-        inlet_travel.setMaximum(10)
-        inlet_travel.setMinimum(-10)
+        inlet_travel.setMaximum(25)
+        inlet_travel.setMinimum(0)
         if inlet_travel_input:
             inlet_travel.setValue(inlet_travel_input)
         else:
@@ -1794,12 +1794,12 @@ class RunScreenController:
             return True
 
         def move_inlet(inlet_travel):
-            self.hardware.set_z(rel_z=inlet_travel)
+            self.hardware.set_z(z=inlet_travel)
             time.sleep(2)
             return check_flags()
 
         def move_outlet(outlet_travel):
-            self.hardware.set_outlet(rel_h=outlet_travel)
+            self.hardware.set_outlet(h=outlet_travel)
             time.sleep(2)
             return check_flags()
 
@@ -1823,7 +1823,9 @@ class RunScreenController:
             elif step['SeparationTypePowerRadio']:
                 logging.error('Unsupported: Separation with power')
                 return False
-            elif step['SeparationTypePressureRadio']:
+
+            #Give user option to run combo of pressure and voltage
+            if step['SeparationTypePressureRadio']:
                 pressure_state = True
             elif step['SeparationTypeVacuumRadio']:
                 logging.error('Unsupported: Separation with vacuum')
@@ -1916,7 +1918,7 @@ class RunScreenController:
                         return False
                     step_start = time.time()
 
-                    state = move_inlet(step['InletTravel'])
+                    state = move_inlet(25) #Always move as high as it can go (will need to make sure set Z is working right
                     if not state:
                         return False
 
@@ -1942,7 +1944,7 @@ class RunScreenController:
                         if not state:
                             return False
 
-                    state = move_inlet(-step['InletTravel'])
+                    state = move_inlet(step['InletTravel'])
                     if not state:
                         return False
 

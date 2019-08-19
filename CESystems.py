@@ -418,11 +418,12 @@ class BarracudaSystem(BaseSystem):
 
     def set_z_home(self):
         """Sets the current position of the Z stage as home. Return False if device has no 'home' capability."""
+
         return False
 
     def home_z(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        self.z_stage_control.set_z(0)
+        self.z_stage_control.go_home()
         return True
 
     def close_outlet(self):

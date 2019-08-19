@@ -82,6 +82,8 @@ class ZStageControl:
         """ set_z (absolute position in mm)
         returns False if unable to set_z, True if command went through
         """
+
+
         with self.lock:
             if self.home:
                 self.pos = set_z
@@ -148,7 +150,8 @@ class OpticsFocusZStage:
     IF switching controllers, create a new class or modify the ZStageControl above
     This is only called by the ZStageControl Class
     """
-
+    max_steps = 13000
+    min_steps = 5
     def __init__(self, port):
         self.serial = serial.Serial()
         self.serial.timeout = 0.8
@@ -203,7 +206,15 @@ class OpticsFocusZStage:
         return position
 
     def go_z(self, mm_to_travel):
+        #This helps keep the stage in ran
         steps = self.mm_to_steps(mm_to_travel)
+        pos_steps = self.mm_to_steps(self.pos)
+
+        if pos_steps+steps > self.max_steps:
+            steps = self.max_steps - pos_steps
+        elif pos_steps+steps < self.min_steps:
+            steps = self.min_steps - pos_steps
+        logging.info("{:+d} STteps to move ,{} pos_steps, {} Pos, {} mm_to_travel".format(steps,pos_steps, self.pos, mm_to_travel))
         self.serial.write("X{:+d}\r".format(steps).encode())
 
     def go_home(self):
