@@ -94,7 +94,7 @@ class ZStageControl:
             if response == type(str):
                 return False
 
-            set_z = set_z - self.pos
+            set_z = set_z - self.stage.pos
             self.stage.go_z(set_z)
         return True
 
