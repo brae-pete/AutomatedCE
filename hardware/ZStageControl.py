@@ -83,18 +83,20 @@ class ZStageControl:
         returns False if unable to set_z, True if command went through
         """
 
-
         with self.lock:
             if self.home:
                 self.pos = set_z
                 return True
 
-            # check if stage is busy
+            # Get Current position and check if stage is busy/moving
             response = self.stage.get_z()
             if response == type(str):
                 return False
+            else:
+                self.pos = response
 
-            set_z = set_z - self.stage.pos
+            #Convert from absolute to relative position (optics_focus cant handle absolute)
+            set_z = set_z - self.pos
             self.stage.go_z(set_z)
         return True
 
