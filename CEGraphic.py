@@ -588,7 +588,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.outlet_set_home = QtWidgets.QPushButton('Set Home')
         self.outlet_home = QtWidgets.QPushButton('Home')
 
-        self.outlet_step_size.setSuffix(" mm")
+        self.outlet_step_size.setSuffix(" cm")
         self.outlet_step_size.setValue(1)
 
         form_layout = QtWidgets.QFormLayout()
