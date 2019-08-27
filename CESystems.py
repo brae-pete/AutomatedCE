@@ -580,13 +580,20 @@ class BarracudaSystem(BaseSystem):
 # A motor for the outlet (don't really need encoder), and a z stage for the inlet and a
 # pressure control device (preferably the same one used on the Barracuda system)
 class OstrichSystem(BaseSystem):
+    """
+    _daq_dev: '/Dev#/' This is the daq device number found in NiMax under Devices and Interfaces
+            (looking for probably the NI-PCI-6229 Name).
+
+    """
     system_id = 'OSTRICH'
 
-    _daq_dev = "/Dev1/"  # fixme not sure what to put here ("/Dev1/" is from Barracuda)
+    _daq_dev = "/Dev2/"  # ("/Dev1/" is from Barracuda)
     _daq_voltage_control = 'ao1'
     _daq_current_readout = 'ai0'
     _daq_voltage_readout = 'ai1'
     _daq_rfu = 'ai3'
+    _daq_laser = 'p0.1'
+
     _xy_stage_id = 'TIXYDrive'
     _z_stage_id = 'TIZDrive'
 

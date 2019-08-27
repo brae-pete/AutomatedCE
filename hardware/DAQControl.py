@@ -1,3 +1,9 @@
+"""
+Ostrich Approved
+Brae Petersen
+
+"""
+
 from nidaqmx.constants import Edge
 import nidaqmx
 import numpy as np
@@ -7,12 +13,13 @@ import threading
 
 
 class DAQBoard:
-    freq = 4  # Sampling frequency for analog inputs
+    freq = 12000  # Sampling frequency for analog inputs
+    butter_filter_freq = 3
     output_freq = 1000  # Frequency for sending voltage levels to the Power supply (Can be much higher than analog in)
     clock_channel = 'ctr0'  # Sampling Clock channel (don't really need to change)
     sample_terminal = "Ctr0InternalOutput"  # Make sure this route is allowed via NIMAX
     mode = nidaqmx.constants.AcquisitionType.CONTINUOUS  # Sampling mode
-    samples_per_chain = 4  # Samples per buffer channel / how often it will update is samples_per_chain/freq
+    samples_per_chain = 1000  # Samples per buffer channel / how often it will update is samples_per_chain/freq
     max_time = 60  # Total amount of time to wait before exiting.
     voltage_ramp = 10  # speed to ramp voltage in kV/s
     voltage = 0  # Current voltage in V to send to the  daq. (-10 to 10 max)
@@ -36,9 +43,16 @@ class DAQBoard:
             samples = self.task.read(number_of_samples_per_channel=self.samples_per_chain)
         except nidaqmx.errors.DaqError:
             return
+        """
         self.data[self.voltage_readout].extend([x*self.voltage_conversion for x in samples[0]])  # Voltage
         self.data[self.current_readout].extend([x*self.voltage_conversion for x in samples[1]])  # Current
         self.data[self.rfu_chan].extend([x*self.voltage_conversion for x in samples[2]])  # RFU
+        """
+        # Need to put in a hardware filter or a software filter at 4 Hz
+
+        self.data[self.voltage_readout].extend([np.mean(samples[0])])  # Voltage
+        self.data[self.current_readout].extend([np.mean(samples[1])])  # Current
+        self.data[self.rfu_chan].extend([np.mean(samples[2])])  # RFU
         return 0
 
     def sample_config(self, task):
@@ -51,6 +65,9 @@ class DAQBoard:
         return task
 
     def analog_out_config(self, task):
+        """
+        Set the output voltage channesl and timing
+        """
         chan = self.dev + self.voltage_control
         task.ao_channels.add_ao_voltage_chan(chan)
         task.timing.cfg_samp_clk_timing(self.output_freq)
@@ -114,8 +131,13 @@ class DAQBoard:
         time.sleep(0.2)
 
     def read_task(self):
-        """Create a new task, configure it, then run it. Consumes a thread
-        should be target for thread"""
+        """
+        Starts the read RFU, Read Current and Voltage, and Voltage output for the CE setup.
+
+        Create a new task, configure it, then run it. Consumes a thread
+        should be target for thread
+
+        """
         # Set up the Clock
         sample_task = nidaqmx.Task()
         sample_task = self.sample_config(sample_task)
@@ -140,3 +162,9 @@ class DAQBoard:
             while time.time() - start < self.max_time and not self.stop.is_set():
                 # Sleep our thread every 5 ms and check. Does not consume core during sleep
                 time.sleep(0.005)
+
+
+if __name__ == "__main__":
+    dq = DAQBoard("/Dev2/",'ai1', 'ai0', 'ai3', 'ao1')
+    dq.max_time = 5
+    dq.read_task()

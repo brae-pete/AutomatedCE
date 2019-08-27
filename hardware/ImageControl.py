@@ -40,7 +40,7 @@ elif "CEGraphic" in contents:
 else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
     CONFIG_FOLDER = os.getcwd()
 
-CONFIG_FILE = os.path.join(CONFIG_FOLDER, "QCam3Test.cfg")
+CONFIG_FILE = os.path.join(CONFIG_FOLDER, "CoolSnapHq2Cam.cfg")
 
 
 class ImageControl:
@@ -118,3 +118,7 @@ class ImageControl:
         equ = cv2.equalizeHist(img)
         return equ
 
+
+if __name__ == "__main__":
+    CONFIG_FOLDER = r"C:\OstrichQt\QFiles\config"
+    CONFIG_FILE = r"C:\OstrichQt\QFiles\config\CoolSnapHq2Cam.cfg"
