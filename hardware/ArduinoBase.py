@@ -15,7 +15,8 @@ class ArduinoBase:
         if self.com == "Auto":
             self.com = self.getCom()
         self.serial = serial.Serial()
-        self.serial.timeout = 0.05
+        self.serial.timeout = 0.2
+        self.serial.baudrate = 1000000
         self.serial.baudrate = 1000000
 
         self.pos = 0
@@ -41,7 +42,7 @@ class ArduinoBase:
             self.serial.port = self.com
             try:
                 self.serial.open()
-                time.sleep(1)
+                time.sleep(2)
             except serial.serialutil.SerialException:
                 logging.warning("ARDUINO ERROR: CLOSE ARDUINO")
 
@@ -69,8 +70,6 @@ class ArduinoBase:
         if self.home:
             return random.random()
         self.serial.write("M0L?\n".encode())
-        # logging.info( self.serial.port)
-        # logging.info(self.serial.is_open)
         offset = self.objective_reset
         self.outlet_reset = False
         response = self.serial.readlines()
@@ -98,23 +97,33 @@ class ArduinoBase:
         return pos, offset
 
     def set_outlet_z(self, pos):
-        """set the outlet position (mm) (precision to hundreths)"""
+        """set the outlet position (mm) (precision to micron)"""
         if self.home:
             return
-        logging.warning("M0L{:+.2f}\n".format(pos))
-        self.serial.write("M0L{:+.2f}\n".format(pos).encode())
+        logging.warning("M0L{:+.3f}\n".format(pos))
+        self.serial.write("M0L{:+.3f}\n".format(pos).encode())
         return
 
     def set_outlet_speed(self, mm_per_sec):
         if self.home:
             return
 
-        self.serial.write("M0L{:d}\n".format(mm_per_sec).encode())
+        self.serial.write("M0S{:d}\n".format(mm_per_sec).encode())
+
+    def set_stepper_accel(self, steps_per_sec2):
+        if self.home:
+            return
+        self.serial.write("M0A{:d}\n".format(steps_per_sec2).encode())
 
     def set_outlet_origin(self):
         if self.home:
             return
         self.serial.write("M0H\n".encode())
+
+    def go_home(self):
+        if self.home:
+            return
+        self.serial.write("M0G\n".encode())
 
     def set_objective_z(self,pos):
         if self.home:
@@ -160,6 +169,7 @@ class ArduinoBase:
         except ValueError:
             return self.pos, offset
         return pos, offset
+
 
     def applyPressure(self):
         if self.home:
