@@ -5,6 +5,9 @@ import cv2
 import time
 import numpy as np
 import logging
+from skimage import io, data, img_as_float
+from skimage import exposure
+io.use_plugin('pil')
 
 if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
     sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
@@ -115,6 +118,14 @@ class ImageControl:
     @staticmethod
     def image_conversion(img):
         """ Adjusts the contrast and brightness"""
-        equ = cv2.equalizeHist(img)
+        #equ = cv2.equalizeHist(img)
+        equ = img_as_float(img)
+        #equ = exposure.equalize_adapthist(equ, clip_limit=0.03)
+        equ = exposure.equalize_hist(equ)
         return equ
+    @staticmethod
+    def save_image(img, filename):
+        io.imsave(filename, img)
+
+
 
