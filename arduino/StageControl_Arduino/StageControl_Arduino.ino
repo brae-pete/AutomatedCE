@@ -93,11 +93,11 @@ void setup()
                                 // options: 1, 1/2, 1/4, 1/8, 1/16, 1/32, 1/64, 1/128
 
                                 
-  driver_2.setMaxSpeed(1200); // max speed in units of full steps/s 
+  driver_2.setMaxSpeed(1000); // max speed in units of full steps/s 
   driver_2.setMinSpeed(20);
   driver_2.setFullSpeed(2000); // full steps/s threshold for disabling microstepping
-  driver_2.setAcc(2000); // full steps/s^2 acceleration
-  driver_2.setDec(2000); // full steps/s^2 deceleration
+  driver_2.setAcc(1000); // full steps/s^2 acceleration
+  driver_2.setDec(800); // full steps/s^2 deceleration
   
   driver_2.setSlewRate(SR_980V_us); // faster may give more torque (but also EM noise),
                                   // options are: 114, 220, 400, 520, 790, 980(V/us)
@@ -173,7 +173,7 @@ void moveMotor(){
   //#Serial.print(inputString[1]);
   //#Serial.print(" To Location: ");
   //Serial.println(steps);
-  float steps_per_mm = (200. * outlet_div / 1.5);
+  float steps_per_mm = (200. * outlet_div / 0.75);
   Serial.println(steps_per_mm);   
   long steps = long(mm_pos*steps_per_mm);
   Serial.println(steps);
@@ -242,7 +242,7 @@ void getMotorPos(){
   //Serial.print(chnl);
   //Serial.println(": ");
   long steps = driver_2.getPos();
-  float steps_per_mm = (200. * outlet_div / 1.5);
+  float steps_per_mm = (200. * outlet_div / 0.75);
   float return_steps = float(float(steps)/steps_per_mm);
   Serial.println(return_steps,3);
 }

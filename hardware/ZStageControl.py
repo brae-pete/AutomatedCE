@@ -4,6 +4,7 @@ import logging
 import sys
 import os
 import pickle
+import time
 try:
     from hardware import ArduinoBase
 except ModuleNotFoundError:
@@ -95,7 +96,7 @@ class ZStageControl:
             # check if stage is busy
             response = self.stage.get_z()
             if response == type(str):
-                return False
+                return Falsef
             else:
                 self.pos = response
 
@@ -314,6 +315,22 @@ class PowerStep:
         self.lock = lock
         self.first_read = True
 
+    def wait_for_move(self):
+        """
+        returns the final position of the motor after it has stopped moving.
+
+        :return: current_pos, float in mm of where the stage is at
+        """
+        prev_pos = self.get_z()
+        current_pos = prev_pos + 1
+        # Update position while moving
+        while prev_pos != current_pos:
+            time.sleep(0.5)
+            prev_pos = current_pos
+            current_pos = self.get_z()
+        return current_pos
+
+
     def open(self):
         """User initializes whatever resources are required
          (open ports, create MMC + load config, etc...)
@@ -358,7 +375,7 @@ class PowerStep:
                 self.offset = (data['pos'] - self.pos) + self.offset
                 self.pos = data['pos']
         except IOError:
-            logging.warning("No Objective History found")
+            logging.warning("No Stage History found")
 
     def go_home(self):
         """ Moves up or down until the stage hits the mechanical stop that specifices the 25 mm mark
@@ -369,8 +386,9 @@ class PowerStep:
             self.pos = 0
             return
         self.arduino.go_home()
-        self.pos = 0
+        self.pos = self.wait_for_move()
         self.offset = 0
+        self.save_history()
 
     def set_z(self, set_z):
         """ set_z (absolute position in mm)

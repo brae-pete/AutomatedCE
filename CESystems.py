@@ -346,8 +346,8 @@ class BarracudaSystem(BaseSystem):
 
             if image is None:
                 return None
-            image = self.image_control.image_conversion(image)
             if not HOME:
+
                 self.image_control.save_image(image, "recentImg.png")
 
         return image
@@ -422,7 +422,7 @@ class BarracudaSystem(BaseSystem):
 
     def home_z(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        self.z_stage_control.set_z(0)
+        self.z_stage_control.go_home()
         return True
 
     def close_outlet(self):

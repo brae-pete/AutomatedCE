@@ -49,6 +49,8 @@ CONFIG_FILE = os.path.join(CONFIG_FOLDER, "QCam3Test.cfg")
 class ImageControl:
     """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
      """
+
+    contrast_exposure = [2,98] # Low and high percintiles for contrast exposure
     def __init__(self, mmc=None, config=None, home=False):
         self.mmc = mmc
         self.config = config
@@ -96,9 +98,13 @@ class ImageControl:
             img = self.mmc.getLastImage()
             ims = img.shape
             img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]  # img = np.float32(img)
+            self.raw_img = img.copy()
             img = cv2.resize(img, (0, 0), fx=0.25, fy=0.25)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             # img = cv2.equalizeHist(img)
+            self.img = img.copy()
+            img = self.image_conversion(img)
+
 
             try:
                 img = pilImage.fromarray(img, 'L')
@@ -115,17 +121,20 @@ class ImageControl:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         cv2.imwrite(filename, img)
 
-    @staticmethod
-    def image_conversion(img):
+    def image_conversion(self,img):
         """ Adjusts the contrast and brightness"""
-        #equ = cv2.equalizeHist(img)
-        equ = img_as_float(img)
-        #equ = exposure.equalize_adapthist(equ, clip_limit=0.03)
-        equ = exposure.equalize_hist(equ)
-        return equ
+        p2, p98 = np.percentile(img, self.contrast_exposure)
+        img_rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
+        return img_rescale
+
     @staticmethod
     def save_image(img, filename):
-        io.imsave(filename, img)
+
+        if type(img) is pilImage.Image:
+            img.save(filename)
+        else:
+            logging.WARNING("Could not save image!")
+
 
 
 
