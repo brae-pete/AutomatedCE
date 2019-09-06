@@ -82,7 +82,6 @@ class XYControl:
         with self.lock:
             self.mmc.loadSystemConfiguration(self.config_file)
             self.stageID = self.mmc.getXYStageDevice()
-
     def read_xy(self):
         """ Reads the current XY position of the stage, sets XYControl.position and returns list [X, Y]  """
         if self.home:

@@ -27,14 +27,23 @@ def record_data(hd_ware,dataset):
     if dataset == None:
         dataset=np.zeros((0,4))
 
+    # Get the data [x , y , obj_h, stage_z] when capillary is in focus
     new_data=[0,0,0,0]
     new_data[0:1] = hd_ware.get_xy()
     new_data[2] = hd_ware.get_objective()
     new_data[3] = hd_ware.get_z()
 
-    np.r_[dataset,[new_data]]
+    dataset=np.r_[dataset,[new_data]]
+    return dataset
 
-
+def move_function(x):
+    """
+    Helps control the spacing around a point of interest, more detail near zero, an less detail farther out.
+    :param x: current position from center
+    :return y: distance to move
+    """
+    y = 0.002 * (x**2.1) + 0.1 * x + 2
+    return y
 
 
 if __name__ == "__main__":
