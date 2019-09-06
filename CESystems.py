@@ -484,7 +484,7 @@ class BarracudaSystem(BaseSystem):
 
     def home_objective(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        self.objective_control.set_z(0)
+        self.objective_control.go_home()
         return True
 
     def close_voltage(self):

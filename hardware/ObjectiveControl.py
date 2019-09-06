@@ -2,6 +2,7 @@ import threading
 from hardware import ArduinoBase
 import pickle
 import logging
+import time
 
 class ObjectiveControl:
     """Class to control Z-stage for capillary/optical train
@@ -53,11 +54,11 @@ class ObjectiveControl:
                 self.offset = self.pos
             self.pos = pos*self.inversion
             self.pos = self.pos + self.offset
-        if self.first_read:
-            self.load_history()
-            self.first_read = False
-        else:
-            self.save_history()
+        #if self.first_read:
+            #self.load_history()
+        #    self.first_read = False
+        #else:
+        #    self.save_history()
         return self.pos
 
     def save_history(self):
@@ -132,11 +133,44 @@ class ObjectiveControl:
         self.close()
         self.open()
 
+    def go_home(self):
+        if self.home:
+            return
+        self.arduino.go_home_objective()
+        self.wait_for_move()
+        self.arduino.go_home_objective()
+        self.wait_for_move()
+        self.set_origin()
+        self.pos=0
+        self.offset=0
+        time.sleep(1)
+        self.set_z(5);
+        self.wait_for_move()
+        self.read_z()
+
+
+        return
+
     def close(self):
         """Closes the resources for the stage"""
         if self.home:
             return
         self.arduino.close()
+
+    def wait_for_move(self):
+        """
+        returns the final position of the motor after it has stopped moving.
+
+        :return: current_pos, float in mm of where the stage is at
+        """
+        prev_pos = self.read_z()
+        current_pos = prev_pos + 1
+        # Update position while moving
+        while prev_pos != current_pos:
+            time.sleep(0.5)
+            prev_pos = current_pos
+            current_pos = self.read_z()
+        return current_pos
 
     @staticmethod
     def dos2unix(in_file, out_file):

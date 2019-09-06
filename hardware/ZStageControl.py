@@ -224,6 +224,7 @@ class OpticsFocusZStage:
     def go_home(self):
         self.serial.write("HX0\r".encode())
 
+
     def stop(self):
         self.serial.write("S\r".encode())
 
@@ -386,8 +387,12 @@ class PowerStep:
             self.pos = 0
             return
         self.arduino.go_home()
+        self.wait_for_move()
+        self.arduino.go_home()
         self.pos = self.wait_for_move()
         self.offset = 0
+        self.set_z(0.1);
+        self.wait_for_move()
         self.save_history()
 
     def set_z(self, set_z):

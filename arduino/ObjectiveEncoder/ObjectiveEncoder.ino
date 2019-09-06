@@ -109,7 +109,8 @@ void setup()
                                      
   driver.configStepMode(STEP_FS_16); // 1/128 microstepping, full steps = STEP_FS,
                                 // options: 1, 1/2, 1/4, 1/8, 1/16, 1/32, 1/64, 1/128
-                                
+  driver.setMinSpeed(50);
+                              
   driver.setMaxSpeed(1200); // max speed in units of full steps/s 
   driver.setFullSpeed(2000); // full steps/s threshold for disabling microstepping
   driver.setAcc(1000); // full steps/s^2 acceleration
@@ -152,9 +153,10 @@ void setup()
   driver.setDecKVAL(128);
   driver.setHoldKVAL(0);
 
-  driver.setParam(ALARM_EN, 0x8F); // disable ADC UVLO (divider not populated),
+
+  driver.setParam(ALARM_EN, 0xCF); // disable ADC UVLO (divider not populated),
                                    // disable stall detection (not configured),
-                                   // disable switch (not using as hard stop)
+                                   // enable switch (using hard stop)
 
   driver.getStatus(); // clears error flags
 
@@ -253,6 +255,40 @@ void serialCheck() {
   }
 }
 
+void motorHomePosition(){
+  unsigned int sw_val;
+  sw_val = driver.getParam(STATUS);
+  //Serial.println(sw_val);
+  sw_val &= 0x0004;
+  //Serial.println(sw_val);
+  driver.getStatus(); // clears error flags
+  // Move Motor until it hits the switch
+  char user_dir = inputString[3];
+  //Serial.println("Starting Move...");
+  byte dir = B0;
+  //Serial.println(user_dir);
+  if (user_dir=='1'){
+   dir = true;
+   //Serial.println("HEY!");
+  }
+  if (sw_val == 4){
+    Serial.println("Go Down");
+    driver.releaseSw(B0,B0);
+  }else{
+  driver.goUntil(B0,dir,1000);
+  }
+}
+
+void setHomePosition(){
+  setEncoder = 0;
+  // Set position list to 0.
+  pos = 0;
+  pos_list[0]=0;
+  pos_list[1]=0;
+  pos_list[2]=0;
+  pos_list[3]=0;
+  pos_list[4]=0; 
+}
 
 void moveEncoder(){
   String location = inputString.substring(2,13);
@@ -325,8 +361,11 @@ void encoderTalk(){
     pos = 0;
   }
 
-  else if (inputString[1]=='R'){
-    
+  else if (inputString[1]=='G'){
+    motorHomePosition();
+  }
+  else if (inputString[1]=='X'){
+    setHomePosition();
   }
 }
 

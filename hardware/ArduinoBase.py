@@ -125,6 +125,11 @@ class ArduinoBase:
             return
         self.serial.write("M0G\n".encode())
 
+    def go_home_objective(self):
+        self.serial.write("EG11\n".encode())
+        return
+
+
     def set_objective_z(self,pos):
         if self.home:
             return
@@ -134,7 +139,8 @@ class ArduinoBase:
     def set_objective_origin(self):
         if self.home:
             return
-        self.serial.write("EH\n".encode())
+        self.serial.write("EX\n".encode())
+        self.pos = 0
 
     def read_objective_z(self):
         """read outlet z position, return um

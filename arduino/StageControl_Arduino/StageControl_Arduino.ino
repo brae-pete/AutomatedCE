@@ -161,10 +161,35 @@ void serialCheck() {
   }
 }
 
+bool checkHome(){
+  unsigned int sw_val;
+  sw_val = driver_2.getParam(STATUS);
+  //Serial.println(sw_val);
+  sw_val &= 0x0004;
+  //Serial.println(sw_val);
+  driver_2.getStatus(); // clears error flags
+  bool at_home = (sw_val==4);
+  Serial.println(at_home);
+  return at_home;
+}
+
+void releaseSW(){
+  int at_home=true;
+  Serial.println("Backing from SW");
+  while (at_home){
+    delay(100);
+    at_home = checkHome();
+  }
+}
 void moveMotor(){
   // Move the motor to specified position.
   driver_2.hardStop();
-  driver_2.getStatus(); // clears error flags
+  bool at_home = checkHome();
+  if (at_home){
+        delay(1);
+        driver_2.releaseSw(B0,B1);
+        releaseSW();
+  }
   driver_2.setSwitchMode(CONFIG_SW_HARD_STOP); // Set switch mode to hard stop. 
   int chnl = atoi(inputString[1]);
   String location = inputString.substring(3,13);
@@ -201,9 +226,10 @@ void motorHomePosition(){
   }
   if (sw_val == 4){
     Serial.println("Go Down");
+    
     driver_2.releaseSw(B0,B1);
   }else{
-  driver_2.goUntil(B0,dir,50.3);
+  driver_2.goUntil(B0,dir,400);
   }
 }
 
