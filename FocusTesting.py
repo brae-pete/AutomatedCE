@@ -10,28 +10,31 @@ import pandas as pd
 from matplotlib import animation
 
 
-class CapillaryFocusAuxillary:
+class ZStackData:
     """
-    Collects data on the relationship between the capillary position and objective position for
-    points around the sample well. This is an auxillary class that should only be relavent for
-    the barracuda system.
+    Class for controlling the Z acquisition of images.
+    Stores data into a data frame according to the columns
 
-    Uses CE system class to control the barracuda apparatus. In particular the objective, xy stage,
-    z stage, and camera are all used to gather data.
+    Methods that would probably need to be changed for additional auxiliary function are:
+    _record_data() -> depending on the information you want to capture. default is xy, obj_z, cap_z,
+    img_folder, slide_movment, well_num.
 
-    Data is store in a Pandas dataframe and exported to a csv file.
-    The data columns include:
+    _move_hardware()-> should be connected to the hardware that is moving (either objective or capillary)
 
-    sample_num, x     , y    , objective_z, capillary_z, img_folder, slide_movement, well_num,
-    int       | float| float  | float     |  float     |  string   |   bool        |    int   |
+    Fields that may need to be changed are:
+    temp_file -> CSV filename from the database
+
+
     """
     _columns = ['x', 'y', 'objective_z', 'capillary_z', 'img_folder', 'slide_movement',
                 'well_num']
     _focus_dir = os.getcwd() + "\\focus_data"
-
+    _temp_file = _focus_dir + "\\cap_data.csv"
+    file_prefix = "Sample"
     def __init__(self, apparatus):
         self.apparatus = apparatus
         self.df = self._create_dataframe()
+        self._load_temp()
 
     def start_acquisition(self, slide_movement=False, well_num=1):
         new_data = self._record_data(slide_movement)
@@ -58,16 +61,15 @@ class CapillaryFocusAuxillary:
         new_data[5] = slide_movment
         new_data[6] = well_num
 
-
         # Create new Data frame and add it to our dataset
-        numpy_data = np.reshape(np.asarray(new_data),(1,len(self._columns)))
+        numpy_data = np.reshape(np.asarray(new_data), (1, len(self._columns)))
         new_df = pd.DataFrame(data=numpy_data, columns=self._columns)
         self.df = self.df.append(new_df)
         return new_data
 
     def _create_sample_folder(self):
         sample_time = datetime.datetime.now()
-        name = "\\Sample_{}".format(sample_time.strftime("%Y-%m-%d_%H-%M-%S"))
+        name = "\\{}_{}".format(self.file_prefix, sample_time.strftime("%Y-%m-%d_%H-%M-%S"))
         dir_name = self._focus_dir + name
         os.mkdir(dir_name)
         return dir_name
@@ -81,6 +83,11 @@ class CapillaryFocusAuxillary:
         # Move objective down
         self._loop_acquisition(start_pos, save_dir, -1)
 
+    def _move_hardware(self, position):
+        """ Moves the objective to the absolute position specified by position"""
+        self.apparatus.set_objective(position)
+        self.apparatus.objective_control.wait_for_move()
+
     def _loop_acquisition(self, start_pos, save_dir, direction=1):
         """
         Moves the objective up and down from the focal plane. Acquires images according to the funciton
@@ -93,12 +100,12 @@ class CapillaryFocusAuxillary:
         """
         move_x = 0
         while 100 > move_x > -100:
-            self.apparatus.set_objective(move_x + start_pos)
-            self.apparatus.objective_control.wait_for_move()
-            time.sleep(0.5)
-            filename = save_dir + "\\obj_{:+04.0f}.png".format(move_x)
+            self._move_hardware(move_x + start_pos)
+            time.sleep(0.3)
+            filename = save_dir + "\\z_stack_{:+04.0f}.png".format(move_x)
             self.apparatus.image_control.record_recent_image(filename)
             move_x += direction * self._move_function(np.abs(move_x))
+        self._move_hardware(start_pos)
         return
 
     @staticmethod
@@ -113,6 +120,14 @@ class CapillaryFocusAuxillary:
         return y
 
     def _save_temp(self):
+        self.df.to_csv(self._temp_file)
+        return
+
+    def _load_temp(self):
+        try:
+            self.df = pd.read_csv(self._temp_file)
+        except FileNotFoundError:
+            logging.info("Creating new file...")
         return
 
     def save_as(self):
@@ -121,6 +136,78 @@ class CapillaryFocusAuxillary:
     def _create_dataframe(self):
         df = pd.DataFrame(columns=self._columns)
         return df
+
+
+def init():
+    pass
+
+
+def animate(i):
+    frame = hd.get_image()
+    try:
+        im.set_data(frame)
+    except TypeError:
+        logging.warning("Could not load image")
+    return im
+
+class CapillaryFocusAuxillary(ZStackData):
+    """
+    Collects data on the relationship between the capillary position and objective position for
+    points around the sample well. This is an auxillary class that should only be relavent for
+    the barracuda system.
+
+    Uses CE system class to control the barracuda apparatus. In particular the objective, xy stage,
+    z stage, and camera are all used to gather data.
+
+    Data is store in a Pandas dataframe and exported to a csv file.
+    The data columns include:
+
+    sample_num, x     , y    , objective_z, capillary_z, img_folder, slide_movement, well_num,
+    int       | float| float  | float     |  float     |  string   |   bool        |    int   |
+    """
+    _columns = ['x', 'y', 'objective_z', 'capillary_z', 'img_folder', 'slide_movement',
+                'well_num']
+    _focus_dir = os.getcwd() + "\\focus_data"
+    _temp_file = _focus_dir + "\\cap_data.csv"
+    file_prefix = "Capillary"
+
+    def _record_data(self, slide_movment, well_num=1):
+        """
+        Records data at the start of the acquisition. The capillary and objective should be in focus with each other.
+        The objective should be 100 microns above the focal plane of the glass.
+
+        :param slide_movment: Bool. True signifies slide was adjusted or moved between the last
+         acquisition and now
+        :param well_num: Which of the sample wells this image was taken from
+        :return:
+        """
+        # Record new data of the in focus region
+        new_data = [None] * len(self._columns)
+        new_data[0:2] = self.apparatus.get_xy()
+        new_data[2] = self.apparatus.get_objective()
+        new_data[3] = self.apparatus.get_z()
+        new_data[4] = self._create_sample_folder()
+        new_data[5] = slide_movment
+        new_data[6] = well_num
+
+        # Create new Data frame and add it to our dataset
+        numpy_data = np.reshape(np.asarray(new_data), (1, len(self._columns)))
+        new_df = pd.DataFrame(data=numpy_data, columns=self._columns)
+        self.df = self.df.append(new_df)
+        return new_data
+
+class CellFocusAuxillary(ZStackData):
+    """
+    Collects images at different focal planes of the cell.
+
+    Records position of the xy, objective_height, img_folder into a pandas dataframe (exported to csv).
+
+    Images are organized into folders based off of the time of acquisition.
+    """
+
+    _focus_dir = os.getcwd() + "\\focus_data"
+    _temp_file =_focus_dir + "\\cell_data.csv"
+    file_prefix = "Cell"
 
 
 

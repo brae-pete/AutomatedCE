@@ -97,6 +97,10 @@ class BaseSystem:
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
         logging.error('home_z not implemented in hardware class.')
 
+    def wait_z(self):
+        """ Waits until the z-stage has finished its move before releasing the lock"""
+        logging.error("wait_z not implemented in hardware class")
+
     def close_outlet(self):
         """Removes immediate functionality of the outlet stage/motor."""
         logging.error('close_outlet not implemented in hardware class.')
@@ -244,7 +248,7 @@ class BarracudaSystem(BaseSystem):
     _daq_voltage_control = 'ao1'
     _daq_rfu = "ai3"
 
-    _z_stage_lock = threading.Lock()
+    _z_stage_lock = threading.RLock() # Same thread can access the lock at multiple points, but not multiple threads
     _outlet_lock = threading.Lock()
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
@@ -293,6 +297,7 @@ class BarracudaSystem(BaseSystem):
                 logging.info('{:.0f}s have passed. turning off laser.'.format(self.laser_max_time))
                 self.laser_close()
                 self._laser_rem_time = 0
+                return True
 
     def calibrate_system(self, permissions_gui):
         """Calibrates the system."""
@@ -420,6 +425,9 @@ class BarracudaSystem(BaseSystem):
         """Sets the current position of the Z stage as home. Return False if device has no 'home' capability."""
         return False
 
+    def wait_z(self):
+        self.z_stage_control.wait_for_move()
+
     def home_z(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
         self.z_stage_control.go_home()
@@ -509,10 +517,10 @@ class BarracudaSystem(BaseSystem):
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         if pfn:
-            self.laser_control.set_pfn('{:03d}'.format(pfn))
+            self.laser_control.set_pfn('{:03d}'.format(int(pfn)))
 
         if att:
-            self.laser_control.set_attenuation('{:03d}'.format(att))
+            self.laser_control.set_attenuation('{:03d}'.format(int(att)))
 
         if energy:
             logging.info('Cannot set energy of laser currently.')
@@ -521,7 +529,7 @@ class BarracudaSystem(BaseSystem):
             logging.info('Cannot set mode of laser currently.')
 
         if burst:
-            self.laser_control.set_burst('{:04d}'.format(burst))
+            self.laser_control.set_burst('{:04d}'.format(int(burst)))
 
         return True
 

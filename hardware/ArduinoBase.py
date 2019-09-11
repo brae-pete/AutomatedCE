@@ -125,6 +125,7 @@ class ArduinoBase:
             return
         self.serial.write("M0G\n".encode())
 
+
     def go_home_objective(self):
         self.serial.write("EG11\n".encode())
         return
@@ -176,6 +177,8 @@ class ArduinoBase:
             return self.pos, offset
         return pos, offset
 
+    def stop_objective_z(self):
+        self.serial.write("ES\n".encode())
 
     def applyPressure(self):
         if self.home:

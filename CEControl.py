@@ -11,12 +11,14 @@ import random
 import CESystems  # Hardware system classes
 import CEObjects  # CE-specific data structures
 import CEGraphic  # GUI classes
+import FocusTesting
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
 
 HOME = False
+
 
 # fixme have the program not load and start the systems on startup (for obvious reasons)
 
@@ -25,6 +27,7 @@ HOME = False
 class ProgramController:
     """Builds the pieces of the program and puts them together. Ooooooh we could probably just make this a function
     now that I think about it. Class is cooler though. hmmm"""
+
     def __init__(self):
         # Initialize system model, system hardware and the GUI
         self.repository = CEObjects.CERepository()
@@ -176,8 +179,8 @@ class InsertScreenController:
         # The event we are sending holds the current coordinates of the stage and converts them to pixel
         event_location = self.hardware.get_xy()
         logging.info(event_location)
-        event_location = [event_location[0]-self.hardware.xy_stage_upper_left[0],
-                          event_location[1]-self.hardware.xy_stage_upper_left[1]]
+        event_location = [event_location[0] - self.hardware.xy_stage_upper_left[0],
+                          event_location[1] - self.hardware.xy_stage_upper_left[1]]
         logging.info(event_location)
         logging.info(self.hardware.xy_stage_upper_left)
         # We want the pixel location of the objective relative to the stage.
@@ -191,7 +194,7 @@ class InsertScreenController:
             return
 
         if self.screen.image_frame.draw_shape == 'CIRCLE':  # Only need to know radius of well.
-            event.append(float(self.screen.circle_radius_input.text())*self._mm2pix)
+            event.append(float(self.screen.circle_radius_input.text()) * self._mm2pix)
 
         elif self.screen.image_frame.draw_shape == 'ARRAY':  # Need to know dimensions of array and radius of wells.
             event.append(float(self.screen.circle_radius_input.text()) * self._mm2pix)
@@ -226,8 +229,8 @@ class InsertScreenController:
             if self._initial:
                 self._initial_point = location
             else:
-                location = [self._initial_point[0] + (location[0] - self._initial_point[0])/2,
-                            self._initial_point[1] + (location[1] - self._initial_point[1])/2]
+                location = [self._initial_point[0] + (location[0] - self._initial_point[0]) / 2,
+                            self._initial_point[1] + (location[1] - self._initial_point[1]) / 2]
                 self._add_row(location, pixels=False)
 
         elif self.screen.image_frame.draw_shape == 'ARRAY':
@@ -236,8 +239,8 @@ class InsertScreenController:
             else:
                 x = self._initial_point[0]
                 y = self._initial_point[1]
-                dx = (location[0] - self._initial_point[0])/(int(self.screen.num_circles_horizontal_input.text()) - 1)
-                dy = (location[1] - self._initial_point[1])/(int(self.screen.num_circles_vertical_input.text()) - 1)
+                dx = (location[0] - self._initial_point[0]) / (int(self.screen.num_circles_horizontal_input.text()) - 1)
+                dy = (location[1] - self._initial_point[1]) / (int(self.screen.num_circles_vertical_input.text()) - 1)
                 for _ in range(int(self.screen.num_circles_horizontal_input.text())):
                     for _ in range(int(self.screen.num_circles_vertical_input.text())):
                         self._add_row([x, y], pixels=False)
@@ -259,7 +262,8 @@ class InsertScreenController:
         else:
             label.setText(label_saved)
         if pixels:
-            location.setText('({:.0f}, {:.0f})'.format(well_location[0]/self._um2pix, well_location[1]/self._um2pix))
+            location.setText(
+                '({:.0f}, {:.0f})'.format(well_location[0] / self._um2pix, well_location[1] / self._um2pix))
         else:
             location.setText('({:.0f}, {:.0f})'.format(well_location[0], well_location[1]))
 
@@ -352,7 +356,7 @@ class InsertScreenController:
                 self.screen.image_frame.clear()
                 self.screen.insert_table.clearContents()
                 for row in range(self.screen.insert_table.rowCount()):
-                    self.screen.insert_table.removeRow(self.screen.insert_table.rowCount()-1)
+                    self.screen.insert_table.removeRow(self.screen.insert_table.rowCount() - 1)
                 self.screen.file_name.setText(open_file_path)
 
                 for well in self.insert.wells:
@@ -485,12 +489,12 @@ class MethodScreenController:
         self.screen.insert_table.setItem(row_count, 4, blank_duration)
 
         inlet_travel = QtWidgets.QDoubleSpinBox()
-        inlet_travel.setMaximum(10)
-        inlet_travel.setMinimum(-10)
+        inlet_travel.setMaximum(25)
+        inlet_travel.setMinimum(0)
         if inlet_travel_input:
             inlet_travel.setValue(inlet_travel_input)
         else:
-            inlet_travel.setValue(25)
+            inlet_travel.setValue(0)
         inlet_travel.setSuffix('mm')
         self.screen.insert_table.setCellWidget(row_count, 7, inlet_travel)
 
@@ -500,7 +504,7 @@ class MethodScreenController:
         if outlet_travel_input:
             outlet_travel.setValue(outlet_travel_input)
         else:
-            outlet_travel.setValue(1)
+            outlet_travel.setValue(0)
         outlet_travel.setSuffix('cm')
         self.screen.insert_table.setCellWidget(row_count, 8, outlet_travel)
 
@@ -544,7 +548,7 @@ class MethodScreenController:
             remove_button = QtWidgets.QPushButton('-')
             remove_button.setFixedWidth(38)
             remove_button.released.connect(lambda: self.remove_step())
-            self.screen.insert_table.setCellWidget(row_count-1, 0, remove_button)
+            self.screen.insert_table.setCellWidget(row_count - 1, 0, remove_button)
 
     def remove_step(self):
         """Removes the specified row from the table."""
@@ -890,7 +894,7 @@ class SequenceScreenController:
             remove_button = QtWidgets.QPushButton('-')
             remove_button.setFixedWidth(38)
             remove_button.released.connect(lambda: self.remove_method())
-            self.screen.method_table.setCellWidget(row_count-1, 0, remove_button)
+            self.screen.method_table.setCellWidget(row_count - 1, 0, remove_button)
 
         add_button = QtWidgets.QPushButton('+')
         add_button.setFixedWidth(38)
@@ -969,6 +973,7 @@ class RunScreenController:
     _laser_on = threading.Event()
     _stop_thread_flag = threading.Event()
     _pause_flag = threading.Event()
+    _inject_flag = threading.Event()
     _live_feed = threading.Event()
     _plot_data = threading.Event()
     _laser_position = None
@@ -976,6 +981,7 @@ class RunScreenController:
 
     _stop.set()
     _stop.clear()
+    _last_cell_positions = {'xy': None, 'cap': None, 'obj': None, 'well': None}
 
     # Screen Background Functions
     def __init__(self, screen, hardware, repository):
@@ -1019,16 +1025,22 @@ class RunScreenController:
         self.screen.temp_pic_button.released.connect(lambda: threading.Thread(target=self.take_training_images).start())
 
         if self.hardware.hasXYControl:
-            self.screen.xy_up.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value()*self._xy_step_size]))
-            self.screen.xy_down.released.connect(lambda: self.hardware.set_xy(rel_xy=[0, -self.screen.xy_step_size.value()*self._xy_step_size]))
-            self.screen.xy_right.released.connect(lambda: self.hardware.set_xy(rel_xy=[self.screen.xy_step_size.value()*self._xy_step_size, 0]))
-            self.screen.xy_left.released.connect(lambda: self.hardware.set_xy(rel_xy=[-self.screen.xy_step_size.value()*self._xy_step_size, 0]))
+            self.screen.xy_up.released.connect(
+                lambda: self.hardware.set_xy(rel_xy=[0, self.screen.xy_step_size.value() * self._xy_step_size]))
+            self.screen.xy_down.released.connect(
+                lambda: self.hardware.set_xy(rel_xy=[0, -self.screen.xy_step_size.value() * self._xy_step_size]))
+            self.screen.xy_right.released.connect(
+                lambda: self.hardware.set_xy(rel_xy=[self.screen.xy_step_size.value() * self._xy_step_size, 0]))
+            self.screen.xy_left.released.connect(
+                lambda: self.hardware.set_xy(rel_xy=[-self.screen.xy_step_size.value() * self._xy_step_size, 0]))
             self.screen.xy_x_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.xy_y_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.xy_x_value.unselected.connect(lambda: self._value_display_interact(selected=False))
             self.screen.xy_y_value.unselected.connect(lambda: self._value_display_interact(selected=False))
-            self.screen.xy_x_value.returnPressed.connect(lambda: self.hardware.set_xy(xy=[float(self.screen.xy_x_value.text()), self.hardware.get_xy()[1]]))
-            self.screen.xy_y_value.returnPressed.connect(lambda: self.hardware.set_xy(xy=[self.hardware.get_xy()[0], float(self.screen.xy_y_value.text())]))
+            self.screen.xy_x_value.returnPressed.connect(
+                lambda: self.hardware.set_xy(xy=[float(self.screen.xy_x_value.text()), self.hardware.get_xy()[1]]))
+            self.screen.xy_y_value.returnPressed.connect(
+                lambda: self.hardware.set_xy(xy=[self.hardware.get_xy()[0], float(self.screen.xy_y_value.text())]))
             self.screen.xy_set_origin.released.connect(lambda: self.hardware.set_xy_home())
             self.screen.xy_origin.released.connect(lambda: self.hardware.home_xy())
             self.screen.xy_stop.released.connect(lambda: self.hardware.stop_xy())
@@ -1036,9 +1048,12 @@ class RunScreenController:
             self.screen.enable_xy_stage_form(False)
 
         if self.hardware.hasObjectiveControl:
-            self.screen.objective_up.released.connect(lambda: self.hardware.set_objective(rel_h=self.screen.objective_step_size.value()))
-            self.screen.objective_down.released.connect(lambda: self.hardware.set_objective(rel_h=-self.screen.objective_step_size.value()))
-            self.screen.objective_value.returnPressed.connect(lambda: self.hardware.set_objective(h=float(self.screen.objective_value.text())))
+            self.screen.objective_up.released.connect(
+                lambda: self.hardware.set_objective(rel_h=self.screen.objective_step_size.value()))
+            self.screen.objective_down.released.connect(
+                lambda: self.hardware.set_objective(rel_h=-self.screen.objective_step_size.value()))
+            self.screen.objective_value.returnPressed.connect(
+                lambda: self.hardware.set_objective(h=float(self.screen.objective_value.text())))
             self.screen.objective_stop.released.connect(lambda: self.hardware.stop_objective())
             self.screen.objective_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.objective_value.unselected.connect(lambda: self._value_display_interact(selected=False))
@@ -1048,9 +1063,12 @@ class RunScreenController:
             self.screen.enable_objective_form(False)
 
         if self.hardware.hasOutletControl:
-            self.screen.outlet_up.released.connect(lambda: self.hardware.set_outlet(rel_h=self.screen.outlet_step_size.value()))
-            self.screen.outlet_down.released.connect(lambda: self.hardware.set_outlet(rel_h=-self.screen.outlet_step_size.value()))
-            self.screen.outlet_value.returnPressed.connect(lambda: self.hardware.set_outlet(h=float(self.screen.outlet_value.text())))
+            self.screen.outlet_up.released.connect(
+                lambda: self.hardware.set_outlet(rel_h=self.screen.outlet_step_size.value()))
+            self.screen.outlet_down.released.connect(
+                lambda: self.hardware.set_outlet(rel_h=-self.screen.outlet_step_size.value()))
+            self.screen.outlet_value.returnPressed.connect(
+                lambda: self.hardware.set_outlet(h=float(self.screen.outlet_value.text())))
             self.screen.outlet_stop.released.connect(lambda: self.hardware.stop_outlet())
             self.screen.outlet_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.outlet_value.unselected.connect(lambda: self._value_display_interact(selected=False))
@@ -1069,21 +1087,24 @@ class RunScreenController:
             self.screen.enable_pressure_form(False)
 
         if self.hardware.hasInletControl:
-            self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
-            self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
+            self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
+            self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
             self.screen.z_value.returnPressed.connect(lambda: self.hardware.set_z(float(self.screen.z_value.text())))
             self.screen.z_stop.released.connect(lambda: self.hardware.stop_z())
             self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.z_value.unselected.connect(lambda: self._value_display_interact(selected=False))
             self.screen.z_set_home.released.connect(lambda: self.hardware.set_z_home())
-            self.screen.z_home.released.connect(lambda: self.hardware.home_z())
+            self.screen.z_home.released.connect(lambda: threading.Thread(target=self.hardware.home_z).start())
         else:
             self.screen.enable_z_stage_form(False)
 
         if self.hardware.hasLaserControl:
-            self.screen.laser_pfn.valueChanged.connect(lambda: self.hardware.set_laser_parameters(pfn=self.screen.laser_pfn.value()))
-            self.screen.laser_attenuation.valueChanged.connect(lambda: self.hardware.set_laser_parameters(att=self.screen.laser_attenuation.value()))
-            self.screen.laser_burst_count.valueChanged.connect(lambda: self.hardware.set_laser_parameters(burst=self.screen.laser_burst_count.value()))
+            self.screen.laser_pfn.returnPressed.connect(
+                lambda: self.hardware.set_laser_parameters(pfn=self.screen.laser_pfn.text()))
+            self.screen.laser_attenuation.returnPressed.connect(
+                lambda: self.hardware.set_laser_parameters(att=self.screen.laser_attenuation.text()))
+            self.screen.laser_burst_count.returnPressed.connect(
+                lambda: self.hardware.set_laser_parameters(burst=self.screen.laser_burst_count.text()))
             self.screen.laser_fire.released.connect(lambda: self.fire_laser())
             self.screen.laser_standby.released.connect(lambda: self.laser_on())
             self.screen.laser_stop.released.connect(lambda: self.hardware.laser_stop())
@@ -1093,7 +1114,8 @@ class RunScreenController:
             self.screen.enable_laser_form(False)
 
         if self.hardware.hasVoltageControl:
-            self.screen.voltage_value.valueChanged.connect(lambda: self.hardware.set_voltage(self.screen.voltage_value.value()))
+            self.screen.voltage_value.valueChanged.connect(
+                lambda: self.hardware.set_voltage(self.screen.voltage_value.value()))
             self.screen.voltage_off.released.connect(lambda: self.hardware.stop_voltage())
         else:
             self.screen.enable_voltage_form(False)
@@ -1110,6 +1132,8 @@ class RunScreenController:
         self.screen.start_sequence.released.connect(lambda: self.start_sequence())
         self.screen.pause_sequence.released.connect(lambda: self.pause_sequence())
         self.screen.stop_sequence.released.connect(lambda: self.end_sequence())
+        self.screen.inject_capture_button.released.connect(lambda: self.inject_capture())
+
         self.screen.clear_output.released.connect(lambda: self.clear_output_window())
         self.screen.save_output.released.connect(lambda: self.save_output_window())
         self.screen.feed_updated.connect(lambda: self.screen.feed_pointer.setPixmap(self._new_pixmap))
@@ -1169,7 +1193,7 @@ class RunScreenController:
         """Updates the live positions of the stages and motors in the edit boxes."""
         while True:
             if self._stop.is_set():
-                time.sleep(4*self._update_delay)
+                time.sleep(4 * self._update_delay)
                 continue
 
             value = self.hardware.get_xy()
@@ -1315,7 +1339,7 @@ class RunScreenController:
         if self._calibrating_ratio:
             self._calibrating_image_ratio(True)
         else:
-            logging.info(self.screen.live_feed_scene.crosshair_location)
+            pass
 
     # Hardware Control Function
     def calibrate_system(self, start):
@@ -1352,8 +1376,8 @@ class RunScreenController:
                 meter_dx = second_calibration_point[0][0] - self._first_calibration_point[0][0]
                 pixel_dy = second_calibration_point[1][1] - self._first_calibration_point[1][1]
                 meter_dy = second_calibration_point[0][1] - self._first_calibration_point[0][1]
-                pixel_d = np.sqrt(pixel_dx**2 + pixel_dy**2)
-                meter_d = np.sqrt(meter_dx**2 + meter_dy**2)
+                pixel_d = np.sqrt(pixel_dx ** 2 + pixel_dy ** 2)
+                meter_d = np.sqrt(meter_dx ** 2 + meter_dy ** 2)
 
                 self._pixel2um = meter_d / pixel_d
 
@@ -1409,16 +1433,8 @@ class RunScreenController:
 
     def fire_laser(self):
         """Fires the laser."""
+
         def fire():
-            pfn = self.screen.laser_pfn.value()
-            attenuation = self.screen.laser_attenuation.value()
-
-            set_bool = self.hardware.set_laser_parameters(pfn=pfn, att=attenuation, mode=2)  # fixme, add mode
-
-            if not set_bool:
-                logging.warning('Laser firing canceled.')
-                return
-
             executed = self.hardware.laser_fire()
             if not executed:
                 logging.error('Error firing laser. Maker sure laser_fire() is properly defined in the hardware class.')
@@ -1472,7 +1488,7 @@ class RunScreenController:
                     logging.info('insertloaded')
                     if self.insert.label != data.insert.label and self.insert.wells != data.insert.wells:
                         CEGraphic.ErrorMessageUI('The insert for this method does not match the insert for previously'
-                                                   ' loaded methods.')
+                                                 ' loaded methods.')
                         return
                 else:
                     self.insert = data.insert
@@ -1555,6 +1571,7 @@ class RunScreenController:
 
     def focus(self):
         """Focuses the objective."""
+
         def user_focused():
             focus_stop_flag.set()
             self.hardware.objective_focus = self.hardware.get_objective()
@@ -1608,7 +1625,7 @@ class RunScreenController:
             s_2 = time.time()
             distance, score, negative_score = self.hardware.get_focus()
             logging.info('{}, {}, {}'.format(distance, score, time.time() - s_2))
-            distances[(attempts-1) % 10] = distance
+            distances[(attempts - 1) % 10] = distance
             logging.info(distances)
 
             # If the network predicts we are at or near zero, stop and record current position as the focus point.
@@ -1654,13 +1671,13 @@ class RunScreenController:
             return [x1, y1, x2, y2]
 
         def smart_move(repetitions):
-            if iterations > (repetitions**2 + repetitions):
+            if iterations > (repetitions ** 2 + repetitions):
                 repetitions += 1
 
-            if iterations <= repetitions**2:
-                move = [0, 150*(-1)**repetitions]
+            if iterations <= repetitions ** 2:
+                move = [0, 150 * (-1) ** repetitions]
             else:
-                move = [-150*(-1)**repetitions, 0]
+                move = [-150 * (-1) ** repetitions, 0]
 
             moved = self.hardware.set_xy(rel_xy=move)
             if not moved:
@@ -1715,15 +1732,16 @@ class RunScreenController:
             cell_boxes = [[float(y) * float(self._pixel2um) for y in x] for x in cell_boxes]
 
             for cell in cell_boxes:
-                cell_radius = np.sqrt(((cell[2]-cell[0])/2)**2 + ((cell[3]-cell[1])/2)**2)
-                centroid = [(cell[2]-cell[0])/2 + cell[0], (cell[3]-cell[1])/2 + cell[1], cell_radius]
+                cell_radius = np.sqrt(((cell[2] - cell[0]) / 2) ** 2 + ((cell[3] - cell[1]) / 2) ** 2)
+                centroid = [(cell[2] - cell[0]) / 2 + cell[0], (cell[3] - cell[1]) / 2 + cell[1], cell_radius]
                 self.screen.live_feed_scene.draw_rect(cell, single=True)
 
                 for other_cell in cell_boxes:
                     if other_cell != cell:
-                        other_cell_radius = np.sqrt(((other_cell[2]-other_cell[0])/2)**2 + ((other_cell[3]-other_cell[1])/2)**2)
-                        centroid_separation = np.sqrt((cell[0]+cell[2]/2-other_cell[0]-other_cell[2]/2)**2 +
-                                                      (cell[1]+cell[3]/2-other_cell[1]-other_cell[3]/2)**2)
+                        other_cell_radius = np.sqrt(
+                            ((other_cell[2] - other_cell[0]) / 2) ** 2 + ((other_cell[3] - other_cell[1]) / 2) ** 2)
+                        centroid_separation = np.sqrt((cell[0] + cell[2] / 2 - other_cell[0] - other_cell[2] / 2) ** 2 +
+                                                      (cell[1] + cell[3] / 2 - other_cell[1] - other_cell[3] / 2) ** 2)
                         cell_separation = centroid_separation - cell_radius - other_cell_radius
 
                         if cell_separation < min_separation:
@@ -1763,6 +1781,31 @@ class RunScreenController:
         self.hardware.set_voltage(0)
         self._stop_thread_flag.set()
 
+    def inject_capture(self):
+        threading.Thread(target=self._capture_logic).start()
+
+    def _capture_logic(self):
+        logging.info('Capture Data')
+        # Check if to acquire Cell Z-stacks
+        if int(self.screen.inject_cell_box.checkState()) == 2:
+            logging.info("Capture cell z_stack...")
+            cell_focus = FocusTesting.CellFocusAuxillary(self.hardware)
+            self.hardware.set_z(rel_z=-2)
+            self.hardware.z_stage_control.wait_for_move()
+            cell_focus.start_acquisition()
+            self.hardware.set_z(rel_z=2)
+            self.hardware.z_stage_control.wait_for_move()
+
+        # Check if to acquire capillary z-stacks
+        if int(self.screen.inject_cap_box.checkState()) == 2:
+            logging.info("Capture Capillary Stack...")
+            self.hardware.set_objective(rel_h=80)
+            self.hardware.objective_control.wait_for_move()
+            cap_focus = FocusTesting.CapillaryFocusAuxillary(self.hardware)
+            cap_focus.start_acquisition()
+            self.hardware.set_objective(rel_h=-80)
+            self.hardware.objective_control.wait_for_move()
+
     def run(self):
         if not self.check_system():
             logging.error('Unable to start run.')
@@ -1777,13 +1820,22 @@ class RunScreenController:
         self._plot_data.clear()
         logging.info('Sequence Completed.')
         return True
-
+    def record_cell_info(self):
+        xy = self.hardware.get_xy()
+        cap = self.hardware.get_z()
+        obj = self.hardware.get_objective()
+        self._last_cell_positions['xy']=xy
+        self._last_cell_positions['cap']=cap
+        self._last_cell_positions['obj']=obj
+        return
     def run_method(self, method, repetitions):
         def check_flags():
             while self._pause_flag.is_set():
                 if self._stop_thread_flag.is_set():
                     self._plot_data.clear()
                     return False
+                if self._inject_flag.is_set():
+                    self.record_cell_info()
                 self._plot_data.clear()
                 time.sleep(1)
                 continue
@@ -1794,13 +1846,17 @@ class RunScreenController:
             return True
 
         def move_inlet(inlet_travel):
-            self.hardware.set_z(rel_z=inlet_travel)
-            time.sleep(2)
+            self.hardware.set_z(inlet_travel)
+            self.hardware.wait_z()
             return check_flags()
 
         def move_outlet(outlet_travel):
             self.hardware.set_outlet(rel_h=outlet_travel)
             time.sleep(2)
+            return check_flags()
+
+        def move_objective(objective_position):
+            self.hardware.set_objective(objective_position)
             return check_flags()
 
         def move_xy_stage(inlet_location):
@@ -1867,6 +1923,23 @@ class RunScreenController:
 
             return True
 
+        def semi_auto_cell():
+            # If wells are the same move back one.
+            if self._inject_flag.is_set():
+                return False
+            xy = self._last_cell_positions['xy']
+            if xy is not None:
+                move_xy_stage(xy)
+
+                cap = self._last_cell_positions['cap']
+                if cap is not None:
+                    move_inlet(cap)
+
+                obj = self._last_cell_positions['obj']
+                if cap is not None:
+                    move_objective(obj)
+            self._inject_flag.set()
+            return True
         def inject():
             pressure_state = False
             voltage_level = None
@@ -1886,11 +1959,15 @@ class RunScreenController:
                     logging.info('Focusing, locating and lysing cell.')
                     pass
                 else:
+                    semi_auto_cell()
                     logging.info('Run is paused. Locate and lyse cell.')
                     self._pause_flag.set()
                     state_n = check_flags()
                     if not state_n:
                         return False
+                    else:
+                        self.hardware.set_objective(rel_h=-1500)
+                        self.hardware.objective_control.wait_for_move()
 
             if pressure_state:
                 self.hardware.pressure_rinse_start()
@@ -1908,6 +1985,7 @@ class RunScreenController:
 
         for rep in range(repetitions):
             previous_step = None
+            self._inject_flag.clear()
             for step in method.steps:
                 if 'Type' in step.keys():
                     logging.info('{} Step: {}'.format(step['Type'], step['Summary']))
@@ -1916,7 +1994,7 @@ class RunScreenController:
                         return False
                     step_start = time.time()
 
-                    state = move_inlet(step['InletTravel'])
+                    state = move_inlet(0.25)
                     if not state:
                         return False
 
@@ -1929,20 +2007,21 @@ class RunScreenController:
                     except ValueError:
                         state = move_xy_stage(self.insert.get_well_xy(step['Inlet']))
                     else:
-                        if rep+1 > cycles:
-                            state = move_xy_stage(self.insert.get_next_well_xy(step['Inlet'], int(np.floor(rep/cycles))))
+                        if rep + 1 > cycles:
+                            state = move_xy_stage(
+                                self.insert.get_next_well_xy(step['Inlet'], int(np.floor(rep / cycles))))
                         else:
                             state = move_xy_stage(self.insert.get_well_xy(step['Inlet']))
                     if not state:
                         return False
 
                     if previous_step == 'Inject' and time.time() - step_start < self.injection_wait:
-                        time.sleep(abs(self.injection_wait-(time.time() - step_start)))
+                        time.sleep(abs(self.injection_wait - (time.time() - step_start)))
                         state = check_flags()
                         if not state:
                             return False
 
-                    state = move_inlet(-step['InletTravel'])
+                    state = move_inlet(step['InletTravel'])
                     if not state:
                         return False
 

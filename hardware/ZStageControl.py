@@ -155,6 +155,9 @@ class ZStageControl:
     def go_home(self):
         self.stage.go_home()
 
+    def wait_for_move(self):
+        self.stage.wait_for_move()
+
 
 class OpticsFocusZStage:
     """Helper class for the OpticsFocus Z stage
@@ -312,9 +315,10 @@ class PowerStep:
             self.check = False
             self.arduino = ArduinoBase.ArduinoBase(self.com,self.home)
         if lock == -1:
-            lock = threading.Lock()
+            lock = threading.RLock()
         self.lock = lock
         self.first_read = True
+        self.go_home()
 
     def wait_for_move(self):
         """
@@ -326,7 +330,7 @@ class PowerStep:
         current_pos = prev_pos + 1
         # Update position while moving
         while prev_pos != current_pos:
-            time.sleep(0.5)
+            time.sleep(0.1)
             prev_pos = current_pos
             current_pos = self.get_z()
         return current_pos
@@ -343,21 +347,23 @@ class PowerStep:
         User requests to get current position of stage, returned in mm
         """
         # Lock the resources we are going to use
-
-        if self.home:
-            if len(args) > 0:
-                self.pos = args[0]
-            return self.pos
-        pos, check_offset = self.arduino.read_outlet_z()
-        if check_offset:
-            self.offset = self.pos
-        self.pos = pos*self.inversion
-        self.pos = self.pos + self.offset
-        if self.first_read:
-            self.load_history()
-            self.first_read = False
-        else:
-            self.save_history()
+        with self.lock:
+            if self.home:
+                if len(args) > 0:
+                    self.pos = args[0]
+                return self.pos
+            pos, check_offset = self.arduino.read_outlet_z()
+            if check_offset:
+                self.offset = self.pos
+            self.pos = pos*self.inversion
+            self.pos = self.pos + self.offset
+            """
+            if self.first_read:
+                self.load_history()
+                self.first_read = False
+            else:
+                self.save_history()
+        """
         return self.pos
 
     def save_history(self):
@@ -382,18 +388,20 @@ class PowerStep:
         """ Moves up or down until the stage hits the mechanical stop that specifices the 25 mm mark
 
          """
-
-        if self.home:
-            self.pos = 0
-            return
-        self.arduino.go_home()
-        self.wait_for_move()
-        self.arduino.go_home()
-        self.pos = self.wait_for_move()
-        self.offset = 0
-        self.set_z(0.1);
-        self.wait_for_move()
-        self.save_history()
+        with self.lock:
+            if self.home:
+                self.pos = 0
+                return
+            self.arduino.go_home()
+            self.wait_for_move()
+            self.arduino.go_home()
+            self.pos = self.wait_for_move()
+            self.offset = 0
+            logging.info("{} is pos 0, {} is stage 0".format(self.pos, self.arduino.pos))
+            self.set_z(0.1);
+            cz=self.wait_for_move()
+            logging.info("{} is current z".format(cz))
+            self.save_history()
 
     def set_z(self, set_z):
         """ set_z (absolute position in mm)

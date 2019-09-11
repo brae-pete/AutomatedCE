@@ -31,6 +31,7 @@ class ObjectiveControl:
             lock = threading.Lock()
         self.lock = lock
         self.first_read = True
+        threading.Thread(target=self.go_home()).start()
         return
 
     def open(self):
@@ -167,7 +168,7 @@ class ObjectiveControl:
         current_pos = prev_pos + 1
         # Update position while moving
         while prev_pos != current_pos:
-            time.sleep(0.5)
+            time.sleep(0.1)
             prev_pos = current_pos
             current_pos = self.read_z()
         return current_pos

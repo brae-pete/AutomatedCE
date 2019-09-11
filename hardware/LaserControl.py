@@ -7,9 +7,9 @@ import serial  # PySerial
 
 
 class Laser:
-    _safety_pfn_limit = 95
+    _safety_pfn_limit = 255
 
-    def __init__(self, com="COM6", baudrate=9600, stopbits=1, timeout=0.5, lock=None, home=False):
+    def __init__(self, com="COM6", baudrate=9600, stopbits=1, timeout=0.1, lock=None, home=False):
         self.serial = serial.Serial()
         self.serial.timeout = timeout
         self.serial.baudrate = baudrate
@@ -179,7 +179,7 @@ class Laser:
 
             self.serial.write(self.commands['PULSE_MODE']('?').encode())
             response = self._read_buffer()
-            print('\tPulse Mode set to: {}'.format(response))
+            logging.info('\tPulse Mode set to: {}'.format(response))
 
             self.serial.write(self.commands['PFN_VOLTAGE']('?').encode())
             response = self._read_buffer()
@@ -259,6 +259,7 @@ class Laser:
             return True
 
     def set_mode(self, value):
+        """ 3 modes"""
         try:
             int(value)
         except ValueError:
@@ -336,7 +337,9 @@ class Laser:
             if response != 'ok':
                 logging.error('Failed to put laser in standby mode. Laser Response: {}'.format(response))
                 return False
-            return True
+
+        self.set_mode(1)
+        return True
 
     def fire(self):
         with self.lock:

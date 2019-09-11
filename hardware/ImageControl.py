@@ -115,11 +115,19 @@ class ImageControl:
     def record_recent_image(self, filename):
         if self.home:
             time.sleep(0.25)
-        img = self.mmc.getLastImage()
+        img = self._get_image()
         ims = img.shape
         img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         cv2.imwrite(filename, img)
+
+    def _get_image(self):
+        try:
+            img = self.mmc.getLastImage()
+        except MMCorePy.CMMError:
+            time.sleep(0.15)
+            img = self._get_image()
+        return img
 
     def image_conversion(self,img):
         """ Adjusts the contrast and brightness"""

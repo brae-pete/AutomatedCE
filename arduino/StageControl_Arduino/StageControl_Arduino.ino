@@ -186,7 +186,7 @@ void moveMotor(){
   driver_2.hardStop();
   bool at_home = checkHome();
   if (at_home){
-        delay(1);
+        
         driver_2.releaseSw(B0,B1);
         releaseSW();
   }
