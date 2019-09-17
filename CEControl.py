@@ -12,6 +12,7 @@ import CESystems  # Hardware system classes
 import CEObjects  # CE-specific data structures
 import CEGraphic  # GUI classes
 import FocusTesting
+import Detection # Cell Detection
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -978,6 +979,8 @@ class RunScreenController:
     _plot_data = threading.Event()
     _laser_position = None
     _t = 350
+    _start = True
+    mover = None
 
     _stop.set()
     _stop.clear()
@@ -994,11 +997,11 @@ class RunScreenController:
         self.injection_wait = 4.5
         self._um2pix = 1 / 300
         self._mm2pix = self._um2pix * 1000
+        self._detector = Detection.CellDetector(self.hardware)
         self._stage_offset = self.hardware.xy_stage_upper_left
         self._stage_inversion = self.hardware.xy_stage_inversion
         self._new_pixmap = None
         self._event = None
-
         self.screen.live_feed_scene.setSceneRect(0, 0, 512, 384)
 
         # Set up logging window in the run screen.
@@ -1017,12 +1020,15 @@ class RunScreenController:
     def _set_callbacks(self):
         """Assigns callbacks to all widgets and signals for the run screen."""
         self.screen.temp_find_button.released.connect(lambda: threading.Thread(target=self.find_cell).start())
-        self.screen.temp_calibrate_button.released.connect(lambda: self.calibrate_system(True))
+        self.screen.temp_calibrate_button.released.connect(lambda: self.calibrate_system())
         self.screen.live_feed_scene.calibrating_crosshairs.connect(lambda: self._screen_selection())
         self.screen.temp_pixel_conversion_button.released.connect(lambda: self._calibrating_image_ratio(False))
         self.screen.temp_laser_set.released.connect(lambda: self._setting_laser_position(False))
         self.screen.temp_focus_button.released.connect(lambda: threading.Thread(target=self.focus).start())
         self.screen.temp_pic_button.released.connect(lambda: threading.Thread(target=self.take_training_images).start())
+        self.screen.save_plot.released.connect(lambda: self._save_plot())
+        self.screen.reset_plot.released.connect(lambda: self._reset_plot())
+        self.screen.view_plot.released.connect(lambda: self._view_plot())
 
         if self.hardware.hasXYControl:
             self.screen.xy_up.released.connect(
@@ -1257,6 +1263,27 @@ class RunScreenController:
 
                 time.sleep(.25)
 
+    def _save_plot(self):
+
+        # returns tuple (file_path_file_name.csv, extension)
+        open_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Choose previous session',
+                                                                os.getcwd(), '(*.csv)')
+        with open(open_file_path[0], 'w') as f_in:
+            f_in.write('time, rfu, kV, uA\n')
+            data = self.hadware.daq_board_control.data
+            for i in range(len(data)):
+                t_point = i * (1/self.hardware.daq_board_control.freq)
+                rfu = data['ai3']
+                ua = data['ai2']
+                kv = data['ai1']
+                f_in.write('{:.3f},{},{:.3f},{:.3f}\n'.format(t_point, rfu, ua, kv))
+
+    def _reset_plot(self):
+        self.hardware.daq_board_control._clear_data()
+
+    def _view_plot(self):
+        pass
+
     def _switch_feed(self, live):
         """Switches the feed between live feed from camera or insert view with live XY position."""
         if not live:
@@ -1314,6 +1341,7 @@ class RunScreenController:
                 logging.info('{},{},{}'.format(meter_dx, meter_dy, meter_d))
 
                 self._pixel2um = meter_d / pixel_d
+                self._detector.pix2um = self._pixel2um
 
                 self._first_calibration_point = None
                 self.screen.live_feed_scene.calibrating = False
@@ -1326,8 +1354,15 @@ class RunScreenController:
             self._calibrating_ratio = not self._calibrating_ratio
 
     def _setting_laser_position(self, crosshair_set=False):
+        """
+        Sets the laser position to crosshair location (pixels? or um?)
+
+        :param crosshair_set:
+        :return:
+        """
         if crosshair_set:
             self._laser_position = self.screen.live_feed_scene.crosshair_location
+            self._detector.laser_spot = self._laser_position
             logging.info('Setting laser position to {}'.format(self._laser_position))
             self._setting_laser = False
         else:
@@ -1342,18 +1377,17 @@ class RunScreenController:
             pass
 
     # Hardware Control Function
-    def calibrate_system(self, start):
+    def calibrate_system(self):
         """Walks user through the necessary system calibrations that can't be done automatically."""
         if not self.hardware.hasXYControl:
             return
 
-        if start:
+        if self._start:
             if not self.screen.live_feed_scene.calibrating:
                 message = 'Follow the instructions in the output window to calibrate the system.'
                 CEGraphic.PermissionsMessageUI(message)
 
                 message = 'Calibrating Instructions' \
-                          '1. Move XY Stage to the upper left corner and click "Set Home" under XY Stage Control.\n' \
                           '2. If you are doing single cell analysis, focus the objective (manually or automatically.\n' \
                           '3. Once focused, select an object on the live feed.\n' \
                           '4. Move the XY stage until the object is on the opposite side of the live feed.\n' \
@@ -1363,6 +1397,7 @@ class RunScreenController:
                 logging.info('Ending Calibration')
 
             self.screen.live_feed_scene.calibrating = not self.screen.live_feed_scene.calibrating
+            self._start = False
         else:
             if not self._first_calibration_point:
                 logging.info('First calibration point.')
@@ -1380,10 +1415,11 @@ class RunScreenController:
                 meter_d = np.sqrt(meter_dx ** 2 + meter_dy ** 2)
 
                 self._pixel2um = meter_d / pixel_d
-
+                self._detector.pix2um = self._pixel2um
                 self._first_calibration_point = None
                 self.screen.live_feed_scene.calibrating = False
                 logging.info('Conversion is {}'.format(self._pixel2um))
+                self._start = True
 
     def stop_laser(self):  # keeper
         """Stops laser as well as alters appropriate items on the view."""
@@ -1661,8 +1697,19 @@ class RunScreenController:
                 return False
 
             attempts += 1
+    def create_mover(self):
+        xy = self.hardware.get_xy()
+        self.mover = Detection.Mover(xy)
 
     def find_cell(self):
+        """ Finds a cell"""
+        if self.mover is None:
+            logging.warning("Creating Mover")
+            self.mover = Detection.Mover(self.hardware.get_xy)
+            return
+        self._detector.mover_find_cell(self.mover)
+
+        """
         def adjust_laser(cell_n):
             x1 = cell_n[0] - self._laser_position[0]
             y1 = cell_n[1] - self._laser_position[1]
@@ -1760,7 +1807,7 @@ class RunScreenController:
                     return None
 
                 iterations += 1
-
+    """
     # Run Control Functions
     def start_sequence(self):
         if self._pause_flag.is_set():
@@ -1837,7 +1884,7 @@ class RunScreenController:
                 if self._inject_flag.is_set():
                     self.record_cell_info()
                 self._plot_data.clear()
-                time.sleep(1)
+                time.sleep(0.2)
                 continue
             if self._stop_thread_flag.is_set():
                 self._plot_data.clear()

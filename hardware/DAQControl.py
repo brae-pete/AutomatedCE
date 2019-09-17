@@ -17,6 +17,7 @@ class DAQBoard:
     voltage_ramp = 10  # speed to ramp voltage in kV/s
     voltage = 0  # Current voltage in V to send to the  daq. (-10 to 10 max)
     voltage_conversion = 30 / 10  # kV/daqV conversion factor
+    data_lock = threading.Lock()
 
     def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None):
         self.dev = dev
@@ -24,10 +25,16 @@ class DAQBoard:
         self.voltage_readout = voltage_read
         self.current_readout = current_read
         self.rfu_chan = rfu_read
-        self.data = {self.rfu_chan: [], self.current_readout: [], self.voltage_readout: []}  # RFU, Current and Voltage respectively
+        self._clear_data()
+
         if stop is None:
             stop = threading.Event()
         self.stop = stop
+
+    def _clear_data(self):
+        with self.data_lock:
+            self.data = {self.rfu_chan: [], self.current_readout: [], self.voltage_readout: []}  # RFU, Current and Voltage respectively
+        return
 
     def callback(self, *args):
         """Add data to the data variable every so many samples"""
@@ -36,9 +43,10 @@ class DAQBoard:
             samples = self.task.read(number_of_samples_per_channel=self.samples_per_chain)
         except nidaqmx.errors.DaqError:
             return
-        self.data[self.voltage_readout].extend([x*self.voltage_conversion for x in samples[0]])  # Voltage
-        self.data[self.current_readout].extend([x*self.voltage_conversion for x in samples[1]])  # Current
-        self.data[self.rfu_chan].extend([x*self.voltage_conversion for x in samples[2]])  # RFU
+        with self.data_lock:
+            self.data[self.voltage_readout].extend([x*self.voltage_conversion for x in samples[0]])  # Voltage
+            self.data[self.current_readout].extend([x*self.voltage_conversion for x in samples[1]])  # Current
+            self.data[self.rfu_chan].extend([x*self.voltage_conversion for x in samples[2]])  # RFU
         return 0
 
     def sample_config(self, task):

@@ -892,6 +892,10 @@ class RunScreen(QtWidgets.QMainWindow):
 
     def init_plot_view(self):
         self.save_plot = QtWidgets.QPushButton('Save')
+        self.reset_plot = QtWidgets.QPushButton('Reset')
+        self.view_plot = QtWidgets.QPushButton('Live Plot')
+        self.view_plot.setCheckable(True)
+
         self.plot_panel = PlotPanel()
         live_plot_window = QtWidgets.QMainWindow()
 
@@ -899,6 +903,8 @@ class RunScreen(QtWidgets.QMainWindow):
         control_widget = QtWidgets.QWidget()
         control_layout = QtWidgets.QHBoxLayout()
         control_layout.addWidget(self.save_plot)
+        control_layout.addWidget(self.reset_plot)
+        control_layout.addWidget(self.view_plot)
         control_layout.addStretch()
         control_widget.setLayout(control_layout)
         live_plot_control.setWidget(control_widget)

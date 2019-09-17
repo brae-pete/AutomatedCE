@@ -7,6 +7,12 @@ import numpy as np
 import logging
 from skimage import io, data, img_as_float
 from skimage import exposure
+from skimage import transform
+from skimage.color import rgb2gray
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+
 io.use_plugin('pil')
 
 if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
@@ -50,7 +56,8 @@ class ImageControl:
     """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
      """
 
-    contrast_exposure = [2,98] # Low and high percintiles for contrast exposure
+    contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
+    rotate = 90
     def __init__(self, mmc=None, config=None, home=False):
         self.mmc = mmc
         self.config = config
@@ -97,19 +104,22 @@ class ImageControl:
         if self.mmc.getRemainingImageCount() > 0:
             img = self.mmc.getLastImage()
             ims = img.shape
+            # From bring back from 32 bit to 3 rgb channels
             img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]  # img = np.float32(img)
-            self.raw_img = img.copy()
-            img = cv2.resize(img, (0, 0), fx=0.25, fy=0.25)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # img = cv2.equalizeHist(img)
+            new_ims=[0,0]
+            new_ims[0] = ims[0]/4
+            new_ims[1] = ims[1]/4
+            img = transform.resize(img, new_ims, anti_aliasing=True)
+            img = transform.rotate(img, 90, resize=True)
+            img = rgb2gray(img)
             self.img = img.copy()
             img = self.image_conversion(img)
-
-
+            """
             try:
                 img = pilImage.fromarray(img, 'L')
             except:
                 img = pilImage.fromarray(img)
+            """
             return img
 
     def record_recent_image(self, filename):
@@ -129,7 +139,7 @@ class ImageControl:
             img = self._get_image()
         return img
 
-    def image_conversion(self,img):
+    def image_conversion(self, img):
         """ Adjusts the contrast and brightness"""
         p2, p98 = np.percentile(img, self.contrast_exposure)
         img_rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
@@ -137,12 +147,23 @@ class ImageControl:
 
     @staticmethod
     def save_image(img, filename):
+        io.imsave(filename,img)
 
-        if type(img) is pilImage.Image:
-            img.save(filename)
-        else:
-            logging.WARNING("Could not save image!")
+    def live_view(self):
 
+        def animate(i):
+            img = self.get_recent_image()
+            if img is not None:
+                im.set_array(img)
+            return im,
 
-
-
+        fig = plt.figure()
+        try:
+            self.start_video_feed()
+        except MMCorePy.CMMError:
+            logging.WARNING("Continuous already starting")
+        time.sleep(1)
+        img = self.get_recent_image()
+        im = plt.imshow(img, animated=True)
+        ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
+        plt.show()

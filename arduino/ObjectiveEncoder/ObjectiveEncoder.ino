@@ -114,7 +114,7 @@ void setup()
   driver.setMaxSpeed(1200); // max speed in units of full steps/s 
   driver.setFullSpeed(2000); // full steps/s threshold for disabling microstepping
   driver.setAcc(1000); // full steps/s^2 acceleration
-  driver.setDec(1000); // full steps/s^2 deceleration
+  driver.setDec(3000); // full steps/s^2 deceleration
   
   driver.setSlewRate(SR_520V_us); // faster may give more torque (but also EM noise),
                                   // options are: 114, 220, 400, 520, 790, 980(V/us)
@@ -275,7 +275,7 @@ void motorHomePosition(){
     Serial.println("Go Down");
     driver.releaseSw(B0,B0);
   }else{
-  driver.goUntil(B0,dir,1000);
+  driver.goUntil(B0,dir,2000);
   }
 }
 
