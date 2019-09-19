@@ -1740,19 +1740,19 @@ class RunPlot(FigureCanvas):
 
     def set_style(self):
         title_font_size = 12
-        self.axes_current.set_ylabel("Current (mA)", fontsize=title_font_size)
+        self.axes_current.set_ylabel("Current (uA)", fontsize=title_font_size)
         self.axes_current.set_facecolor('#FFFFFF')
-        self.axes_rfu.set_xlabel("Time (µs)", fontsize=title_font_size)
-        self.axes_rfu.set_ylabel("RFU (kV)", fontsize=title_font_size)
+        self.axes_rfu.set_xlabel("Time (s)", fontsize=title_font_size)
+        self.axes_rfu.set_ylabel("PMT (V)", fontsize=title_font_size)
         self.axes_rfu.set_facecolor('#FFFFFF')
 
     def update_rfu(self, rfu):
         self.axes_rfu.clear()
-        self.axes_rfu.plot(rfu, linewidth=3)
+        self.axes_rfu.plot(rfu, linewidth=2)
 
     def update_current(self, current):
         self.axes_current.clear()
-        self.axes_current.plot(current, linewidth=3, color="C2")
+        self.axes_current.plot(current, linewidth=1, color="C2", alpha = 0.7)
 
 
 def wrap_widget(widget):

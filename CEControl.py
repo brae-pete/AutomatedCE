@@ -1026,9 +1026,9 @@ class RunScreenController:
         self.screen.temp_laser_set.released.connect(lambda: self._setting_laser_position(False))
         self.screen.temp_focus_button.released.connect(lambda: threading.Thread(target=self.focus).start())
         self.screen.temp_pic_button.released.connect(lambda: threading.Thread(target=self.take_training_images).start())
-        self.screen.save_plot.released.connect(lambda: self._save_plot())
-        self.screen.reset_plot.released.connect(lambda: self._reset_plot())
-        self.screen.view_plot.released.connect(lambda: self._view_plot())
+        self.screen.save_plot.released.connect(lambda: self.save_plot())
+        self.screen.reset_plot.released.connect(lambda: self.reset_plot())
+        self.screen.view_plot.released.connect(lambda: self.view_plot())
 
         if self.hardware.hasXYControl:
             self.screen.xy_up.released.connect(
@@ -1263,27 +1263,35 @@ class RunScreenController:
 
                 time.sleep(.25)
 
-    def _save_plot(self):
+    def save_plot(self):
 
         # returns tuple (file_path_file_name.csv, extension)
         open_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Choose previous session',
                                                                 os.getcwd(), '(*.csv)')
         with open(open_file_path[0], 'w') as f_in:
             f_in.write('time, rfu, kV, uA\n')
-            data = self.hadware.daq_board_control.data
-            for i in range(len(data)):
-                t_point = i * (1/self.hardware.daq_board_control.freq)
-                rfu = data['ai3']
-                ua = data['ai2']
-                kv = data['ai1']
-                f_in.write('{:.3f},{},{:.3f},{:.3f}\n'.format(t_point, rfu, ua, kv))
+            data = self.hardware.daq_board_control.data
+            for i in range(len(data['ai3'])):
+                t_point = float(i * (1/self.hardware.daq_board_control.freq))
+                rfu = data['ai3'][i]
+                ua = data['ai2'][i]
+                kv = data['ai1'][i]
+                try:
+                    f_in.write('{:.3f},{},{:.3f},{:.3f}\n'.format(t_point, rfu, ua, kv))
+                except TypeError:
+                    f_in.write("{},{},{},{}\n".format(t_point, rfu, ua, kv))
 
-    def _reset_plot(self):
+
+    def reset_plot(self):
         self.hardware.daq_board_control._clear_data()
 
-    def _view_plot(self):
-        pass
-
+    def view_plot(self):
+        check = self.screen.view_plot.isChecked()
+        if check:
+            self._plot_data.set()
+        else:
+            self._plot_data.clear()
+        return
     def _switch_feed(self, live):
         """Switches the feed between live feed from camera or insert view with live XY position."""
         if not live:
@@ -1892,21 +1900,31 @@ class RunScreenController:
             self._plot_data.set()
             return True
 
+
+
         def move_inlet(inlet_travel):
+            if self._stop_thread_flag.is_set():
+                return
             self.hardware.set_z(inlet_travel)
             self.hardware.wait_z()
             return check_flags()
 
         def move_outlet(outlet_travel):
+            if self._stop_thread_flag.is_set():
+                return
             self.hardware.set_outlet(rel_h=outlet_travel)
             time.sleep(2)
             return check_flags()
 
         def move_objective(objective_position):
+            if self._stop_thread_flag.is_set():
+                return
             self.hardware.set_objective(objective_position)
             return check_flags()
 
         def move_xy_stage(inlet_location):
+            if self._stop_thread_flag.is_set():
+                return
             if inlet_location is None:
                 logging.error('Unable to make next XY movement.')
                 return False
@@ -1915,6 +1933,8 @@ class RunScreenController:
             return check_flags()
 
         def separate():
+            if self._stop_thread_flag.is_set():
+                return
             voltage_level = None
             pressure_state = None
 
@@ -1953,6 +1973,8 @@ class RunScreenController:
             return True
 
         def rinse():
+            if self._stop_thread_flag.is_set():
+                return
             pressure_state = None
             if step['PressureTypePressureRadio']:
                 pressure_state = True
@@ -1971,6 +1993,8 @@ class RunScreenController:
             return True
 
         def semi_auto_cell():
+            if self._stop_thread_flag.is_set():
+                return
             # If wells are the same move back one.
             if self._inject_flag.is_set():
                 return False
@@ -1988,6 +2012,8 @@ class RunScreenController:
             self._inject_flag.set()
             return True
         def inject():
+            if self._stop_thread_flag.is_set():
+                return
             pressure_state = False
             voltage_level = None
 
@@ -2031,6 +2057,8 @@ class RunScreenController:
         # fixme prompt for alternate input if user selects unsupported type.
 
         for rep in range(repetitions):
+            if self._stop_thread_flag.is_set():
+                return
             previous_step = None
             self._inject_flag.clear()
             for step in method.steps:

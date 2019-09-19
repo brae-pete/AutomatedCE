@@ -75,7 +75,11 @@ class ImageControl:
         except MMCorePy.CMMError:
             self.close()
             time.sleep(1)
-            self.mmc.loadSystemConfiguration(CONFIG_FILE)
+            try:
+                cfg = r'C:\KivyBarracuda\BarracudaQt\BarracudaQt\config\DemoCam.cfg'
+                self.mmc.loadSystemConfiguration(cfg)
+            except MMCorePy.CMMError:
+                logging.warning("Could not load camera")
 
     def close(self):
         self.mmc.unloadAllDevices()

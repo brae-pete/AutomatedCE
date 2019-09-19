@@ -4,20 +4,27 @@ import numpy as np
 import logging
 import time
 import threading
+from scipy import signal
+
 
 
 class DAQBoard:
-    freq = 4  # Sampling frequency for analog inputs
-    output_freq = 1000  # Frequency for sending voltage levels to the Power supply (Can be much higher than analog in)
+    freq = 8.1 # Sampling frequency for analog inputs
+    cutoff=4 # Cut off for digital filter
+    output_freq = freq*100  # Frequency for sending voltage levels to the Power supply (Can be much higher than analog in)
     clock_channel = 'ctr0'  # Sampling Clock channel (don't really need to change)
     sample_terminal = "Ctr0InternalOutput"  # Make sure this route is allowed via NIMAX
     mode = nidaqmx.constants.AcquisitionType.CONTINUOUS  # Sampling mode
+    update_time = 1 # Time in seconds the DAQ should updat
     samples_per_chain = 4  # Samples per buffer channel / how often it will update is samples_per_chain/freq
     max_time = 60  # Total amount of time to wait before exiting.
     voltage_ramp = 10  # speed to ramp voltage in kV/s
     voltage = 0  # Current voltage in V to send to the  daq. (-10 to 10 max)
     voltage_conversion = 30 / 10  # kV/daqV conversion factor
+    rfu_conversion = 1
     data_lock = threading.Lock()
+    ba = (None, None)
+    sos = None
 
     def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None):
         self.dev = dev
@@ -26,6 +33,8 @@ class DAQBoard:
         self.current_readout = current_read
         self.rfu_chan = rfu_read
         self._clear_data()
+        self.samples_per_chain = 5
+        self.filter_setup()
 
         if stop is None:
             stop = threading.Event()
@@ -46,8 +55,49 @@ class DAQBoard:
         with self.data_lock:
             self.data[self.voltage_readout].extend([x*self.voltage_conversion for x in samples[0]])  # Voltage
             self.data[self.current_readout].extend([x*self.voltage_conversion for x in samples[1]])  # Current
-            self.data[self.rfu_chan].extend([x*self.voltage_conversion for x in samples[2]])  # RFU
+            self.data[self.rfu_chan].extend([x * self.rfu_conversion for x in samples[2]])  # RFU
+            # Apply butter filter to the data
+            self.data[self.rfu_chan] = self.filter_data(self.data[self.rfu_chan])
         return 0
+
+    def filter_data(self,data):
+        """ Applies a digital butter filter to the data """
+        logging.debug("FilterData")
+        if len(data) < 10:
+            return data
+        if self.sos is None:
+            # Apply filter forwards and backwards to remove ringing at start
+            # Padlength must be less than the rows in our data
+            pad = 3 * max(len(self.ba[0]), len(self.ba[1]))
+            if pad >= len(data) - 1:
+                pad = 0
+
+            data = signal.filtfilt(self.ba[0], self.ba[1], data, padlen=pad).tolist()
+        else:
+            data = signal.sosfilt(self.sos, data).tolist()
+
+        return data
+
+    def filter_setup(self, poles=8, method='filtfilt'):
+        """
+        Sets up butter filter
+        """
+        def get_wn(desired, smpls):
+            return desired / (smpls / 2)
+
+        cutoff = self.cutoff
+        sampling = self.freq
+        if method == 'filtfilt':
+            # Create a low pass filter without ringing
+            b, a = signal.butter(poles, get_wn(cutoff, sampling), 'lp', analog=False)
+            self.ba = (b, a)
+
+        else:
+            sos = signal.butter(poles, get_wn(cutoff, sampling), 'lp', analog=False, output='sos')
+            self.sos = sos
+
+
+
 
     def sample_config(self, task):
         """We time the voltage in with a sample clock, here we set that up
@@ -105,7 +155,8 @@ class DAQBoard:
         task.timing.cfg_samp_clk_timing(self.freq, source=s_terminal,
                                         active_edge=Edge.FALLING,
                                         samps_per_chan=self.samples_per_chain,
-                                        sample_mode=self.mode)
+                                        sample_mode=self.mode,
+                                        )
         task.register_every_n_samples_acquired_into_buffer_event(
             self.samples_per_chain, self.callback)
 
