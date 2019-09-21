@@ -209,4 +209,4 @@ class XYControl:
 
 
 if __name__ == '__main__':
-    xyc = XYControl()
+    xyc = XYControl(home=False)

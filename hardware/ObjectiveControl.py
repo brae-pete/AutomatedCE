@@ -31,6 +31,7 @@ class ObjectiveControl:
             lock = threading.Lock()
         self.lock = lock
         self.first_read = True
+        time.sleep(0.1)
         threading.Thread(target=self.go_home()).start()
         return
 

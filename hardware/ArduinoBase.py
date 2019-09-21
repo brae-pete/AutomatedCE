@@ -15,7 +15,7 @@ class ArduinoBase:
         if self.com == "Auto":
             self.com = self.getCom()
         self.serial = serial.Serial()
-        self.serial.timeout = 0.2
+        self.serial.timeout = 0.3
         self.serial.baudrate = 1000000
         self.serial.baudrate = 1000000
 
@@ -183,6 +183,7 @@ class ArduinoBase:
     def applyPressure(self):
         if self.home:
             return True
+
         self.serial.write("P0R\n".encode())
         return True
 

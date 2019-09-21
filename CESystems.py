@@ -161,6 +161,10 @@ class BaseSystem:
         """Gets the current voltage of the voltage source."""
         logging.error('get_voltage not implemented in hardware class.')
 
+    def save_data(self, filepath):
+        """ Saves the data from the DAQ to the specified filepath"""
+        logging.error("save_data not implemented in hardware class")
+
     def get_voltage_data(self):
         """Gets a list of the voltages over time."""
         logging.error('get_voltage_data not implemented in hardware class.')
@@ -249,7 +253,7 @@ class BarracudaSystem(BaseSystem):
     _daq_rfu = "ai3"
 
     _z_stage_lock = threading.RLock() # Same thread can access the lock at multiple points, but not multiple threads
-    _outlet_lock = threading.Lock()
+    _outlet_lock = threading.RLock()
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
     _pressure_lock = threading.Lock()
@@ -501,6 +505,10 @@ class BarracudaSystem(BaseSystem):
     def set_voltage(self, v=None):
         self._start_daq()
         self.daq_board_control.change_voltage(v)
+        return True
+
+    def save_data(self, filepath):
+        self.daq_board_control.save_data(filepath)
         return True
 
     def get_voltage(self):

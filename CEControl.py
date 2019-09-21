@@ -6,7 +6,7 @@ import threading
 import logging
 import time
 import random
-
+import datetime
 # Custom modules for CE
 import CESystems  # Hardware system classes
 import CEObjects  # CE-specific data structures
@@ -1048,7 +1048,7 @@ class RunScreenController:
             self.screen.xy_y_value.returnPressed.connect(
                 lambda: self.hardware.set_xy(xy=[self.hardware.get_xy()[0], float(self.screen.xy_y_value.text())]))
             self.screen.xy_set_origin.released.connect(lambda: self.hardware.set_xy_home())
-            self.screen.xy_origin.released.connect(lambda: self.hardware.home_xy())
+            #self.screen.xy_origin.released.connect(lambda: self.hardware.home_xy())
             self.screen.xy_stop.released.connect(lambda: self.hardware.stop_xy())
         else:
             self.screen.enable_xy_stage_form(False)
@@ -1268,18 +1268,9 @@ class RunScreenController:
         # returns tuple (file_path_file_name.csv, extension)
         open_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Choose previous session',
                                                                 os.getcwd(), '(*.csv)')
-        with open(open_file_path[0], 'w') as f_in:
-            f_in.write('time, rfu, kV, uA\n')
-            data = self.hardware.daq_board_control.data
-            for i in range(len(data['ai3'])):
-                t_point = float(i * (1/self.hardware.daq_board_control.freq))
-                rfu = data['ai3'][i]
-                ua = data['ai2'][i]
-                kv = data['ai1'][i]
-                try:
-                    f_in.write('{:.3f},{},{:.3f},{:.3f}\n'.format(t_point, rfu, ua, kv))
-                except TypeError:
-                    f_in.write("{},{},{},{}\n".format(t_point, rfu, ua, kv))
+        # Save data
+        self.hardware.save_data(open_file_path[0])
+
 
 
     def reset_plot(self):
@@ -1872,7 +1863,6 @@ class RunScreenController:
                 logging.info('Run stopped.')
                 self._stop_thread_flag.clear()
                 return False
-        self._plot_data.clear()
         logging.info('Sequence Completed.')
         return True
     def record_cell_info(self):
@@ -1967,6 +1957,11 @@ class RunScreenController:
                 self.hardware.pressure_rinse_start()
 
             time.sleep(duration)
+            # Save Data
+            now = datetime.datetime.now()
+            file_name = "Separation_step{}_Rep{}.csv".format(step_id,rep)
+            save_path = os.path.join(save_dir,file_name)
+            self.hardware.save_data(save_path)
             self.hardware.set_voltage(0)
             self.hardware.pressure_rinse_stop()
 
@@ -2054,14 +2049,27 @@ class RunScreenController:
 
             return True
 
+        def create_run_folder():
+            cwd = os.getcwd()
+            now = datetime.datetime.now()
+            save_dir=os.path.join(cwd, 'Data',now.strftime("RunData__%Y_%m_%d__%H_%M_%S"))
+            try:
+                os.makedirs(save_dir, exist_ok=True)
+                return save_dir
+            except FileExistsError:
+                return save_dir
+
+
         # fixme prompt for alternate input if user selects unsupported type.
+
+        save_dir = create_run_folder()
 
         for rep in range(repetitions):
             if self._stop_thread_flag.is_set():
                 return
             previous_step = None
             self._inject_flag.clear()
-            for step in method.steps:
+            for step_id, step in enumerate(method.steps):
                 if 'Type' in step.keys():
                     logging.info('{} Step: {}'.format(step['Type'], step['Summary']))
                     state = check_flags()
@@ -2073,9 +2081,7 @@ class RunScreenController:
                     if not state:
                         return False
 
-                    state = move_outlet(step['OutletTravel'])
-                    if not state:
-                        return False
+
 
                     try:
                         cycles = int(step['TrayPositionsIncrementEdit'])
@@ -2095,6 +2101,10 @@ class RunScreenController:
                         state = check_flags()
                         if not state:
                             return False
+
+                    state = move_outlet(step['OutletTravel'])
+                    if not state:
+                        return False
 
                     state = move_inlet(step['InletTravel'])
                     if not state:

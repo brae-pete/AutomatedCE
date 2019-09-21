@@ -4,6 +4,7 @@ import logging
 import sys
 import os
 import pickle
+import numpy as np
 import time
 try:
     from hardware import ArduinoBase
@@ -320,7 +321,7 @@ class PowerStep:
         self.first_read = True
         self.go_home()
 
-    def wait_for_move(self):
+    def wait_for_move(self,clearance=0.0):
         """
         returns the final position of the motor after it has stopped moving.
 
@@ -329,7 +330,7 @@ class PowerStep:
         prev_pos = self.get_z()
         current_pos = prev_pos + 1
         # Update position while moving
-        while prev_pos != current_pos:
+        while np.abs(prev_pos-current_pos) > clearance:
             time.sleep(0.1)
             prev_pos = current_pos
             current_pos = self.get_z()
@@ -398,7 +399,7 @@ class PowerStep:
             self.pos = self.wait_for_move()
             self.offset = 0
             logging.info("{} is pos 0, {} is stage 0".format(self.pos, self.arduino.pos))
-            self.set_z(0.1);
+            self.set_z(0.1)
             cz=self.wait_for_move()
             logging.info("{} is current z".format(cz))
             self.save_history()

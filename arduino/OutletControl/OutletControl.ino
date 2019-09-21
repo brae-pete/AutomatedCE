@@ -1,3 +1,5 @@
+#include <QuickMedianLib.h>
+
 // Program demonstrating how to control a powerSTEP01-based ST X-NUCLEO-IHM03A1 
 // stepper motor driver shield on an Arduino Uno-compatible board
 // If you copy the powerSTEP01_Arduino_Library from git hub you must change the 
@@ -17,7 +19,7 @@
 
 #include <powerSTEP01ArduinoLibrary.h>
 #include <SPI.h>
-#include "QuickMedianLib.h"
+#include <QuickMedianLib.h>
 
 // Pin definitions for the X-NUCLEO-IHM03A1 connected to an Uno-compatible board
 #define nCS_PIN_2 10
@@ -36,7 +38,7 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 
 
 // Set up variables for motors
-int outlet_div = 128;
+int outlet_div = 32;
 // Set variables for Pressure
 int SOLENOID1 = 23;
 int SOLENOID2 = 29;
@@ -46,6 +48,7 @@ String inputString = "";   // a String to hold incoming data
 int inputCount = 0;
 bool stringComplete = false;  // whether the string is complete
 
+#define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
 void setup() 
 {
@@ -86,13 +89,15 @@ void setup()
   driver_2.configSyncPin(BUSY_PIN, 0); // use SYNC/nBUSY pin as nBUSY, 
                                      // thus syncSteps (2nd paramater) does nothing
                                      
-  driver_2.configStepMode(STEP_FS_8); // 1/128 microstepping, full steps = STEP_FS,
+  driver_2.configStepMode(STEP_FS_32); // 1/128 microstepping, full steps = STEP_FS,
                                 // options: 1, 1/2, 1/4, 1/8, 1/16, 1/32, 1/64, 1/128
+
                                 
-  driver_2.setMaxSpeed(1200); // max speed in units of full steps/s 
+  driver_2.setMaxSpeed(1000); // max speed in units of full steps/s 
+  driver_2.setMinSpeed(20);
   driver_2.setFullSpeed(2000); // full steps/s threshold for disabling microstepping
-  driver_2.setAcc(2000); // full steps/s^2 acceleration
-  driver_2.setDec(2000); // full steps/s^2 deceleration
+  driver_2.setAcc(1000); // full steps/s^2 acceleration
+  driver_2.setDec(800); // full steps/s^2 deceleration
   
   driver_2.setSlewRate(SR_980V_us); // faster may give more torque (but also EM noise),
                                   // options are: 114, 220, 400, 520, 790, 980(V/us)
@@ -116,7 +121,7 @@ void setup()
   driver_2.setVoltageComp(VS_COMP_DISABLE); // no compensation for variation in Vs as
                                           // ADC voltage divider is not populated
                                           
-  driver_2.setSwitchMode(SW_USER); // switch doesn't trigger stop, status can be read.
+  driver_2.setSwitchMode(SW_HARD_STOP); // 
                                  // SW_HARD_STOP: TP1 causes hard stop on connection 
                                  // to GND, you get stuck on switch after homing
                                       
@@ -131,7 +136,7 @@ void setup()
   driver_2.setDecKVAL(128);
   driver_2.setHoldKVAL(32);
 
-  driver_2.setParam(ALARM_EN, 0x8F); // disable ADC UVLO (divider not populated),
+  driver_2.setParam(ALARM_EN, 0xCF); // disable ADC UVLO (divider not populated),
                                    // disable stall detection (not configured),
                                    // disable switch (not using as hard stop)
 
@@ -156,20 +161,76 @@ void serialCheck() {
   }
 }
 
+bool checkHome(){
+  unsigned int sw_val;
+  sw_val = driver_2.getParam(STATUS);
+  //Serial.println(sw_val);
+  sw_val &= 0x0004;
+  //Serial.println(sw_val);
+  driver_2.getStatus(); // clears error flags
+  bool at_home = (sw_val==4);
+  Serial.println(at_home);
+  return at_home;
+}
+
+void releaseSW(){
+  int at_home=true;
+  Serial.println("Backing from SW");
+  while (at_home){
+    delay(100);
+    at_home = checkHome();
+  }
+}
 void moveMotor(){
   // Move the motor to specified position.
-  driver_2.getStatus();
   driver_2.hardStop();
+  bool at_home = checkHome();
+  if (at_home){
+        
+        driver_2.releaseSw(B0,B1);
+        releaseSW();
+  }
+  driver_2.setSwitchMode(CONFIG_SW_HARD_STOP); // Set switch mode to hard stop. 
   int chnl = atoi(inputString[1]);
   String location = inputString.substring(3,13);
-  float steps = location.toFloat();
+  float mm_pos = location.toFloat();
   //#Serial.print("Move Motor ");
   //#Serial.print(inputString[1]);
   //#Serial.print(" To Location: ");
   //Serial.println(steps);
-  steps = long(steps/8.*200.*outlet_div);
+  float steps_per_mm = (200. * outlet_div / 0.75);
+  Serial.println(steps_per_mm);   
+  long steps = long(mm_pos*steps_per_mm);
   Serial.println(steps);
   driver_2.goTo(steps);
+}
+
+void motorHomePosition(){
+  unsigned int sw_val;
+  sw_val = driver_2.getParam(STATUS);
+  //Serial.println(sw_val);
+  sw_val &= 0x0004;
+  //Serial.println(sw_val);
+  driver_2.getStatus(); // clears error flags
+
+
+
+  // Move Motor until it hits the switch
+  char user_dir = inputString[3];
+  //Serial.println("Starting Move...");
+  byte dir = B0;
+  Serial.println(user_dir);
+  if (user_dir=='1'){
+   dir = true;
+   Serial.println("HEY!");
+  }
+  if (sw_val == 4){
+    Serial.println("Go Down");
+    
+    driver_2.releaseSw(B0,B1);
+  }else{
+  driver_2.goUntil(B0,dir,400);
+  }
 }
 
 
@@ -184,15 +245,19 @@ void motorTalk(){
   if (inputString[2]=='L'){
     if (inputString[3]=='?'){
       getMotorPos();
-    } else {
+    }
+    else {
     moveMotor();
     }
   }
-  else if (inputString[2]=='H'){
-    setHome();
+  else if (inputString[2]=='G'){
+    motorHomePosition();
   } else if (inputString[2]=='S'){
     setMotorSpeed();
-  } else if (inputString[2]=='R'){
+  } else if (inputString[2]=='A'){
+    setAccel();
+  }
+  else if (inputString[2]=='R'){
     resetDriver();
   }
 }
@@ -203,9 +268,11 @@ void getMotorPos(){
   //Serial.print(chnl);
   //Serial.println(": ");
   long steps = driver_2.getPos();
-  float return_steps = float(float(steps)/outlet_div/200.*8.);
-  Serial.println(return_steps);
+  float steps_per_mm = (200. * outlet_div / 0.75);
+  float return_steps = float(float(steps)/steps_per_mm);
+  Serial.println(return_steps,3);
 }
+
 
 void setHome(){
   int chnl = atoi(inputString[1]);
@@ -214,6 +281,14 @@ void setHome(){
   driver_2.resetPos();
 }
 
+void setAccel(){
+  int chnl = atoi(inputString[1]);
+  String location = inputString.substring(3,9);
+  int stepspersec2 = location.toInt();
+  Serial.println(stepspersec2);
+  driver_2.setAcc(stepspersec2); // full steps/s^2 acceleration
+  driver_2.setDec(stepspersec2); // full steps/s^2 deceleration
+}
 void setMotorSpeed(){
   int chnl = atoi(inputString[1]);
   String location = inputString.substring(3,8);

@@ -1000,10 +1000,14 @@ class RunScreen(QtWidgets.QMainWindow):
                 self.live_feed_scene.removeItem(item)
 
     def update_plots(self, rfu, current):
-        self.plot_panel.canvas.update_rfu(rfu)
+
         self.plot_panel.canvas.update_current(current)
+        self.plot_panel.canvas.update_rfu(rfu)
         self.plot_panel.canvas.set_style()
-        self.plot_panel.canvas.draw()
+        try:
+            self.plot_panel.canvas.draw()
+        except IndexError:
+            pass
 
 
 class DataScreen(QtWidgets.QMainWindow):
