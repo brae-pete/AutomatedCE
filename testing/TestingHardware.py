@@ -9,6 +9,7 @@ from hardware import ObjectiveControl
 class ZStageTestCase(unittest.TestCase):
 
     def setUp(self):
+
         self.z_stage = ZStageControl.ZStageControl()
 
     def tearDown(self):

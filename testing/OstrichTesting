@@ -1,0 +1,80 @@
+import unittest
+import sys
+import os
+import time
+
+sys.path.insert(0, os.pardir)
+from hardware import ZStageControl
+from hardware import ObjectiveControl
+from hardware import XYControl
+from hardware import DAQControl
+
+ObjectiveControl.CONFIG_FOLDER = os.path.join(os.pardir,'config')
+
+# DAQ Test
+class DaqLoadingTestCase(unittest.TestCase):
+    _daq_dev = "/Dev2/"  # ("/Dev1/" is from Barracuda)
+    _daq_voltage_control = 'ao1'
+    _daq_current_readout = 'ai0'
+    _daq_voltage_readout = 'ai1'
+    _daq_rfu = 'ai3'
+    def setUp(self):
+        self.dq = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
+                                                     current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
+                                                     voltage_control=self._daq_voltage_control)
+
+    def tearDown(self):
+        self.dq.stop.set()
+        time.sleep(2)
+
+    def test_callback(self):
+        self.dq.start_read_task()
+        time.sleep(3)
+        self.assertGreaterEqual(len(self.dq.data['avg']), self.dq.downsampled_freq)
+
+
+class XYControlTesting(unittest.TestCase):
+
+    def setUp(self):
+        XYControl.CONFIG_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config'))
+        self.xyc = XYControl.XYControl(home=False, config_file="NikonTi.cfg")
+
+    def tearDown(self):
+        self.xyc.close()
+
+    def test_read(self):
+        x, y = self.xyc.read_xy()
+        self.assertIs(float, type(x), "XY stage is not reading position. Check XY Control")
+
+    def test_set(self):
+        x, y = self.xyc.read_xy()
+        self.xyc.set_rel_xy([5, 5])
+        time.sleep(1)
+        x2, y2 = self.xyc.read_xy()
+        msg = "XY stage is not moving position accurately. Check XY Control"
+        self.assertAlmostEqual(x + 5, x2, 1)
+        self.assertAlmostEqual(y + 5, y2, 1)
+
+
+class ObjectiveTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.obj = ObjectiveControl.OstrichObjective(home=False)
+
+    def tearDown(self):
+        self.obj.close()
+
+    def test_read(self):
+        z = self.obj.read_z()
+        self.assertIs(float, type(z), "Objective is not reading position. Check Objective Control")
+
+    def test_set(self):
+        z = self.obj.read_z()
+        self.obj.set_rel_z(10)
+        time.sleep(2)
+        msg = "Objective is not moving position accurately. Check Objective Control"
+        rz=self.obj.read_z()
+        self.assertAlmostEqual(z + 10, rz, 1, msg)
+
+if __name__ =="__main__":
+    unittest.main()

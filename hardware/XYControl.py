@@ -25,9 +25,10 @@ os.chdir(prev_dir)
 # Locate the directory of config files
 cwd = os.getcwd()
 contents = os.listdir(cwd)
-
+SETUP = 'ostrich'
 if "config" in contents:
     CONFIG_FOLDER = os.path.join(cwd, "config")
+
 elif "CEGraphic" in contents:
     contents = os.listdir(os.path.join(cwd, "CEGraphic"))
     if "config" in contents:
@@ -35,6 +36,8 @@ elif "CEGraphic" in contents:
         CONFIG_FOLDER = os.path.join(os.getcwd(), "config")
     else:
         CONFIG_FOLDER = os.getcwd()
+elif "XYControl.py" in contents or "OstrichTesting.py" in contents:
+    CONFIG_FOLDER=os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config'))
 else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
     CONFIG_FOLDER = os.getcwd()
 
@@ -209,4 +212,6 @@ class XYControl:
 
 
 if __name__ == '__main__':
-    xyc = XYControl(home=False)
+    if SETUP == "ostrich":
+        CONFIG_FILE = 'NikonTi.cfg'
+    xyc = XYControl(home=False, config_file=CONFIG_FILE)

@@ -16,18 +16,22 @@ import os
 # Installed Modules
 import numpy as np
 import cv2
-import onnx
-from onnx_tf.backend import prepare
-from skimage.transform import resize
-from keras.preprocessing.image import img_to_array, load_img
-from keras import backend as K
-from keras.models import Model, load_model
-from keras.engine import Layer, InputSpec
-from keras import initializers, regularizers
-from keras.engine.topology import Layer
+try:
+    import onnx
+    from onnx_tf.backend import prepare
+    from skimage.transform import resize
+    from keras.preprocessing.image import img_to_array, load_img
+    from keras import backend as K
+    from keras.models import Model, load_model
+    from keras.engine import Layer, InputSpec
+    from keras import initializers, regularizers
+    from keras.engine.topology import Layer
 
-if K.backend() == 'tensorflow':
-    import tensorflow as tf
+
+    if K.backend() == 'tensorflow':
+        import tensorflow as tf
+except ModuleNotFoundError:
+    logging.warning("Neural Network is not Loaded")
 
 
 class BarracudaCellDetector:

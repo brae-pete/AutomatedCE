@@ -14,8 +14,11 @@ from hardware import ObjectiveControl
 from hardware import LaserControl
 from hardware import PressureControl
 
-# Network Module
-import CENetworks
+try:
+    # Network Module
+    import CENetworks
+except:
+    CENetworks=None
 
 HOME = False
 
@@ -268,8 +271,9 @@ class BarracudaSystem(BaseSystem):
     xy_stage_upper_left = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
     xy_stage_inversion = [-1, -1]
 
-    _focus_network = CENetworks.BarracudaFocusClassifier()
-    _find_network = CENetworks.BarracudaCellDetector()
+    if CENetworks is not None:
+        _focus_network = CENetworks.BarracudaFocusClassifier()
+        _find_network = CENetworks.BarracudaCellDetector()
 
     def __init__(self):
         super(BarracudaSystem, self).__init__()
@@ -632,11 +636,11 @@ class OstrichSystem(BaseSystem):
 
     def start_system(self):
         """Puts the system into its functional state."""
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage=self._xy_stage_id,
-                                                    config_file='sysConfig.cfg', home=HOME, loaded=False)
+        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock,
+                                                    config_file='NikonTi.cfg', home=HOME)
 
-        self.objective_control = ZStageControl.NikonZStage(lock=self._objective_lock, stage=self._z_stage_id,
-                                                           config_file='sysConfig.cfg', home=HOME, loaded=False)
+        self.objective_control = ObjectiveControl.OstrichObjective(lock=self._objective_lock,
+                                                                   config_file='NikonTi.cfg', home=HOME)
 
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
@@ -644,17 +648,35 @@ class OstrichSystem(BaseSystem):
 
         self.laser_control = True  # No need to define a new class when we only have one command
 
-        self.image_control = ImageControl.ImageControl(home=HOME)
+        self.image_control = ImageControl.ImageControl(home=True)
         return True
 
     def close_system(self):
         """Takes system out of its functional state."""
-        self.close_z()
-        self.close_xy()
-        self.close_voltage()
-        self.close_outlet()
-        self.close_objective()
-        self.close_image()
+        try:
+            self.close_z()
+        except:
+            logging.warning('Could not close Z Stage')
+        try:
+            self.close_xy()
+        except:
+            logging.warning('Could not close XY stage')
+        try:
+            self.close_voltage()
+        except:
+            logging.warning('Could not close objective')
+        try:
+            self.close_outlet()
+        except:
+            logging.warning('Could not close outlet')
+        try:
+            self.close_objective()
+        except:
+            logging.warning('Could not close objective')
+        try:
+            self.close_image()
+        except:
+            logging.warning('Could not close camera')
         return True
 
     def close_xy(self):
