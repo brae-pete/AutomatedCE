@@ -10,6 +10,7 @@ class Laser:
     _safety_pfn_limit = 255
     _timer_count = 0
 
+
     def __init__(self, com="COM6", baudrate=9600, stopbits=1, timeout=0.1, lock=None, home=False):
         self.serial = serial.Serial()
         self.serial.timeout = timeout
@@ -307,6 +308,7 @@ class Laser:
         return True
 
     def set_mode(self, value):
+        """ 3 modes"""
         try:
             int(value)
         except ValueError:
@@ -388,7 +390,9 @@ class Laser:
             if response != 'ok':
                 logging.error('Failed to put laser in standby mode. Laser Response: {}'.format(response))
                 return False
-            return True
+
+        self.set_mode(1)
+        return True
 
     def fire(self):
         with self.lock:

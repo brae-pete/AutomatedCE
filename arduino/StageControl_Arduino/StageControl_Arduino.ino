@@ -22,7 +22,7 @@
 #include <QuickMedianLib.h>
 
 // Pin definitions for the X-NUCLEO-IHM03A1 connected to an Uno-compatible board
-#define nCS_PIN_2 10
+#define nCS_PIN_2 7
 #define STCK_PIN_2 9
 #define nSTBY_nRESET_PIN_2 8
 #define nBUSY_PIN_2 4

@@ -155,7 +155,7 @@ class BarracudaCellDetector:
 
         class_mapping = {v: k for k, v in class_mapping.items()}
 
-        bbox_threshold = 0.8
+        bbox_threshold = 0.95
 
         s = time.time()
         image_array, ratio = self._format_image(original_image, self._model_config)

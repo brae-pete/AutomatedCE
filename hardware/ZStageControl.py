@@ -3,6 +3,13 @@ import threading
 import logging
 import sys
 import os
+import pickle
+import numpy as np
+import time
+try:
+    from hardware import ArduinoBase
+except ModuleNotFoundError:
+    import ArduinoBase
 
 if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
     sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
@@ -29,7 +36,7 @@ class ZStageControl:
     This is called by the GUI and needs data types to match
     """
 
-    def __init__(self, com="COM4", lock=-1, home=False):
+    def __init__(self, com="COM3", lock=-1, home=False):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -40,7 +47,7 @@ class ZStageControl:
         self.stage = None
         self.pos = 0
         if lock == -1:
-            lock = threading.Lock()
+            lock = threading.RLock()
         self.lock = lock
         if home:
             self.home = home
@@ -56,7 +63,7 @@ class ZStageControl:
         if len(args) > 0:
             self.com = args[0]
             return
-        self.stage = OpticsFocusZStage(self.com)
+        self.stage = PowerStep(self.lock, self.com)
 
     def read_z(self, *args):
         """ returns float of current position
@@ -78,7 +85,7 @@ class ZStageControl:
 
         return self.pos
 
-    def set_z(self, set_z, *args):
+    def set_z(self, set_z=0, *args):
         """ set_z (absolute position in mm)
         returns False if unable to set_z, True if command went through
         """
@@ -95,12 +102,12 @@ class ZStageControl:
             else:
                 self.pos = response
 
-            #Convert from absolute to relative position (optics_focus cant handle absolute)
-            set_z = set_z - self.pos
-            self.stage.go_z(set_z)
+            set_z = set_z
+            self.stage.set_z(set_z)
+
         return True
 
-    def set_rel_z(self, set_z):
+    def set_rel_z(self, set_z=0):
         with self.lock:
             if self.home:
                 self.pos = set_z
@@ -110,8 +117,9 @@ class ZStageControl:
             response = self.stage.get_z()
             if response == type(str):
                 return False
+            self.pos = response
 
-            self.stage.go_z(set_z)
+            self.stage.set_z(self.pos + set_z)
         return True
 
     def set_speed(self, speed):
@@ -121,6 +129,12 @@ class ZStageControl:
                 return
             self.stage.set_speed(speed)
 
+    def set_accel(self, accel):
+        with self.lock:
+            if self.home:
+                return
+
+            self.stage.set_accel(accel)
     def stop(self):
         """Stop the Z-stage from moving"""
         if self.home:
@@ -139,10 +153,13 @@ class ZStageControl:
         """Closes the resources for the stage"""
         if self.home:
             return
-        self.stage.serial.close()
+        self.stage.close()
 
     def go_home(self):
         self.stage.go_home()
+
+    def wait_for_move(self):
+        self.stage.wait_for_move()
 
 
 class OpticsFocusZStage:
@@ -222,6 +239,7 @@ class OpticsFocusZStage:
     def go_home(self):
         self.serial.write("HX0\r".encode())
 
+
     def stop(self):
         self.serial.write("S\r".encode())
 
@@ -233,6 +251,8 @@ class OpticsFocusZStage:
         speed = int(round(mm_per_sec / 10 * 255))
         self.serial.write("V{:d}\r".format(speed).encode())
         return
+
+
 
     def reset(self):
         self.serial.close()
@@ -292,8 +312,194 @@ class NikonZStage:
                 self.mmc.stop(self.stage_id)
 
 
+
+class PowerStep:
+    def __init__(self, lock, com = "COM3", arduino = -1, home=False, ):
+        self.lock = lock
+        self.home = home
+        self.inversion = 1
+        self.offset = 0
+        self.com = "COM3"
+        self.pos = 0
+        self.have_arduino = True
+        self.arduino = arduino
+        if arduino == -1:
+            self.check = False
+            self.arduino = ArduinoBase.ArduinoBase(self.com,self.home)
+        if lock == -1:
+            lock = threading.RLock()
+        self.lock = lock
+        self.first_read = True
+        self.go_home()
+
+    def wait_for_move(self,clearance=0.0):
+        """
+        returns the final position of the motor after it has stopped moving.
+
+        :return: current_pos, float in mm of where the stage is at
+        """
+        prev_pos = self.get_z()
+        current_pos = prev_pos + 1
+        # Update position while moving
+        while np.abs(prev_pos-current_pos) > clearance:
+            time.sleep(0.1)
+            prev_pos = current_pos
+            current_pos = self.get_z()
+        return current_pos
+
+
+    def open(self):
+        """User initializes whatever resources are required
+         (open ports, create MMC + load config, etc...)
+         """
+        self.arduino.open()
+
+    def get_z(self, *args):
+        """ returns float of current position
+        User requests to get current position of stage, returned in mm
+        """
+        # Lock the resources we are going to use
+        with self.lock:
+            if self.home:
+                if len(args) > 0:
+                    self.pos = args[0]
+                return self.pos
+            pos, check_offset = self.arduino.read_outlet_z()
+            if check_offset:
+                self.offset = self.pos
+            self.pos = pos*self.inversion
+            self.pos = self.pos + self.offset
+            """
+            if self.first_read:
+                self.load_history()
+                self.first_read = False
+            else:
+                self.save_history()
+        """
+        return self.pos
+
+    def save_history(self):
+        with open("StageHistory.p", "wb") as fout:
+            data = {'pos': self.pos, 'offset': self.offset}
+            pickle.dump(data, fout)
+
+    def load_history(self):
+        try:
+            self.dos2unix("StageHistory.p", "StageHistory.p")
+            with open("StageHistory.p", "rb") as fin:
+                logging.info(fin)
+                data = pickle.load(fin)
+                logging.info(data)
+                # adjust for the new offset, and add the old offset that  may be present
+                self.offset = (data['pos'] - self.pos) + self.offset
+                self.pos = data['pos']
+        except IOError:
+            logging.warning("No Stage History found")
+
+    def go_home(self):
+        """ Moves up or down until the stage hits the mechanical stop that specifices the 25 mm mark
+
+         """
+        with self.lock:
+            if self.home:
+                self.pos = 0
+                return
+            self.arduino.go_home()
+            self.wait_for_move()
+            self.arduino.go_home()
+            self.pos = self.wait_for_move()
+            self.offset = 0
+            logging.info("{} is pos 0, {} is stage 0".format(self.pos, self.arduino.pos))
+            self.set_z(0.1)
+            cz=self.wait_for_move()
+            logging.info("{} is current z".format(cz))
+            self.save_history()
+
+    def set_z(self, set_z):
+        """ set_z (absolute position in mm)
+        returns False if unable to set_z, True if command went through
+        """
+
+        if self.home:
+            self.pos = set_z
+            return
+        go_to = self.inversion*(set_z-self.offset)
+        self.arduino.set_outlet_z(go_to)
+        return True
+
+    def set_rel_z(self, set_z):
+        pos = self.read_z()
+
+
+        if self.home:
+            self.pos = set_z
+            return
+        go_to = self.inversion * (set_z - self.offset + pos)
+        self.arduino.set_outlet_z(go_to)
+        return True
+
+    def set_speed(self, steps_per_sec):
+        if self.home:
+            return
+
+        self.arduino.set_outlet_speed(steps_per_sec)
+        return True
+    def set_accel(self, steps_per_sec2):
+        if self.home:
+            return
+        self.arduino.set_stepper_accel(steps_per_sec2)
+        return True
+
+    def stop_z(self):
+        """ Stops the objective motor where it is at. """
+
+        if self.home:
+            return True
+        self.arduino.stop_objective_z()
+        return True
+
+    def stop(self):
+        """Stop the Z-stage from moving"""
+        if self.home:
+            return
+
+    def reset(self):
+        """Resets the resources for the stage"""
+        if self.home:
+            self.close()
+            return
+        self.close()
+        self.open()
+
+    def close(self):
+        """Closes the resources for the stage"""
+        if self.home:
+            return
+        self.arduino.close()
+
+    @staticmethod
+    def dos2unix(in_file, out_file):
+        outsize = 0
+        with open(in_file, 'rb') as infile:
+            content = infile.read()
+            print(content)
+        with open(out_file, 'wb') as output:
+            for line in content.splitlines():
+                outsize += len(line) + 1
+                output.write(line + '\n'.encode())
+
+        print("Done. Saved %s bytes." % (len(content) - outsize))
+
 def threading_test():
     # import threading
     # lock = threading.Lock()
     print("We are Locked")
     # ser2 = ZStageControl()
+
+if __name__ == "__main__":
+    import time
+    s = ZStageControl()
+
+
+
+
