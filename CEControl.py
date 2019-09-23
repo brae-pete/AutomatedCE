@@ -1093,9 +1093,11 @@ class RunScreenController:
             self.screen.enable_pressure_form(False)
 
         if self.hardware.hasInletControl:
+
             self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
             self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
             self.screen.z_value.returnPressed.connect(lambda: self.hardware.set_z(float(self.screen.z_value.text())))
+
             self.screen.z_stop.released.connect(lambda: self.hardware.stop_z())
             self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.z_value.unselected.connect(lambda: self._value_display_interact(selected=False))
@@ -1374,6 +1376,7 @@ class RunScreenController:
             self._calibrating_image_ratio(True)
         else:
             pass
+
 
     # Hardware Control Function
     def calibrate_system(self):
@@ -1903,6 +1906,7 @@ class RunScreenController:
             if self._stop_thread_flag.is_set():
                 return
             self.hardware.set_outlet(rel_h=outlet_travel)
+
             time.sleep(2)
             return check_flags()
 
@@ -1936,7 +1940,9 @@ class RunScreenController:
             elif step['SeparationTypePowerRadio']:
                 logging.error('Unsupported: Separation with power')
                 return False
-            elif step['SeparationTypePressureRadio']:
+
+            #Give user option to run combo of pressure and voltage
+            if step['SeparationTypePressureRadio']:
                 pressure_state = True
             elif step['SeparationTypeVacuumRadio']:
                 logging.error('Unsupported: Separation with vacuum')
@@ -2077,7 +2083,9 @@ class RunScreenController:
                         return False
                     step_start = time.time()
 
+
                     state = move_inlet(0.25)
+
                     if not state:
                         return False
 

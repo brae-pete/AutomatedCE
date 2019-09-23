@@ -427,6 +427,7 @@ class BarracudaSystem(BaseSystem):
 
     def set_z_home(self):
         """Sets the current position of the Z stage as home. Return False if device has no 'home' capability."""
+
         return False
 
     def wait_z(self):
@@ -534,7 +535,8 @@ class BarracudaSystem(BaseSystem):
             logging.info('Cannot set energy of laser currently.')
 
         if mode:
-            logging.info('Cannot set mode of laser currently.')
+            self.laser_control.set_mode('0')
+            self.laser_control.set_rep_rate('010')
 
         if burst:
             self.laser_control.set_burst('{:04d}'.format(int(burst)))
