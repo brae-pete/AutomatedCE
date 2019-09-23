@@ -557,6 +557,7 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.objective_step_size.setSuffix(" µm")
         self.objective_step_size.setValue(5)
+        self.objective_step_size.setMaximum(1000)
 
         form_layout = QtWidgets.QFormLayout()
         form_layout.addWidget(self.objective_value)
@@ -663,9 +664,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.pressure_form.setLayout(form_layout)
 
     def init_laser_form(self):
-        self.laser_pfn = QtWidgets.QSpinBox()
-        self.laser_attenuation = QtWidgets.QSpinBox()
-        self.laser_burst_count = QtWidgets.QSpinBox()
+        self.laser_pfn = ValueDisplay()
+        self.laser_attenuation = ValueDisplay()
+        self.laser_burst_count = ValueDisplay()
         self.laser_fire = QtWidgets.QPushButton('Fire')
         self.laser_stop = QtWidgets.QPushButton('Stop Firing')
         self.laser_timer = QtWidgets.QTimeEdit()
@@ -688,10 +689,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.laser_fire_check.setEnabled(False)
         # self.laser_timer.setReadOnly(True)
         self.laser_timer.setText('0s')
-        self.laser_pfn.setMaximum(255)
-        self.laser_pfn.setValue(20)
-        self.laser_attenuation.setMaximum(255)
-        self.laser_attenuation.setValue(137)
+
 
         form_layout = QtWidgets.QFormLayout()
         col_one = QtWidgets.QVBoxLayout()
@@ -781,6 +779,13 @@ class RunScreen(QtWidgets.QMainWindow):
         self.clear_output = QtWidgets.QPushButton('Clear')
         self.save_output = QtWidgets.QPushButton('Save')
 
+        #Injection Steps
+        self.inject_label = QtWidgets.QLabel('Injection Control:')
+        self.inject_cell_box = QtWidgets.QCheckBox('Cell Z Stack')
+        self.inject_cap_box = QtWidgets.QCheckBox('Cap. Z Stack')
+        self.inject_capture_button = QtWidgets.QPushButton('Capture')
+        self.inject_cell_box.checkState()
+
         self.sequence_display.setColumnCount(3)
         self.sequence_display.setColumnWidth(0, 30)
         self.sequence_display.setColumnWidth(1, 390)
@@ -804,6 +809,13 @@ class RunScreen(QtWidgets.QMainWindow):
         row.addWidget(self.repetition_input)
         row.addStretch()
         col.addLayout(row)
+        row_2 = QtWidgets.QHBoxLayout()
+        row_2.addWidget(self.inject_label)
+        row_2.addWidget(self.inject_cell_box)
+        row_2.addWidget(self.inject_cap_box)
+        row_2.addWidget(self.inject_capture_button)
+        row_2.addStretch()
+        col.addLayout(row_2)
         main_layout.addLayout(col)
 
         col = QtWidgets.QVBoxLayout()
@@ -880,6 +892,10 @@ class RunScreen(QtWidgets.QMainWindow):
 
     def init_plot_view(self):
         self.save_plot = QtWidgets.QPushButton('Save')
+        self.reset_plot = QtWidgets.QPushButton('Reset')
+        self.view_plot = QtWidgets.QPushButton('Live Plot')
+        self.view_plot.setCheckable(True)
+
         self.plot_panel = PlotPanel()
         live_plot_window = QtWidgets.QMainWindow()
 
@@ -887,6 +903,8 @@ class RunScreen(QtWidgets.QMainWindow):
         control_widget = QtWidgets.QWidget()
         control_layout = QtWidgets.QHBoxLayout()
         control_layout.addWidget(self.save_plot)
+        control_layout.addWidget(self.reset_plot)
+        control_layout.addWidget(self.view_plot)
         control_layout.addStretch()
         control_widget.setLayout(control_layout)
         live_plot_control.setWidget(control_widget)
@@ -982,10 +1000,14 @@ class RunScreen(QtWidgets.QMainWindow):
                 self.live_feed_scene.removeItem(item)
 
     def update_plots(self, rfu, current):
-        self.plot_panel.canvas.update_rfu(rfu)
+
         self.plot_panel.canvas.update_current(current)
+        self.plot_panel.canvas.update_rfu(rfu)
         self.plot_panel.canvas.set_style()
-        self.plot_panel.canvas.draw()
+        try:
+            self.plot_panel.canvas.draw()
+        except IndexError:
+            pass
 
 
 class DataScreen(QtWidgets.QMainWindow):
@@ -1722,19 +1744,19 @@ class RunPlot(FigureCanvas):
 
     def set_style(self):
         title_font_size = 12
-        self.axes_current.set_ylabel("Current (mA)", fontsize=title_font_size)
+        self.axes_current.set_ylabel("Current (uA)", fontsize=title_font_size)
         self.axes_current.set_facecolor('#FFFFFF')
-        self.axes_rfu.set_xlabel("Time (µs)", fontsize=title_font_size)
-        self.axes_rfu.set_ylabel("RFU (kV)", fontsize=title_font_size)
+        self.axes_rfu.set_xlabel("Time (s)", fontsize=title_font_size)
+        self.axes_rfu.set_ylabel("PMT (V)", fontsize=title_font_size)
         self.axes_rfu.set_facecolor('#FFFFFF')
 
     def update_rfu(self, rfu):
         self.axes_rfu.clear()
-        self.axes_rfu.plot(rfu, linewidth=3)
+        self.axes_rfu.plot(rfu, linewidth=2)
 
     def update_current(self, current):
         self.axes_current.clear()
-        self.axes_current.plot(current, linewidth=3, color="C2")
+        self.axes_current.plot(current, linewidth=1, color="C2", alpha = 0.7)
 
 
 def wrap_widget(widget):

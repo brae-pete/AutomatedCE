@@ -25,10 +25,12 @@ class PressureControl:
         self.arduino.open()
 
     def apply_rinse_pressure(self):
+        self.state=True
         with self.lock:
             self.state = self.arduino.applyPressure()
 
     def stop_rinse_pressure(self):
+        self.state=False
         """Only need to open release valve momentarily, this reduces heat build up on the MOSFET"""
         # with self.lock:
         #    self.state= self.arduino.openValves()
@@ -36,13 +38,20 @@ class PressureControl:
         with self.lock:
             self.state = self.arduino.removePressure()
             logging.info("Released Pressure")
-            time.sleep(0.5)
+        time.sleep(1.5)
+        self.close_valve()
 
     def open_valve(self):
         with self.lock:
             self.state = self.arduino.openValves()
 
     def close_valve(self):
+        """
+        Only release valves if the pressure is off. This prevents build up of pressure inside the capilalry
+        :return:
+        """
+        if self.state:
+            return
         with self.lock:
             self.state = self.arduino.closeValves()
 

@@ -1,7 +1,7 @@
 import threading
 from hardware import ArduinoBase
 import logging
-
+import time
 
 class OutletControl:
     """Class to control Z-stage for capillary/optical train
@@ -9,7 +9,7 @@ class OutletControl:
     Make sure that what you program matches the inputs and outputs
     This is called by the GUI and needs data types to match
     """
-
+    invert = -1
     def __init__(self, com="COM9", arduino=-1, lock=-1, home=True):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
@@ -30,6 +30,8 @@ class OutletControl:
             lock = threading.Lock()
 
         self.lock = lock
+        time.sleep(0.25)
+        self.go_home()
         return
 
     def open(self):
@@ -49,7 +51,7 @@ class OutletControl:
                     self.pos = args[0]
                 return self.pos
             response = self.arduino.read_outlet_z()
-            self.pos = -response[0]
+            self.pos = self.invert*response[0]
         return self.pos
 
     def set_z(self, set_z):
@@ -60,7 +62,7 @@ class OutletControl:
             if self.home:
                 self.pos = set_z
                 return
-            self.arduino.set_outlet_z(-set_z)
+            self.arduino.set_outlet_z(self.invert*set_z)
         return True
 
     def set_rel_z(self, set_z):
@@ -72,7 +74,7 @@ class OutletControl:
             if self.home:
                 self.pos = set_z
                 return
-            self.arduino.set_outlet_z(-(set_z + pos))
+            self.arduino.set_outlet_z(self.invert*(set_z + pos))
         return True
 
     def set_speed(self, speed):
@@ -100,3 +102,33 @@ class OutletControl:
         if self.home:
             return
         self.arduino.close()
+
+    def go_home(self):
+        with self.lock:
+            if self.home:
+                self.pos=0
+                return
+
+            self.arduino.go_home()
+            self.wait_for_move()
+            self.arduino.go_home()
+            self.pos = self.wait_for_move()
+            self.offset = 0
+            self.set_z(-9)
+            cz = self.wait_for_move()
+
+
+    def wait_for_move(self):
+        """
+        returns the final position of the motor after it has stopped moving.
+
+        :return: current_pos, float in mm of where the stage is at
+        """
+        prev_pos = self.read_z()
+        current_pos = prev_pos + 1
+        # Update position while moving
+        while prev_pos != current_pos:
+            time.sleep(0.1)
+            prev_pos = current_pos
+            current_pos = self.read_z()
+        return current_pos

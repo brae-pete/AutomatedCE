@@ -5,6 +5,15 @@ import cv2
 import time
 import numpy as np
 import logging
+from skimage import io, data, img_as_float
+from skimage import exposure
+from skimage import transform
+from skimage.color import rgb2gray
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+
+io.use_plugin('pil')
 
 if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
     sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
@@ -46,6 +55,9 @@ CONFIG_FILE = os.path.join(CONFIG_FOLDER, "QCam3Test.cfg")
 class ImageControl:
     """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
      """
+
+    contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
+    rotate = 90
     def __init__(self, mmc=None, config=None, home=False):
         self.mmc = mmc
         self.config = config
@@ -63,7 +75,11 @@ class ImageControl:
         except MMCorePy.CMMError:
             self.close()
             time.sleep(1)
-            self.mmc.loadSystemConfiguration(CONFIG_FILE)
+            try:
+                cfg = r'C:\KivyBarracuda\BarracudaQt\BarracudaQt\config\DemoCam.cfg'
+                self.mmc.loadSystemConfiguration(cfg)
+            except MMCorePy.CMMError:
+                logging.warning("Could not load camera")
 
     def close(self):
         self.mmc.unloadAllDevices()
@@ -92,29 +108,66 @@ class ImageControl:
         if self.mmc.getRemainingImageCount() > 0:
             img = self.mmc.getLastImage()
             ims = img.shape
+            # From bring back from 32 bit to 3 rgb channels
             img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]  # img = np.float32(img)
-            img = cv2.resize(img, (0, 0), fx=0.25, fy=0.25)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # img = cv2.equalizeHist(img)
-
+            new_ims=[0,0]
+            new_ims[0] = ims[0]/4
+            new_ims[1] = ims[1]/4
+            img = transform.resize(img, new_ims, anti_aliasing=True)
+            img = transform.rotate(img, 90, resize=True)
+            img = rgb2gray(img)
+            self.img = img.copy()
+            img = self.image_conversion(img)
+            """
             try:
                 img = pilImage.fromarray(img, 'L')
             except:
                 img = pilImage.fromarray(img)
+            """
             return img
 
     def record_recent_image(self, filename):
         if self.home:
             time.sleep(0.25)
-        img = self.mmc.getLastImage()
+        img = self._get_image()
         ims = img.shape
         img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         cv2.imwrite(filename, img)
 
-    @staticmethod
-    def image_conversion(img):
-        """ Adjusts the contrast and brightness"""
-        equ = cv2.equalizeHist(img)
-        return equ
+    def _get_image(self):
+        try:
+            img = self.mmc.getLastImage()
+        except MMCorePy.CMMError:
+            time.sleep(0.15)
+            img = self._get_image()
+        return img
 
+    def image_conversion(self, img):
+        """ Adjusts the contrast and brightness"""
+        p2, p98 = np.percentile(img, self.contrast_exposure)
+        img_rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
+        return img_rescale
+
+    @staticmethod
+    def save_image(img, filename):
+        io.imsave(filename,img)
+
+    def live_view(self):
+
+        def animate(i):
+            img = self.get_recent_image()
+            if img is not None:
+                im.set_array(img)
+            return im,
+
+        fig = plt.figure()
+        try:
+            self.start_video_feed()
+        except MMCorePy.CMMError:
+            logging.WARNING("Continuous already starting")
+        time.sleep(1)
+        img = self.get_recent_image()
+        im = plt.imshow(img, animated=True)
+        ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
+        plt.show()

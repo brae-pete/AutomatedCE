@@ -97,6 +97,10 @@ class BaseSystem:
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
         logging.error('home_z not implemented in hardware class.')
 
+    def wait_z(self):
+        """ Waits until the z-stage has finished its move before releasing the lock"""
+        logging.error("wait_z not implemented in hardware class")
+
     def close_outlet(self):
         """Removes immediate functionality of the outlet stage/motor."""
         logging.error('close_outlet not implemented in hardware class.')
@@ -156,6 +160,10 @@ class BaseSystem:
     def get_voltage(self):
         """Gets the current voltage of the voltage source."""
         logging.error('get_voltage not implemented in hardware class.')
+
+    def save_data(self, filepath):
+        """ Saves the data from the DAQ to the specified filepath"""
+        logging.error("save_data not implemented in hardware class")
 
     def get_voltage_data(self):
         """Gets a list of the voltages over time."""
@@ -244,8 +252,8 @@ class BarracudaSystem(BaseSystem):
     _daq_voltage_control = 'ao1'
     _daq_rfu = "ai3"
 
-    _z_stage_lock = threading.Lock()
-    _outlet_lock = threading.Lock()
+    _z_stage_lock = threading.RLock() # Same thread can access the lock at multiple points, but not multiple threads
+    _outlet_lock = threading.RLock()
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
     _pressure_lock = threading.Lock()
@@ -293,6 +301,7 @@ class BarracudaSystem(BaseSystem):
                 logging.info('{:.0f}s have passed. turning off laser.'.format(self.laser_max_time))
                 self.laser_close()
                 self._laser_rem_time = 0
+                return True
 
     def calibrate_system(self, permissions_gui):
         """Calibrates the system."""
@@ -346,9 +355,9 @@ class BarracudaSystem(BaseSystem):
 
             if image is None:
                 return None
-
             if not HOME:
-                image.save("recentImg.png")
+
+                self.image_control.save_image(image, "recentImg.png")
 
         return image
 
@@ -421,6 +430,9 @@ class BarracudaSystem(BaseSystem):
 
         return False
 
+    def wait_z(self):
+        self.z_stage_control.wait_for_move()
+
     def home_z(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
         self.z_stage_control.go_home()
@@ -485,7 +497,7 @@ class BarracudaSystem(BaseSystem):
 
     def home_objective(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        self.objective_control.set_z(0)
+        self.objective_control.go_home()
         return True
 
     def close_voltage(self):
@@ -494,6 +506,10 @@ class BarracudaSystem(BaseSystem):
     def set_voltage(self, v=None):
         self._start_daq()
         self.daq_board_control.change_voltage(v)
+        return True
+
+    def save_data(self, filepath):
+        self.daq_board_control.save_data(filepath)
         return True
 
     def get_voltage(self):
@@ -510,10 +526,10 @@ class BarracudaSystem(BaseSystem):
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         if pfn:
-            self.laser_control.set_pfn('{:03d}'.format(pfn))
+            self.laser_control.set_pfn('{:03d}'.format(int(pfn)))
 
         if att:
-            self.laser_control.set_attenuation('{:03d}'.format(att))
+            self.laser_control.set_attenuation('{:03d}'.format(int(att)))
 
         if energy:
             logging.info('Cannot set energy of laser currently.')
@@ -523,7 +539,7 @@ class BarracudaSystem(BaseSystem):
             self.laser_control.set_rep_rate('010')
 
         if burst:
-            self.laser_control.set_burst('{:04d}'.format(burst))
+            self.laser_control.set_burst('{:04d}'.format(int(burst)))
 
         return True
 
