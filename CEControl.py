@@ -1249,7 +1249,7 @@ class RunScreenController:
         # self._plot_data.set()  # fixme
         if self.hardware.hasVoltageControl:
             while True:
-                rfu = self.hardware.daq_board_control.data['ai3']
+                rfu = self.hardware.daq_board_control.data['avg']
                 kv = self.hardware.daq_board_control.data['ai1']
                 ua = self.hardware.daq_board_control.data['ai2']
 

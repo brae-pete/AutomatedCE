@@ -26,6 +26,7 @@ class DAQBoard:
     voltage_ramp = 10  # speed to ramp voltage in kV/s
     voltage = 0  # Current voltage in V to send to the  daq. (-10 to 10 max)
     voltage_conversion = 30 / 10  # kV/daqV conversion factor
+    current_conversion = 300 / 10
     rfu_conversion = 1
     data_lock = threading.Lock()
     ba = (None, None)
@@ -87,8 +88,8 @@ class DAQBoard:
             self.downsampled_freq=len(decimated)
             self.data[self.rfu_chan].extend(decimated)  # RFU
             # Voltage and current don't matter as much so we will just average those
-            self.data[self.voltage_readout].extend(self.average_data(samples[0], len(decimated)))  # Voltage
-            self.data[self.current_readout].extend(self.average_data(samples[1], len(decimated))) # Current
+            self.data[self.voltage_readout].extend(self.average_data(samples[0], len(decimated), self.voltage_conversion))  # Voltage
+            self.data[self.current_readout].extend(self.average_data(samples[1], len(decimated), self.current_conversion)) # Current
 
             #Get comparative chromatograms
             self.data['raw'].extend(self.raw_data(samples[2],len(decimated)))
@@ -106,11 +107,11 @@ class DAQBoard:
             raws.append(data[idx*i])
         return raws
     @staticmethod
-    def average_data(data, points):
+    def average_data(data, points,conversion=1):
         avgs = []
         for i in range(points):
             idx = int(len(data)/points)
-            avgs.append(np.mean(data[idx*i:idx*i+idx]))
+            avgs.append(np.mean(data[idx*i:idx*i+idx])*conversion)
         return avgs
 
     def decimate_data(self,data):

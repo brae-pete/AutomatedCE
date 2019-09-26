@@ -42,6 +42,9 @@ int outlet_div = 32;
 // Set variables for Pressure
 int SOLENOID1 = 23;
 int SOLENOID2 = 29;
+int LED_R = 35;
+int LED_G = 37;
+int LED_B = 39;
 
 //SERIAL 
 String inputString = "";   // a String to hold incoming data
@@ -62,8 +65,9 @@ void setup()
   pinMode(MOSI, OUTPUT);
   pinMode(MISO, OUTPUT);
   pinMode(SCK, OUTPUT);
-
-
+  pinMode(LED_R, OUTPUT);
+  pinMode(LED_G, OUTPUT);
+  pinMode(LED_B, OUTPUT);
 
   // Reset powerSTEP and set CS
   digitalWrite(nSTBY_nRESET_PIN_2, HIGH);
@@ -74,6 +78,11 @@ void setup()
  // Turn pressure off
  digitalWrite(SOLENOID1, HIGH);
  digitalWrite(SOLENOID2,HIGH);
+
+ // Turn LED ON
+ digitalWrite(LED_R, HIGH);
+ digitalWrite(LED_G, LOW);
+ digitalWrite(LED_B, LOW);
 
  
 
@@ -333,6 +342,25 @@ void resetDriver(){
   digitalWrite(nCS_PIN_2, HIGH);
 }
 
+void lightTalk(){
+  
+  // Select the RGB channel
+  int pin = LED_R; // R is default
+  if (inputString[1]=='G'){
+    pin = LED_G;
+  }
+  else if (inputString[1]=='B'){
+    pin = LED_B;
+  }
+  // Turn on or off the LED
+  if (inputString[2]=='1'){
+    digitalWrite(pin, HIGH);
+  }
+  else if (inputString[2]=='0'){
+    digitalWrite(pin, LOW);
+  }
+}
+
 void loop() 
 { 
    // print the string when a newline arrives:
@@ -347,6 +375,9 @@ void loop()
     }
     else if (inputString[0]=='S'){
       Serial.println("Run");
+    }
+    else if (inputString[0]=='L'){
+      lightTalk();
     }
     // clear the string:
     inputString = "";

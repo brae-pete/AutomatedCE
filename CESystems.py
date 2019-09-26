@@ -443,6 +443,7 @@ class BarracudaSystem(BaseSystem):
         return True
 
     def set_outlet(self, h=None, rel_h=None):
+
         if h:
             self.outlet_control.set_z(h)
             return True
