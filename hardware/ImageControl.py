@@ -8,10 +8,22 @@ import logging
 from skimage import io, data, img_as_float
 from skimage import exposure
 from skimage import transform
+from skimage.util import img_as_ubyte
 from skimage.color import rgb2gray
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from pyvcam import pvc
+from pyvcam.camera import Camera
 
+"""
+For Micromanager, you need to transfer the Micromanager 2.0 gamma folder from the barracuda PC to the computer you are 
+working with. Alternatively you can try building a python 3 compatible Micromanager. 
+
+For PVCAM, you will need to follow the install instructions for PVCAM python wrapper at https://github.com/Photometrics/PyVCAM
+Be sure you have PVCAM, PVCAM SDK, Misrosoft Visual C++ Build Tools all installed before running the python setup.py install
+command. 
+Restart the PC after running python setup.py install
+"""
 
 io.use_plugin('pil')
 
@@ -54,10 +66,90 @@ CONFIG_FILE = os.path.join(CONFIG_FOLDER, "PVCAM.cfg")
 
 class ImageControl:
     """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
+    Default uses micromanager (mmc). Instead you can use PVCAM shown below if using a PVCAM compatiable camera
+    like the coolnap hq2
      """
 
     contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
     rotate = 90
+
+    def open(self):
+        """Opens the camera resources"""
+        pass
+
+    def close(self):
+        """ Closes the camera resources, called when program exits"""
+        pass
+
+    def stop_video_feed(self):
+        """Stops the live video feed"""
+        pass
+
+    def get_single_image(self):
+        """Snaps single image, returns image"""
+        pass
+
+    def start_video_feed(self):
+        """ Starts a live video feed, typicall using camera circular buffer """
+        pass
+
+    def get_recent_image(self, size=None):
+        """Returns most recent image from the camera circular buffer (live feed)
+        performs image processing. Returns PIL image
+        """
+        pass
+
+    def record_recent_image(self, filename):
+        """ Saves recent image from circular buffer to designaed file"""
+        pass
+
+    def _get_image(self):
+        """ Command that retrieves image from the camera"""
+        pass
+
+    def image_conversion(self, img):
+        """ Adjusts the contrast and brightness"""
+        p2, p98 = np.percentile(img, self.contrast_exposure)
+        img_rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
+        return img_rescale
+
+    @staticmethod
+    def save_image(img, filename):
+        """ Saves PIL image with filename"""
+        io.imsave(filename, img)
+
+    def live_view(self):
+        """ Simple window to view the camera feed using matplotlib
+         Live update is performed using the animate functionality in matplotlib
+
+         """
+
+        def animate(i):
+            # Get an image
+            img = self.get_recent_image()
+            if img is not None:
+                # put the image into the display data array
+                im.set_array(img)
+            return im,
+
+        fig = plt.figure()
+        self.start_video_feed()
+        time.sleep(1)
+        img = self.get_recent_image()
+        im = plt.imshow(img, animated=True)
+        ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
+        plt.show()
+
+
+class MicroManagerControl(ImageControl):
+    """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
+    Default uses micromanager (mmc). Instead you can use PVCAM shown below if using a PVCAM compatiable camera
+    like the coolnap hq2
+     """
+
+    contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
+    rotate = 90
+
     def __init__(self, mmc=None, config=None, home=False):
         self.mmc = mmc
         self.config = config
@@ -110,9 +202,9 @@ class ImageControl:
             ims = img.shape
             # From bring back from 32 bit to 3 rgb channels
             img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]  # img = np.float32(img)
-            new_ims=[0,0]
-            new_ims[0] = ims[0]/4
-            new_ims[1] = ims[1]/4
+            new_ims = [0, 0]
+            new_ims[0] = ims[0] / 4
+            new_ims[1] = ims[1] / 4
             img = transform.resize(img, new_ims, anti_aliasing=True)
             img = transform.rotate(img, 90, resize=True)
             img = rgb2gray(img)
@@ -151,7 +243,7 @@ class ImageControl:
 
     @staticmethod
     def save_image(img, filename):
-        io.imsave(filename,img)
+        io.imsave(filename, img)
 
     def live_view(self):
 
@@ -171,3 +263,112 @@ class ImageControl:
         im = plt.imshow(img, animated=True)
         ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
         plt.show()
+
+
+class PVCamImageControl(ImageControl):
+    """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
+     """
+    cam = None  # PV camera object
+    exposure = 50  # ms exposure time
+    contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
+    rotate = 90
+    img = None  # Copy of the raw image before processing
+    process_time = 0 # time it takes to process a single image for live feed
+    def __init__(self):
+        self.open()
+
+    def open(self):
+        """Opens the MMC resources"""
+        try:
+            pvc.init_pvcam()
+        except RuntimeError:
+            pvc.uninit_pvcam()
+            pvc.init_pvcam()
+
+        self.cam = next(Camera.detect_camera())
+        self.cam.open()
+
+    def close(self):
+        self.cam.close()
+        pvc.uninit_pvcam()
+
+    def stop_video_feed(self):
+        self.cam.stop_live()
+
+    def get_single_image(self):
+        """Snaps single image, returns image, for when live feed is not runniing"""
+        image = self.cam.get_frame(self.exposure)
+        return image
+
+    def start_video_feed(self):
+        """ starts continuous video feed  """
+        self.cam.start_live(self.exposure)
+
+    @staticmethod
+    def _adjust_size(img, size):
+        ims = img.shape
+        new_ims = [0, 0]
+        new_ims[0] = int(ims[0] * size)
+        new_ims[1] = int(ims[1] * size)
+        img = transform.resize(img, new_ims, anti_aliasing=True)
+        return img
+
+    @staticmethod
+    def _rotate_img(img, rotation):
+        if rotation == 0:
+            return img
+        return transform.rotate(img, 90, resize=True)
+
+    def get_recent_image(self, size=0.5, rotation=0):
+        """Returns most recent image from the camera"""
+        st = time.perf_counter()
+        img = self._get_image()
+        # keep a copy of the original for debugging ( you could remove this )
+        self.img = img.copy()
+        img = self._adjust_size(img, size)
+        img = self._rotate_img(img, rotation)
+        img = self.image_conversion(img)
+        # convert to 8 bit image (with proper rescaling)
+        img = img_as_ubyte(img)
+        self.process_time = time.perf_counter()-st
+        return img
+
+    def record_recent_image(self, filename):
+        img = self._get_image()
+        cv2.imwrite(filename, img)
+
+    def _get_image(self):
+        img = self.cam.get_live_frame()
+        return img
+
+    def image_conversion(self, img):
+        """ Adjusts the contrast and brightness"""
+        p2, p98 = np.percentile(img, self.contrast_exposure)
+        img_rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
+        return img_rescale
+
+    @staticmethod
+    def save_image(img, filename):
+        io.imsave(filename, img)
+
+    def live_view(self):
+
+        def animate(i):
+            img = self.get_recent_image()
+            if img is not None:
+                im.set_array(img)
+            return im,
+
+        fig = plt.figure()
+        try:
+            self.start_video_feed()
+        except MMCorePy.CMMError:
+            logging.WARNING("Continuous already starting")
+        time.sleep(1)
+        img = self.get_recent_image()
+        im = plt.imshow(img, animated=True)
+        ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
+        plt.show()
+
+if __name__ == "__main__":
+    ic = PVCamImageControl()
