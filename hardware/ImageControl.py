@@ -49,7 +49,7 @@ elif "CEGraphic" in contents:
 else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
     CONFIG_FOLDER = os.getcwd()
 
-CONFIG_FILE = os.path.join(CONFIG_FOLDER, "QCam3Test.cfg")
+CONFIG_FILE = os.path.join(CONFIG_FOLDER, "PVCAM.cfg")
 
 
 class ImageControl:
@@ -76,7 +76,7 @@ class ImageControl:
             self.close()
             time.sleep(1)
             try:
-                cfg = r'C:\KivyBarracuda\BarracudaQt\BarracudaQt\config\DemoCam.cfg'
+                cfg = r'C:\KivyBarracuda\BarracudaQt\BarracudaQt\config\PVCAM.cfg'
                 self.mmc.loadSystemConfiguration(cfg)
             except MMCorePy.CMMError:
                 logging.warning("Could not load camera")
