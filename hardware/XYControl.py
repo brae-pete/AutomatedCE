@@ -3,6 +3,7 @@ import os
 import logging
 import threading
 import random
+import serial
 
 if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
     sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
@@ -55,6 +56,7 @@ class XYControl:
     x_inversion = 1
     y_inversion = 1
 
+    """
     def __init__(self, home=True, lock=-1, stage='XYStage', config_file = "PriorXY.cfg", loaded=False):
         logging.info("{} IS LOCK {} IS HOME".format(lock, home))
 
@@ -69,6 +71,7 @@ class XYControl:
         if not home:
             self.mmc = MMCorePy.CMMCore()
             self.load_config()
+    """
 
     def load_config(self):
         """ starts MMC object, [config file] [home]
@@ -82,6 +85,7 @@ class XYControl:
         with self.lock:
             self.mmc.loadSystemConfiguration(self.config_file)
             self.stageID = self.mmc.getXYStageDevice()
+
     def read_xy(self):
         """ Reads the current XY position of the stage, sets XYControl.position and returns list [X, Y]  """
         if self.home:
@@ -120,19 +124,19 @@ class XYControl:
         if self.home:
             self.position = [0, 0]
             return
-        x = x*self.scale
+        x = x * self.scale
         pos = self.read_xy()
         with self.lock:
-            self.mmc.setXYPosition(self.stageID, x, pos[1]*self.scale)
+            self.mmc.setXYPosition(self.stageID, x, pos[1] * self.scale)
 
     def set_y(self, y):
         if self.home:
             self.position = [0, 0]
             return
-        y = y*self.scale
+        y = y * self.scale
         pos = self.read_xy()
         with self.lock:
-            self.mmc.setXYPosition(self.stageID, pos[0]*self.scale, y)
+            self.mmc.setXYPosition(self.stageID, pos[0] * self.scale, y)
 
     def set_rel_xy(self, xy):
         # setRelativeXYPosition()
@@ -208,5 +212,133 @@ class XYControl:
             self.mmc.stop(self.stageID)
 
 
+class PriorControl(XYControl):
+    """ Basic XY Control class. If you switch hardware so that it no longer uses MMC. You only need
+    to maintain the outputs for each method.
+
+    This uses the proscan controller III from prior.
+    see commands at https://www.prior.com/wp-content/uploads/2017/06/ProScanIII-v1.12.pdf
+
+    """
+    scale = 1
+    x_inversion = 1
+    y_inversion = 1
+    ser = serial.Serial()
+    lock = threading.Lock()
+
+
+    def __init__(self, port = "COM5"):
+        self.ser.port = port
+        self.open()
+
+    def _read_lines(self):
+        """
+        Reads entire buffer and returns response as a list
+        :return:
+        """
+        lines = []
+        while self.ser.in_waiting > 0:
+            lines.append(self._read_line())
+        return lines
+
+    def _read_line(self):
+        """
+        reads one line, using \r as the terminator
+        returns decoded response as a string
+        :return: string response
+        """
+        return self.ser.read_until('\r'.encode()).decode()
+
+
+    def read_xy(self):
+        """ Reads the current XY position of the stage, sets XYControl.position and returns list [X, Y]  """
+        # Get XY from Stage
+        with self.lock:
+            pos=[0,0]
+            self.ser.write("P \r".encode())
+            resp = self._read_line().split(',')
+            pos[0] = eval(resp[0])
+            pos[1] = eval(resp[1])
+            pos = [x / self.scale for x in pos]
+            pos[0] *= self.x_inversion
+            pos[1] *= self.y_inversion
+
+        return pos
+
+    def set_xy(self, xy):
+        """Moves stage to position defined by pos (x,y). Returns nothing
+        pos must be defined in microns """
+        pos = xy[:]
+        pos[0] *= self.x_inversion
+        pos[1] *= self.y_inversion
+        pos = [x * self.scale for x in pos]
+        logging.info("{} is XY MOVE".format(pos))
+
+        with self.lock:
+            self.ser.write("G {},{} \r".format(pos[0], pos[1]).encode())
+            self._read_line()
+
+    def set_x(self, x):
+        x = x * self.scale * self.x_inversion
+        with self.lock:
+            self.ser.write("GX {} \r".format(x).encode())
+            self._read_line()
+
+    def set_y(self, y):
+        y = y * self.scale*self.y_inversion
+        with self.lock:
+            self.ser.write("GY {} \r".format(y).encode())
+            self._read_line()
+
+    def set_rel_xy(self, xy):
+        pos = xy[:]
+        pos[0] *= self.x_inversion
+        pos[1] *= self.y_inversion
+        pos = [x * self.scale for x in pos]
+
+        with self.lock:
+            self.ser.write("GR {},{} \r".format(pos[0],pos[1]).encode())
+            self._read_line()
+
+    def set_rel_x(self, x):
+        self.set_rel_xy([x,0])
+
+    def set_rel_y(self, y):
+        self.set_rel_xy([0, y])
+
+    def set_origin(self):
+        """Redefines current position as 0,0. Calls XYControl.read_xy after reset"""
+        with self.lock:
+            self.ser.write("Z \r".encode())
+            self._read_line()
+        self.read_xy()
+
+    def origin(self):
+        " Return to 0,0 "
+        self.set_xy([0,0])
+
+    def close(self):
+        """Releases any communication ports that may be used"""
+        self.ser.close()
+
+    def reset(self):
+        """ Resets the device in case of a communication error elsewhere """
+        self.close()
+        self.open()
+
+    def open(self):
+        """ Opens serial communicaiton port"""
+        self.ser.open()
+
+    def stop(self):
+        """
+        Stops the stage immediately, can lose position
+        :return:
+        """
+        with self.lock:
+            self.ser.write('K\r'.encode())
+            self._read_line()
+
+
 if __name__ == '__main__':
-    xyc = XYControl(home=False)
+    xyc = PriorControl()

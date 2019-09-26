@@ -1,11 +1,10 @@
 import sys
 import os
-from PIL import Image as pilImage
 import cv2
 import time
 import numpy as np
 import logging
-from skimage import io, data, img_as_float
+from skimage import io
 from skimage import exposure
 from skimage import transform
 from skimage.util import img_as_ubyte
@@ -23,6 +22,10 @@ For PVCAM, you will need to follow the install instructions for PVCAM python wra
 Be sure you have PVCAM, PVCAM SDK, Misrosoft Visual C++ Build Tools all installed before running the python setup.py install
 command. 
 Restart the PC after running python setup.py install
+
+python version 3.7
+skimage can be installed via 'conda install scikit-image'
+cv2 can be installed via python -m pip install opencv_python
 """
 
 io.use_plugin('pil')
@@ -107,6 +110,21 @@ class ImageControl:
         """ Command that retrieves image from the camera"""
         pass
 
+    @staticmethod
+    def _adjust_size(img, size):
+        ims = img.shape
+        new_ims = [0, 0]
+        new_ims[0] = int(ims[0] * size)
+        new_ims[1] = int(ims[1] * size)
+        img = transform.resize(img, new_ims, anti_aliasing=True)
+        return img
+
+    @staticmethod
+    def _rotate_img(img, rotation):
+        if rotation == 0:
+            return img
+        return transform.rotate(img, 90, resize=True)
+
     def image_conversion(self, img):
         """ Adjusts the contrast and brightness"""
         p2, p98 = np.percentile(img, self.contrast_exposure)
@@ -123,7 +141,6 @@ class ImageControl:
          Live update is performed using the animate functionality in matplotlib
 
          """
-
         def animate(i):
             # Get an image
             img = self.get_recent_image()
@@ -132,13 +149,75 @@ class ImageControl:
                 im.set_array(img)
             return im,
 
+        #initialize our matplotlib figure
         fig = plt.figure()
         self.start_video_feed()
         time.sleep(1)
         img = self.get_recent_image()
         im = plt.imshow(img, animated=True)
+
+        # Calls the above animate function every 50 ms. Uses blit to reduce workload.
         ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
         plt.show()
+
+
+class PVCamImageControl(ImageControl):
+    """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
+     """
+    cam = None  # PV camera object
+    exposure = 50  # ms exposure time
+    contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
+    rotate = 90
+    img = None  # Copy of the raw image before processing
+    process_time = 0 # time it takes to process a single image for live feed
+    def __init__(self):
+        self.open()
+
+    def open(self):
+        """Opens the MMC resources"""
+        try:
+            pvc.init_pvcam()
+        except RuntimeError:
+            pvc.uninit_pvcam()
+            pvc.init_pvcam()
+
+        self.cam = next(Camera.detect_camera())
+        self.cam.open()
+
+    def close(self):
+        self.cam.close()
+        pvc.uninit_pvcam()
+
+    def stop_video_feed(self):
+        self.cam.stop_live()
+
+    def get_single_image(self):
+        """Snaps single image, returns image, for when live feed is not runniing"""
+        image = self.cam.get_frame(self.exposure)
+        return image
+
+    def start_video_feed(self):
+        """ starts continuous video feed  """
+        self.cam.start_live(self.exposure)
+
+    def get_recent_image(self, size=0.5, rotation=0):
+        """Returns most recent image from the camera"""
+        st = time.perf_counter()
+        img = self._get_image()
+        # keep a copy of the original for debugging ( you could remove this )
+        self.img = img.copy()
+        img = self._adjust_size(img, size)
+        img = self._rotate_img(img, rotation)
+        img = self.image_conversion(img)
+        # convert to 8 bit image (with proper rescaling)
+        img = img_as_ubyte(img)
+        self.process_time = time.perf_counter()-st
+        return img
+
+    def _get_image(self):
+        """ Returns singe image when camera is in live feed """
+        img = self.cam.get_live_frame()
+        return img
 
 
 class MicroManagerControl(ImageControl):
@@ -264,111 +343,6 @@ class MicroManagerControl(ImageControl):
         ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
         plt.show()
 
-
-class PVCamImageControl(ImageControl):
-    """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
-     """
-    cam = None  # PV camera object
-    exposure = 50  # ms exposure time
-    contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
-    rotate = 90
-    img = None  # Copy of the raw image before processing
-    process_time = 0 # time it takes to process a single image for live feed
-    def __init__(self):
-        self.open()
-
-    def open(self):
-        """Opens the MMC resources"""
-        try:
-            pvc.init_pvcam()
-        except RuntimeError:
-            pvc.uninit_pvcam()
-            pvc.init_pvcam()
-
-        self.cam = next(Camera.detect_camera())
-        self.cam.open()
-
-    def close(self):
-        self.cam.close()
-        pvc.uninit_pvcam()
-
-    def stop_video_feed(self):
-        self.cam.stop_live()
-
-    def get_single_image(self):
-        """Snaps single image, returns image, for when live feed is not runniing"""
-        image = self.cam.get_frame(self.exposure)
-        return image
-
-    def start_video_feed(self):
-        """ starts continuous video feed  """
-        self.cam.start_live(self.exposure)
-
-    @staticmethod
-    def _adjust_size(img, size):
-        ims = img.shape
-        new_ims = [0, 0]
-        new_ims[0] = int(ims[0] * size)
-        new_ims[1] = int(ims[1] * size)
-        img = transform.resize(img, new_ims, anti_aliasing=True)
-        return img
-
-    @staticmethod
-    def _rotate_img(img, rotation):
-        if rotation == 0:
-            return img
-        return transform.rotate(img, 90, resize=True)
-
-    def get_recent_image(self, size=0.5, rotation=0):
-        """Returns most recent image from the camera"""
-        st = time.perf_counter()
-        img = self._get_image()
-        # keep a copy of the original for debugging ( you could remove this )
-        self.img = img.copy()
-        img = self._adjust_size(img, size)
-        img = self._rotate_img(img, rotation)
-        img = self.image_conversion(img)
-        # convert to 8 bit image (with proper rescaling)
-        img = img_as_ubyte(img)
-        self.process_time = time.perf_counter()-st
-        return img
-
-    def record_recent_image(self, filename):
-        img = self._get_image()
-        cv2.imwrite(filename, img)
-
-    def _get_image(self):
-        img = self.cam.get_live_frame()
-        return img
-
-    def image_conversion(self, img):
-        """ Adjusts the contrast and brightness"""
-        p2, p98 = np.percentile(img, self.contrast_exposure)
-        img_rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
-        return img_rescale
-
-    @staticmethod
-    def save_image(img, filename):
-        io.imsave(filename, img)
-
-    def live_view(self):
-
-        def animate(i):
-            img = self.get_recent_image()
-            if img is not None:
-                im.set_array(img)
-            return im,
-
-        fig = plt.figure()
-        try:
-            self.start_video_feed()
-        except MMCorePy.CMMError:
-            logging.WARNING("Continuous already starting")
-        time.sleep(1)
-        img = self.get_recent_image()
-        im = plt.imshow(img, animated=True)
-        ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
-        plt.show()
 
 if __name__ == "__main__":
     ic = PVCamImageControl()
