@@ -23,6 +23,7 @@ class CapillaryLED:
         self.com = com
         self.have_arduino = True
         self.arduino = arduino
+        self.lock = lock
 
         if arduino == -1:
             self.check = False
@@ -54,7 +55,8 @@ class CapillaryLED:
         :param channel: 'R', 'G', or 'B' char.
         :return:
         """
-        self.arduino.serial.write('L{}1\n'.format(channel).encode())
+        with self.lock:
+            self.arduino.serial.write('L{}1\n'.format(channel).encode())
         self.channel_states[channel]=True
 
     def stop_led(self, channel = 'G'):
@@ -63,7 +65,8 @@ class CapillaryLED:
         :param channel: 'R', 'G', or 'B' char
         :return:
         """
-        self.arduino.serial.write('L{}0\n'.format(channel).encode())
+        with self.lock:
+            self.arduino.serial.write('L{}0\n'.format(channel).encode())
         self.channel_states[channel]=False
 
     def dance_party(self):
@@ -74,10 +77,11 @@ class CapillaryLED:
 
         channels = ['R','G','B']
         i = 2
+        self.dance_stop.clear()
         while not self.dance_stop.is_set():
-            time.sleep(0.25)
+            time.sleep(0.5)
             self.start_led(channels[i%3])
-            time.sleep(0.25)
+            time.sleep(0.5)
             self.stop_led(channels[(i-1)%3])
             i+=1
         for chnl in channels:

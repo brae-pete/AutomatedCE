@@ -441,6 +441,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.stop_form = QtWidgets.QGroupBox()
         self.init_stop_form()
 
+
+
         self.temp_calibrate_layout = QtWidgets.QHBoxLayout()
         self.temp_calibrate_layout.addStretch()
         self.temp_calibrate_button = QtWidgets.QPushButton('Calibrate FIXME')
@@ -768,6 +770,27 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.stop_form.setLayout(form_layout)
 
+    def init_led_form(self):
+        self.r_channel = QtWidgets.QPushButton('R')
+        self.r_channel.setCheckable(True)
+        self.g_channel = QtWidgets.QPushButton('G')
+        self.g_channel.setCheckable(True)
+        self.b_channel = QtWidgets.QPushButton('B')
+        self.b_channel.setCheckable(True)
+        self.dance_button = QtWidgets.QPushButton('Dance')
+        self.dance_button.setCheckable(True)
+        row = QtWidgets.QHBoxLayout()
+        row.addStretch()
+        row.addWidget(self.r_channel)
+        row.addWidget(self.g_channel)
+        row.addWidget(self.b_channel)
+        row.addWidget(self.dance_button)
+        form_layout = QtWidgets.QFormLayout()
+        form_layout.addRow(row)
+        self.led_form.setLayout(form_layout)
+        return form_layout
+
+
     def init_run_control(self):
         self.start_sequence = QtWidgets.QPushButton('Start')
         self.pause_sequence = QtWidgets.QPushButton('Pause')
@@ -839,10 +862,16 @@ class RunScreen(QtWidgets.QMainWindow):
     def init_live_display(self):
         self.live_feed_panel = QtWidgets.QDockWidget()
         self.live_feed_panel.setTitleBarWidget(QtWidgets.QWidget())
+
+        self.led_form = QtWidgets.QGroupBox('LED')
+        self.init_led_form()
+
         temper_wid = QtWidgets.QWidget()
         temp_layout = QtWidgets.QHBoxLayout()
         # temp_layout.addStretch()
         feed_layout = QtWidgets.QVBoxLayout()
+        feed_layout.addStretch()
+        feed_layout.addWidget(self.led_form)
         feed_layout.addStretch()
         feed_layout.addWidget(self.init_insert_view())
         feed_layout.addStretch()
@@ -864,6 +893,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.live_feed_scene.setSceneRect(0, 0, 512, 384)
         self.live_feed_view = QtWidgets.QGraphicsView()
         self.live_feed_pixmap = QtWidgets.QGraphicsPixmapItem()
+        self.camera_load = QtWidgets.QPushButton('Open Camera')
+        self.camera_close = QtWidgets.QPushButton('Close Camera')
+
         live_feed_window = QtWidgets.QMainWindow()
 
         # self.live_feed_view.setFixedWidth(584)
@@ -874,6 +906,8 @@ class RunScreen(QtWidgets.QMainWindow):
         control_layout = QtWidgets.QHBoxLayout()
         control_layout.addWidget(self.live_option)
         control_layout.addWidget(self.focus_feed)
+        control_layout.addWidget(self.camera_load)
+        control_layout.addWidget(self.camera_close)
         control_layout.addStretch()
         control_widget.setLayout(control_layout)
         live_feed_control.setWidget(control_widget)

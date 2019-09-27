@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from pyvcam import pvc
 from pyvcam.camera import Camera
+import threading
 
 """
 For Micromanager, you need to transfer the Micromanager 2.0 gamma folder from the barracuda PC to the computer you are 
@@ -110,9 +111,15 @@ class ImageControl:
         """ Command that retrieves image from the camera"""
         pass
 
+    def camera_state(self):
+        """ Returns the camera state True is open, false is closed"""
+        return False
     @staticmethod
     def _adjust_size(img, size):
         ims = img.shape
+        if ims is None:
+            return None
+
         new_ims = [0, 0]
         new_ims[0] = int(ims[0] * size)
         new_ims[1] = int(ims[1] * size)
@@ -162,7 +169,11 @@ class ImageControl:
 
 
 class PVCamImageControl(ImageControl):
-    """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
+    """GUI will read an image (recentImage). Uses PVCAM drivers.
+
+    If the program is having difficulties loading the camera. Open the camera using PVCAM test. Make sure you can
+    snap an image there. If so exit out and restart the GUI.
+
      """
     cam = None  # PV camera object
     exposure = 50  # ms exposure time
@@ -170,7 +181,10 @@ class PVCamImageControl(ImageControl):
     rotate = 90
     img = None  # Copy of the raw image before processing
     process_time = 0 # time it takes to process a single image for live feed
-    def __init__(self):
+    name = 'None'
+    serial_num = 'None'
+    def __init__(self, lock = threading.RLock()):
+        self.lock = lock
         self.open()
 
     def open(self):
@@ -180,25 +194,37 @@ class PVCamImageControl(ImageControl):
         except RuntimeError:
             pvc.uninit_pvcam()
             pvc.init_pvcam()
+        with self.lock:
+            self.cam = next(Camera.detect_camera())
+            self.cam.open()
+            self.serial_num = self.cam.serial_no
+            self.name = self.cam.name
+            time.sleep(1)
 
-        self.cam = next(Camera.detect_camera())
-        self.cam.open()
 
     def close(self):
         self.cam.close()
         pvc.uninit_pvcam()
 
+    def camera_state(self):
+        """ Returns the camera state True is open, false is closed"""
+        return self.cam.is_open
+
     def stop_video_feed(self):
-        self.cam.stop_live()
+        if self.camera_state():
+            with self.lock:
+                self.cam.stop_live()
 
     def get_single_image(self):
         """Snaps single image, returns image, for when live feed is not runniing"""
-        image = self.cam.get_frame(self.exposure)
+        with self.lock:
+            image = self.cam.get_frame(self.exposure)
         return image
 
     def start_video_feed(self):
         """ starts continuous video feed  """
-        self.cam.start_live(self.exposure)
+        with self.lock:
+            self.cam.start_live(self.exposure)
 
     def get_recent_image(self, size=0.5, rotation=0):
         """Returns most recent image from the camera"""
@@ -216,7 +242,8 @@ class PVCamImageControl(ImageControl):
 
     def _get_image(self):
         """ Returns singe image when camera is in live feed """
-        img = self.cam.get_live_frame()
+        with self.lock:
+            img = self.cam.get_live_frame()
         return img
 
 

@@ -13,6 +13,7 @@ from hardware import ZStageControl
 from hardware import ObjectiveControl
 from hardware import LaserControl
 from hardware import PressureControl
+from hardware import LightControl
 
 # Network Module
 import CENetworks
@@ -153,6 +154,10 @@ class BaseSystem:
         """Removes immediate functionality of the voltage source."""
         logging.error('close_voltage not implemented in hardware class.')
 
+    def stop_voltage(self):
+        """ Sets the voltage to Zero"""
+        logging.error("Stop voltage not implemented in hardware class")
+
     def set_voltage(self, v=None):
         """Sets the current voltage of the voltage source."""
         logging.error('set_voltage not implemented in hardware class.')
@@ -180,6 +185,14 @@ class BaseSystem:
     def close_image(self):
         """Removes the immediate functionality of the camera."""
         logging.error('close_image not implemented in hardware class.')
+
+    def open_image(self):
+        """Opens the camera Resources """
+        logging.error("open_image not implemented in hardware class")
+
+    def camera_state(self):
+        """ Checks if camera resources are available"""
+        logging.error("camera_state is not implmented in hardware class")
 
     def start_feed(self):
         """Sets camera to start gathering images. Does not return images."""
@@ -238,6 +251,21 @@ class BaseSystem:
         """Closes pressure valve."""
         logging.error('pressure_valve_close not implemented in hardware class.')
 
+    def turn_on_led(self,channel='R'):
+        """ Turns on the LED with the corresponding channel"""
+        logging.error("LED is not supported in hardware class")
+
+    def turn_off_led(self, channel='R'):
+        """ Turns off LED with corresponding channel"""
+        logging.error("LED is not supported in hardware class")
+
+    def turn_on_dance(self):
+        """ Flashes RGB lights on and off """
+        logging.error("LED Dance is not supported in hardware class")
+
+    def turn_off_dance(self):
+        """ Turns off the flashing RGB """
+        logging.error("LED Dance is not supported in hardware class")
 
 class BarracudaSystem(BaseSystem):
     system_id = 'BARRACUDA'
@@ -257,12 +285,13 @@ class BarracudaSystem(BaseSystem):
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
     _pressure_lock = threading.Lock()
-    _camera_lock = threading.Lock()
+    _camera_lock = threading.RLock()
     _laser_lock = threading.Lock()
     _laser_poll_flag = threading.Event()
+    _led_lock = _outlet_lock
     _laser_rem_time = 0
 
-    image_size = (512, 384)
+    image_size = 0.5
     objective_focus = 0
     xy_stage_size = [112792, 64340]  # Rough size in mm
     xy_stage_upper_left = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
@@ -283,6 +312,7 @@ class BarracudaSystem(BaseSystem):
         self.hasVoltageControl = True
         self.hasPressureControl = True
         self.hasXYControl = True
+        self.hasLEDControl=True
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -308,20 +338,41 @@ class BarracudaSystem(BaseSystem):
         pass
 
     def start_system(self):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
-        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock, home=HOME)
-        self.image_control = ImageControl.ImageControl(home=HOME)
-        self.xy_stage_control = XYControl.XYControl(lock=self._xy_stage_lock, stage='XYStage', config_file='PriorXY.cfg', home=HOME)
+        # Initialize all the motors independently
+        zstage = threading.Thread(target=self._start_zstage)
+        zstage.start()
+        outlet=threading.Thread(target=self._start_outlet)
+        outlet.start()
+        objective = threading.Thread(target=self._start_objective)
+        objective.start()
+        # Wait for motors to finish homing
+        zstage.join()
+        outlet.join()
+        objective.join()
+        self.image_control = ImageControl.PVCamImageControl(lock = self._camera_lock)
+        self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock)
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
                                                      voltage_control=self._daq_voltage_control)
-        #
         self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
-        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock, arduino=self.outlet_control.arduino, home=HOME)
 
+        self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
         self._start_daq()
+
+        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
+                                                                arduino=self.outlet_control.arduino, home=HOME)
+
         pass
+
+    def _start_outlet(self):
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+
+    def _start_zstage(self):
+        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+
+    def _start_objective(self):
+        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock,
+                                                                   home=HOME)
 
     def close_system(self):
         self.close_image()
@@ -362,16 +413,26 @@ class BarracudaSystem(BaseSystem):
         return image
 
     def close_image(self):
-        self.image_control.close()
+        with self.image_control.lock:
+            self.image_control.close()
+        return True
+
+    def open_image(self):
+        self.image_control.open()
         return True
 
     def start_feed(self):
-        self.image_control.start_video_feed()
+        if self.camera_state():
+            self.image_control.start_video_feed()
         return True
 
     def stop_feed(self):
         self.image_control.stop_video_feed()
         return True
+
+    def camera_state(self):
+        """ Checks if camera resources are available"""
+        return self.image_control.camera_state()
 
     def close_xy(self):
         self.xy_stage_control.close()
@@ -525,6 +586,10 @@ class BarracudaSystem(BaseSystem):
     def get_rfu_data(self):
         return self.daq_board_control.data['ai3']
 
+    def stop_voltage(self):
+        self.daq_board_control.change_voltage(0)
+
+
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         if pfn:
             self.laser_control.set_pfn('{:03d}'.format(int(pfn)))
@@ -591,6 +656,19 @@ class BarracudaSystem(BaseSystem):
     def pressure_valve_close(self):
         self.pressure_control.close_valve()
         return True
+
+    def turn_on_led(self, channel='R'):
+        self.led_control.start_led(channel)
+
+    def turn_off_led(self, channel='R'):
+        self.led_control.stop_led(channel)
+
+    def turn_on_dance(self):
+        threading.Thread(target = self.led_control.dance_party).start()
+
+    def turn_off_dance(self):
+        self.led_control.dance_stop.set()
+
 
 
 # NEEDS:

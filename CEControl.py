@@ -1097,7 +1097,6 @@ class RunScreenController:
             self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
             self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
             self.screen.z_value.returnPressed.connect(lambda: self.hardware.set_z(float(self.screen.z_value.text())))
-
             self.screen.z_stop.released.connect(lambda: self.hardware.stop_z())
             self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
             self.screen.z_value.unselected.connect(lambda: self._value_display_interact(selected=False))
@@ -1132,8 +1131,24 @@ class RunScreenController:
             self.screen.live_option.positive_selected.connect(lambda: self._switch_feed(True))
             self.screen.live_option.negative_selected.connect(lambda: self._switch_feed(False))
             self.screen.focus_feed.released.connect(lambda: self.focus())
+            self.screen.camera_load.released.connect(lambda:self.hardware.open_image())
+            self.screen.camera_close.released.connect(lambda:self.hardware.close_image())
         else:
             self.screen.enable_live_feed(False)
+
+        if self.hardware.hasLEDControl:
+            self.screen.r_channel.released.connect(
+                lambda x=self.screen.r_channel:
+                self.hardware.turn_on_led('R') if x.isChecked() else self.hardware.turn_off_led('R'))
+            self.screen.dance_button.released.connect(
+                lambda x=self.screen.dance_button:
+                self.hardware.turn_on_dance() if x.isChecked() else self.hardware.turn_off_dance())
+            self.screen.g_channel.released.connect(
+                lambda x=self.screen.g_channel:
+                self.hardware.turn_on_led('G') if x.isChecked() else self.hardware.turn_off_led('G'))
+            self.screen.b_channel.released.connect(
+                lambda x=self.screen.b_channel:
+                self.hardware.turn_on_led('B') if x.isChecked() else self.hardware.turn_off_led('B'))
 
         self.screen.all_stop.released.connect(lambda: self.stop_all())
 
@@ -1224,8 +1239,12 @@ class RunScreenController:
     def _update_live_feed(self):
         """Loads either the new image for the live feed or moves the crosshairs on the insert view."""
         while True:
-            if self._live_feed.is_set() and self.hardware.hasCameraControl:
-                image = self.hardware.get_image()
+            if self._live_feed.is_set() and self.hardware.hasCameraControl and self.hardware.camera_state():
+                try:
+                    image = self.hardware.get_image()
+                except ValueError:
+                    logging.error("Value Error, could not load image")
+                    continue
 
                 if image is None:
                     continue
