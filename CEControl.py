@@ -32,7 +32,7 @@ class ProgramController:
     def __init__(self):
         # Initialize system model, system hardware and the GUI
         self.repository = CEObjects.CERepository()
-        self.hardware = CESystems.BarracudaSystem()
+        self.hardware = CESystems.OstrichSystem()
         self.hardware.start_system()
 
         app = QtWidgets.QApplication(sys.argv)
@@ -1208,18 +1208,26 @@ class RunScreenController:
             self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
             self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
             time.sleep(self._update_delay)
+            try:
+                value = self.hardware.get_z()
+                self.screen.z_value.setText("{:.3f}".format(float(value)))
+                time.sleep(self._update_delay)
+            except TypeError:
+                pass
+                # TODO need to verify z stage is loaded.
 
-            value = self.hardware.get_z()
-            self.screen.z_value.setText("{:.3f}".format(float(value)))
-            time.sleep(self._update_delay)
 
             value = self.hardware.get_objective()
             self.screen.objective_value.setText("{:.3f}".format(float(value)))
             time.sleep(self._update_delay)
+            try:
 
-            value = self.hardware.get_outlet()
-            self.screen.outlet_value.setText("{:.3f}".format(float(value)))
-            time.sleep(self._update_delay)
+                value = self.hardware.get_outlet()
+                self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+                time.sleep(self._update_delay)
+            except TypeError:
+                pass
+
 
     def _update_live_feed(self):
         """Loads either the new image for the live feed or moves the crosshairs on the insert view."""
@@ -1249,9 +1257,11 @@ class RunScreenController:
         # self._plot_data.set()  # fixme
         if self.hardware.hasVoltageControl:
             while True:
+
                 rfu = self.hardware.daq_board_control.data['ai3']
                 kv = self.hardware.daq_board_control.data['ai1']
-                ua = self.hardware.daq_board_control.data['ai2']
+                ua = self.hardware.daq_board_control.data['ai0']
+                logging.warning(len(ua))
 
                 if self._plot_data.is_set():
                     threading.Thread(target=self.screen.update_plots, args=(rfu, ua)).start()

@@ -626,9 +626,23 @@ class OstrichSystem(BaseSystem):
 
     _laser_pfn = 255
     image_size = (512, 512)
+    objective_focus = 0
+    xy_stage_size = [112792, 64340]  # Rough size in mm
+    xy_stage_upper_left = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_inversion = [-1, -1]
+
 
     def __init__(self):
         super(OstrichSystem, self).__init__()
+
+        self.hasCameraControl = False
+        self.hasInletControl = False
+        self.hasLaserControl = False
+        self.hasObjectiveControl = True
+        self.hasOutletControl = False
+        self.hasVoltageControl = True
+        self.hasPressureControl = False
+        self.hasXYControl = True
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -649,6 +663,7 @@ class OstrichSystem(BaseSystem):
         self.laser_control = True  # No need to define a new class when we only have one command
 
         self.image_control = ImageControl.ImageControl(home=True)
+        self._start_daq()
         return True
 
     def close_system(self):
