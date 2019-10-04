@@ -290,6 +290,7 @@ class BarracudaSystem(BaseSystem):
     _laser_poll_flag = threading.Event()
     _led_lock = _outlet_lock
     _laser_rem_time = 0
+    laser_start_time = time.time()
 
     image_size = 0.5
     objective_focus = 0
@@ -318,10 +319,10 @@ class BarracudaSystem(BaseSystem):
         self.daq_board_control.max_time = 600000
         self.daq_board_control.start_read_task()
 
-    def _poll_laser(self, start_time):
+    def _poll_laser(self):
         while True:
             if self._laser_poll_flag.is_set():
-                self._laser_rem_time = self.laser_max_time - (time.time() - start_time)
+                self._laser_rem_time = self.laser_max_time - (time.time() - self.laser_start_time)
                 if self._laser_rem_time > 0:
                     self.laser_control.poll_status()
                     time.sleep(1)
@@ -571,7 +572,11 @@ class BarracudaSystem(BaseSystem):
         return True
 
     def save_data(self, filepath):
-        self.daq_board_control.save_data(filepath)
+        try:
+            self.daq_board_control.save_data(filepath)
+        except FileNotFoundError:
+            logging.info('File not selected')
+
         return True
 
     def get_voltage(self):
@@ -614,8 +619,8 @@ class BarracudaSystem(BaseSystem):
         if executed:
             self._laser_poll_flag.set()
 
-            start_time = time.time()
-            threading.Thread(target=self._poll_laser, args=(start_time,), daemon=True).start()
+            self.laser_start_time = time.time()
+            threading.Thread(target=self._poll_laser, daemon=True).start()
             logging.info('Laser on standby for {}s'.format(self.laser_max_time))
 
             return True
@@ -636,6 +641,19 @@ class BarracudaSystem(BaseSystem):
         self.laser_control.check_status()
         self.laser_control.check_parameters()
         return True
+
+    def restart_laser_run_time(self):
+        """ Restarts the clock for the laser run time or restarts the laser"""
+
+        if self._laser_poll_flag.is_set():
+            self.laser_start_time = time.time()
+            return True
+        else:
+            self.laser_standby()
+            return False
+
+
+
 
     def pressure_close(self):
         self.pressure_control.close()

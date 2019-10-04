@@ -12,7 +12,8 @@ import CESystems  # Hardware system classes
 import CEObjects  # CE-specific data structures
 import CEGraphic  # GUI classes
 import FocusTesting
-import Detection # Cell Detection
+import Detection  # Cell Detection
+import Lysis
 
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -678,8 +679,12 @@ class MethodScreenController:
         """ Loads the appropriate dialog based on user input in table. """
         if not self._populating_table:
             current_row = self.screen.insert_table.currentRow()
-            inlet = self.screen.insert_table.cellWidget(current_row, 5).currentText()
-            outlet = self.screen.insert_table.cellWidget(current_row, 6).currentText()
+            try:
+                inlet = self.screen.insert_table.cellWidget(current_row, 5).currentText()
+                outlet = self.screen.insert_table.cellWidget(current_row, 6).currentText()
+            except AttributeError:
+                inlet = 'Select'
+                outlet = 'Select'
             if dialog_type != 'Select':  # Rinse, Inject or Separate (Select is default)
                 self.dialogs[dialog_type](self.set_step_conditions, inlet, outlet)
 
@@ -990,6 +995,8 @@ class RunScreenController:
     def __init__(self, screen, hardware, repository):
         self.screen = screen
         self.hardware = hardware
+        self.lyse = Lysis.Lysis(hardware=hardware)
+
         self.repository = repository
 
         self.methods = []
@@ -1048,7 +1055,7 @@ class RunScreenController:
             self.screen.xy_y_value.returnPressed.connect(
                 lambda: self.hardware.set_xy(xy=[self.hardware.get_xy()[0], float(self.screen.xy_y_value.text())]))
             self.screen.xy_set_origin.released.connect(lambda: self.hardware.set_xy_home())
-            #self.screen.xy_origin.released.connect(lambda: self.hardware.home_xy())
+            # self.screen.xy_origin.released.connect(lambda: self.hardware.home_xy())
             self.screen.xy_stop.released.connect(lambda: self.hardware.stop_xy())
         else:
             self.screen.enable_xy_stage_form(False)
@@ -1131,8 +1138,8 @@ class RunScreenController:
             self.screen.live_option.positive_selected.connect(lambda: self._switch_feed(True))
             self.screen.live_option.negative_selected.connect(lambda: self._switch_feed(False))
             self.screen.focus_feed.released.connect(lambda: self.focus())
-            self.screen.camera_load.released.connect(lambda:self.hardware.open_image())
-            self.screen.camera_close.released.connect(lambda:self.hardware.close_image())
+            self.screen.camera_load.released.connect(lambda: self.hardware.open_image())
+            self.screen.camera_close.released.connect(lambda: self.hardware.close_image())
         else:
             self.screen.enable_live_feed(False)
 
@@ -1156,6 +1163,14 @@ class RunScreenController:
         self.screen.pause_sequence.released.connect(lambda: self.pause_sequence())
         self.screen.stop_sequence.released.connect(lambda: self.end_sequence())
         self.screen.inject_capture_button.released.connect(lambda: self.inject_capture())
+
+        self.screen.inject_cell_pos.released.connect(lambda: self.lyse.cap_control.record_cell_height())
+        self.screen.inject_cap_pos.released.connect(lambda: self.lyse.cap_control.record_cap_height())
+        self.screen.inject_lower_cap.released.connect(lambda: self.lyse.lower_capillary())
+        self.screen.inject_burst_lyse.released.connect(lambda pfn=self.screen.laser_pfn,
+                                                       attn=self.screen.laser_attenuation,
+                                                       : threading.Thread(target = self.lyse.post_movement_lysis, args= (pfn.text(),
+                                                                                       attn.text())).start())
 
         self.screen.clear_output.released.connect(lambda: self.clear_output_window())
         self.screen.save_output.released.connect(lambda: self.save_output_window())
@@ -1271,9 +1286,11 @@ class RunScreenController:
                 rfu = self.hardware.daq_board_control.data['avg']
                 kv = self.hardware.daq_board_control.data['ai1']
                 ua = self.hardware.daq_board_control.data['ai2']
+                freq = self.hardware.daq_board_control.downsampled_freq
+                dt = np.arange(0, len(rfu)/freq, 1/freq).tolist()
 
                 if self._plot_data.is_set():
-                    threading.Thread(target=self.screen.update_plots, args=(rfu, ua)).start()
+                    threading.Thread(target=self.screen.update_plots, args=(rfu, ua,dt)).start()
 
                 if len(kv) > 4:
                     try:
@@ -1288,11 +1305,9 @@ class RunScreenController:
 
         # returns tuple (file_path_file_name.csv, extension)
         open_file_path = QtWidgets.QFileDialog.getSaveFileName(self.screen, 'Choose previous session',
-                                                                os.getcwd(), '(*.csv)')
+                                                               os.getcwd(), '(*.csv)')
         # Save data
         self.hardware.save_data(open_file_path[0])
-
-
 
     def reset_plot(self):
         self.hardware.daq_board_control._clear_data()
@@ -1304,6 +1319,7 @@ class RunScreenController:
         else:
             self._plot_data.clear()
         return
+
     def _switch_feed(self, live):
         """Switches the feed between live feed from camera or insert view with live XY position."""
         if not live:
@@ -1395,7 +1411,6 @@ class RunScreenController:
             self._calibrating_image_ratio(True)
         else:
             pass
-
 
     # Hardware Control Function
     def calibrate_system(self):
@@ -1558,7 +1573,10 @@ class RunScreenController:
     def remove_method(self):
         current_row = self.screen.sequence_display.currentRow()
         self.screen.sequence_display.removeRow(current_row)
-        self.methods.pop(current_row)
+        try:
+            self.methods.pop(current_row)
+        except IndexError:
+            logging.warning("Methods popped incorrectly")
 
     def _add_row(self, method_file, summary):
         row_count = self.screen.sequence_display.rowCount()
@@ -1718,6 +1736,7 @@ class RunScreenController:
                 return False
 
             attempts += 1
+
     def create_mover(self):
         xy = self.hardware.get_xy()
         self.mover = Detection.Mover(xy)
@@ -1829,6 +1848,7 @@ class RunScreenController:
 
                 iterations += 1
     """
+
     # Run Control Functions
     def start_sequence(self):
         if self._pause_flag.is_set():
@@ -1887,19 +1907,21 @@ class RunScreenController:
                 return False
         logging.info('Sequence Completed.')
         return True
+
     def record_cell_info(self):
         xy = self.hardware.get_xy()
         cap = self.hardware.get_z()
         obj = self.hardware.get_objective()
-        self._last_cell_positions['xy']=xy
-        self._last_cell_positions['cap']=cap
-        self._last_cell_positions['obj']=obj
+        self._last_cell_positions['xy'] = xy
+        self._last_cell_positions['cap'] = cap
+        self._last_cell_positions['obj'] = obj
         return
+
     def run_method(self, method, repetitions):
         def check_flags():
             while self._pause_flag.is_set():
                 if self._stop_thread_flag.is_set():
-                    self._plot_data.clear()
+                    #self._plot_data.clear()
                     return False
                 if self._inject_flag.is_set():
                     self.record_cell_info()
@@ -1911,8 +1933,6 @@ class RunScreenController:
                 return False
             self._plot_data.set()
             return True
-
-
 
         def move_inlet(inlet_travel):
             if self._stop_thread_flag.is_set():
@@ -1945,6 +1965,17 @@ class RunScreenController:
             time.sleep(2)
             return check_flags()
 
+        def wait_sleep(wait_time):
+            """ Returns false if wait time was interupted by stop command"""
+            start_time = time.time()
+            while time.time()-start_time< wait_time and not self._stop_thread_flag.is_set():
+                time.sleep(0.05)
+
+            if self._stop_thread_flag.is_set():
+                logging.warning("CE Run Stopped during Separation")
+                return False
+            return True
+
         def separate():
             if self._stop_thread_flag.is_set():
                 return
@@ -1960,7 +1991,7 @@ class RunScreenController:
                 logging.error('Unsupported: Separation with power')
                 return False
 
-            #Give user option to run combo of pressure and voltage
+            # Give user option to run combo of pressure and voltage
             if step['SeparationTypePressureRadio']:
                 pressure_state = True
             elif step['SeparationTypeVacuumRadio']:
@@ -1981,16 +2012,18 @@ class RunScreenController:
             if pressure_state:
                 self.hardware.pressure_rinse_start()
 
-            time.sleep(duration)
+            state = wait_sleep(duration)
             # Save Data
             now = datetime.datetime.now()
-            file_name = "Separation_step{}_Rep{}.csv".format(step_id,rep)
-            save_path = os.path.join(save_dir,file_name)
+            file_name = "Separation_step{}_Rep{}.csv".format(step_id, rep)
+            save_path = os.path.join(save_dir, file_name)
             self.hardware.save_data(save_path)
             self.hardware.set_voltage(0)
             self.hardware.pressure_rinse_stop()
 
-            return True
+            return state
+
+
 
         def rinse():
             if self._stop_thread_flag.is_set():
@@ -2031,6 +2064,7 @@ class RunScreenController:
                     move_objective(obj)
             self._inject_flag.set()
             return True
+
         def inject():
             if self._stop_thread_flag.is_set():
                 return
@@ -2077,21 +2111,22 @@ class RunScreenController:
         def create_run_folder():
             cwd = os.getcwd()
             now = datetime.datetime.now()
-            save_dir=os.path.join(cwd, 'Data',now.strftime("RunData__%Y_%m_%d__%H_%M_%S"))
+            folder_name = self.screen.run_prefix.text() + now.strftime("RunData__%Y_%m_%d__%H_%M_%S")
+            save_dir = os.path.join(cwd, 'Data',  folder_name)
             try:
                 os.makedirs(save_dir, exist_ok=True)
                 return save_dir
             except FileExistsError:
                 return save_dir
 
-
         # fixme prompt for alternate input if user selects unsupported type.
 
         save_dir = create_run_folder()
 
         for rep in range(repetitions):
-            if self._stop_thread_flag.is_set():
-                return
+            state = check_flags()
+            if not state:
+                return False
             previous_step = None
             self._inject_flag.clear()
             for step_id, step in enumerate(method.steps):
@@ -2102,13 +2137,10 @@ class RunScreenController:
                         return False
                     step_start = time.time()
 
-
                     state = move_inlet(0.25)
 
                     if not state:
                         return False
-
-
 
                     try:
                         cycles = int(step['TrayPositionsIncrementEdit'])

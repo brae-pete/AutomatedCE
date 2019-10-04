@@ -5,6 +5,8 @@ import logging
 import time
 import threading
 from scipy import signal
+import shutil
+import os
 import matplotlib.pyplot as plt
 
 DEV = "/Dev1/"
@@ -28,11 +30,13 @@ class DAQBoard:
     voltage_conversion = 30 / 10  # kV/daqV conversion factor
     current_conversion = 300 / 10
     rfu_conversion = 1
+    temp_file = 'temp_data.csv'
     data_lock = threading.Lock()
     ba = (None, None)
     sos = None
     old_data=None
     middle_data=None
+    downsampled_freq=8
 
     def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None):
         self.dev = dev
@@ -51,7 +55,11 @@ class DAQBoard:
     def _clear_data(self):
         with self.data_lock:
             self.data = {self.rfu_chan: [], self.current_readout: [],
-                         self.voltage_readout: [], 'raw':[], 'avg':[]}  # RFU, Current and Voltage respectively
+                         self.voltage_readout: [], 'raw':[], 'avg':[], 'dt':[]}  # RFU, Current and Voltage respectively
+            try:
+                os.remove(self.temp_file)
+            except FileNotFoundError:
+                pass
         return
 
     def callback(self, *args):
@@ -96,6 +104,14 @@ class DAQBoard:
             self.data['avg'].extend(self.average_data(samples[2], len(decimated)))
             self.old_data = self.middle_data
             self.middle_data = samples[2][:]
+
+            #dt_step = len(decimate)
+            #old_dt = self.data['dt'][-1] + (1 / dt_step)
+            #self.data['dt'].extend(np.arange(old_dt, old_dt+1, 1/dt_step).tolist())
+            with open(self.temp_file,'a') as temp:
+                [temp.write('{}\n'.format(x)) for x in self.average_data(samples[2], int(len(samples[2])/50))]
+
+
             # Apply butter filter to the data
             #self.data[self.rfu_chan] = self.filter_data(self.data[self.rfu_chan])
         return 0
@@ -297,6 +313,13 @@ class DAQBoard:
                     f_in.write('{:.3f},{},{:.3f},{:.3f},{},{}\n'.format(t_point, rfu, ua, kv, avg, raw))
                 except TypeError:
                     f_in.write("{},{},{},{},{},{}\n".format(t_point, rfu, ua, kv,avg,raw))
+
+        destination = filename[:-4] + '_raw_data.csv'
+        try:
+            shutil.move(self.temp_file, destination)
+        except FileNotFoundError:
+            logging.warning('Could not find {}'.format(self.temp_file))
+
 
 
 if __name__ == "__main__":

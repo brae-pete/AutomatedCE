@@ -183,6 +183,11 @@ class PVCamImageControl(ImageControl):
     process_time = 0 # time it takes to process a single image for live feed
     name = 'None'
     serial_num = 'None'
+    live_running=threading.Event()
+    save_sequence = threading.Event()
+    sequence_filepath = os.getcwd()
+    sequence_prefix = "IMGS"
+    sequence_start_time = time.perf_counter()
     def __init__(self, lock = threading.RLock()):
         self.lock = lock
         self.open()
@@ -204,6 +209,7 @@ class PVCamImageControl(ImageControl):
 
     def close(self):
         self.cam.close()
+        self.live_running.clear()
         pvc.uninit_pvcam()
 
     def camera_state(self):
@@ -214,6 +220,7 @@ class PVCamImageControl(ImageControl):
         if self.camera_state():
             with self.lock:
                 self.cam.stop_live()
+        self.live_running.clear()
 
     def get_single_image(self):
         """Snaps single image, returns image, for when live feed is not runniing"""
@@ -221,15 +228,24 @@ class PVCamImageControl(ImageControl):
             image = self.cam.get_frame(self.exposure)
         return image
 
+    def save_feed(self, filepath, prefix='IMGS'):
+        self.sequence_filepath = filepath
+        self.sequence_prefix = prefix
+        self.sequence_start_time = time.perf_counter()
+        with self.lock:
+            self.save_sequence.set()
+
     def start_video_feed(self):
         """ starts continuous video feed  """
         with self.lock:
             self.cam.start_live(self.exposure)
+            self.live_running.set()
 
     def get_recent_image(self, size=0.5, rotation=0):
         """Returns most recent image from the camera"""
-        st = time.perf_counter()
+
         img = self._get_image()
+        st = time.perf_counter() # Record when the picture was acquired
         # keep a copy of the original for debugging ( you could remove this )
         self.img = img.copy()
         img = self._adjust_size(img, size)
@@ -238,6 +254,13 @@ class PVCamImageControl(ImageControl):
         # convert to 8 bit image (with proper rescaling)
         img = img_as_ubyte(img)
         self.process_time = time.perf_counter()-st
+
+        # Save Feed if required
+        if self.save_sequence.is_set():
+            passed_time = int(self.sequence_start_time-st)*1000
+            file_name = "{}_{:05d}.png".format(self.sequence_prefix, passed_time)
+            file_path = os.path.join(self.sequence_filepath, file_name)
+            self.save_image(img, file_path)
         return img
 
     def _get_image(self):

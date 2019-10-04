@@ -10,6 +10,7 @@ class OutletControl:
     This is called by the GUI and needs data types to match
     """
     invert = -1
+    default_pos = -6.2
     def __init__(self, com="COM9", arduino=-1, lock=-1, home=True):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
@@ -114,7 +115,7 @@ class OutletControl:
             self.arduino.go_home()
             self.pos = self.wait_for_move()
             self.offset = 0
-            self.set_z(-9)
+            self.set_z(self.default_pos)
             cz = self.wait_for_move()
 
 

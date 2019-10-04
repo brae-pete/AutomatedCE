@@ -809,6 +809,18 @@ class RunScreen(QtWidgets.QMainWindow):
         self.inject_capture_button = QtWidgets.QPushButton('Capture')
         self.inject_cell_box.checkState()
 
+        #Injection Macros
+        row_3 = QtWidgets.QHBoxLayout()
+        self.inject_cell_pos = QtWidgets.QPushButton('Cell Focus')
+        self.inject_cap_pos = QtWidgets.QPushButton('Cap. Focus')
+        self.inject_lower_cap = QtWidgets.QPushButton('Lower Cap')
+        self.inject_burst_lyse = QtWidgets.QPushButton('Diamond Lysis')
+        row_3.addWidget(self.inject_cell_pos)
+        row_3.addWidget(self.inject_cap_pos)
+        row_3.addWidget(self.inject_lower_cap)
+        row_3.addWidget(self.inject_burst_lyse)
+
+
         self.sequence_display.setColumnCount(3)
         self.sequence_display.setColumnWidth(0, 30)
         self.sequence_display.setColumnWidth(1, 390)
@@ -839,6 +851,7 @@ class RunScreen(QtWidgets.QMainWindow):
         row_2.addWidget(self.inject_capture_button)
         row_2.addStretch()
         col.addLayout(row_2)
+        col.addLayout(row_3)
         main_layout.addLayout(col)
 
         col = QtWidgets.QVBoxLayout()
@@ -929,6 +942,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.reset_plot = QtWidgets.QPushButton('Reset')
         self.view_plot = QtWidgets.QPushButton('Live Plot')
         self.view_plot.setCheckable(True)
+        label_prefix = QtWidgets.QLabel('Run Prefix:')
+        self.run_prefix = QtWidgets.QLineEdit('')
+        self.run_prefix.text()
 
         self.plot_panel = PlotPanel()
         live_plot_window = QtWidgets.QMainWindow()
@@ -939,6 +955,8 @@ class RunScreen(QtWidgets.QMainWindow):
         control_layout.addWidget(self.save_plot)
         control_layout.addWidget(self.reset_plot)
         control_layout.addWidget(self.view_plot)
+        control_layout.addWidget(label_prefix)
+        control_layout.addWidget(self.run_prefix)
         control_layout.addStretch()
         control_widget.setLayout(control_layout)
         live_plot_control.setWidget(control_widget)
@@ -1033,10 +1051,10 @@ class RunScreen(QtWidgets.QMainWindow):
             if item != self.feed_pointer:
                 self.live_feed_scene.removeItem(item)
 
-    def update_plots(self, rfu, current):
+    def update_plots(self, rfu, current, dt):
 
-        self.plot_panel.canvas.update_current(current)
-        self.plot_panel.canvas.update_rfu(rfu)
+        self.plot_panel.canvas.update_current(current,dt)
+        self.plot_panel.canvas.update_rfu(rfu,dt)
         self.plot_panel.canvas.set_style()
         try:
             self.plot_panel.canvas.draw()
@@ -1784,13 +1802,13 @@ class RunPlot(FigureCanvas):
         self.axes_rfu.set_ylabel("PMT (V)", fontsize=title_font_size)
         self.axes_rfu.set_facecolor('#FFFFFF')
 
-    def update_rfu(self, rfu):
+    def update_rfu(self, rfu, dt):
         self.axes_rfu.clear()
-        self.axes_rfu.plot(rfu, linewidth=2)
+        self.axes_rfu.plot(dt, rfu, linewidth=2)
 
-    def update_current(self, current):
+    def update_current(self, current, dt):
         self.axes_current.clear()
-        self.axes_current.plot(current, linewidth=1, color="C2", alpha = 0.7)
+        self.axes_current.plot(dt, current, linewidth=1, color="C2", alpha = 0.7)
 
 
 def wrap_widget(widget):

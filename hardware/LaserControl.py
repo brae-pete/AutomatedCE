@@ -205,7 +205,7 @@ class Laser:
             logging.info('\tConfiguration: {0:08b}\n'.format(int(response)))
 
     def set_pfn(self, value):  # fixme, check input type here and change accordingly
-        """ Set the laser power function. A number normally around 85-95.
+        """ Set the laser power function. A number normally around 200.
 
         input: value = String representing an integer of format '000' [ie 3 digits]
 

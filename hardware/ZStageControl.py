@@ -314,6 +314,8 @@ class NikonZStage:
 
 
 class PowerStep:
+    min_z = 0
+    max_z = 24.5
     def __init__(self, lock, com = "COM3", arduino = -1, home=False, ):
         self.lock = lock
         self.home = home
@@ -423,19 +425,24 @@ class PowerStep:
         if self.home:
             self.pos = set_z
             return
+        if not self.min_z < set_z < self.max_z:
+            logging.warning("Z Stage cannot move this far {}".format(set_z))
+            return
+        else:
+            logging.info("{} set z".format(set_z))
+
+
         go_to = self.inversion*(set_z-self.offset)
         self.arduino.set_outlet_z(go_to)
         return True
 
     def set_rel_z(self, set_z):
         pos = self.read_z()
-
-
         if self.home:
             self.pos = set_z
             return
-        go_to = self.inversion * (set_z - self.offset + pos)
-        self.arduino.set_outlet_z(go_to)
+        go_to = set_z - pos
+        self.set_z(go_to)
         return True
 
     def set_speed(self, steps_per_sec):
