@@ -1000,6 +1000,7 @@ class RunScreenController:
         self.repository = repository
 
         self.methods = []
+        self.methods_id = []
         self.insert = None
         self.injection_wait = 4.5
         self._um2pix = 1 / 300
@@ -1140,6 +1141,7 @@ class RunScreenController:
             self.screen.focus_feed.released.connect(lambda: self.focus())
             self.screen.camera_load.released.connect(lambda: self.hardware.open_image())
             self.screen.camera_close.released.connect(lambda: self.hardware.close_image())
+            self.screen.buffer_save.released.connect(lambda: self._save_sequence())
         else:
             self.screen.enable_live_feed(False)
 
@@ -1266,7 +1268,7 @@ class RunScreenController:
                 self._new_pixmap = self.screen.update_pixmap(camera=True)
 
                 self.screen.feed_updated.emit()
-                time.sleep(.25)
+                time.sleep(.01)
 
             elif self.hardware.hasXYControl:
                 event_location = self.hardware.get_xy()
@@ -1274,7 +1276,6 @@ class RunScreenController:
                                (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
 
                 self.screen.xy_updated.emit()
-                time.sleep(.25)
             else:
                 break
 
@@ -1283,14 +1284,15 @@ class RunScreenController:
         # self._plot_data.set()  # fixme
         if self.hardware.hasVoltageControl:
             while True:
-                rfu = self.hardware.daq_board_control.data['avg']
-                kv = self.hardware.daq_board_control.data['ai1']
-                ua = self.hardware.daq_board_control.data['ai2']
+                data = self.hardware.get_data()
+                rfu = data['rfu']
+                kv = data['volts']
+                ua = data['current']
                 freq = self.hardware.daq_board_control.downsampled_freq
-                dt = np.arange(0, len(rfu)/freq, 1/freq).tolist()
+
 
                 if self._plot_data.is_set():
-                    threading.Thread(target=self.screen.update_plots, args=(rfu, ua,dt)).start()
+                    threading.Thread(target=self.screen.update_plots, args=(rfu, ua, freq)).start()
 
                 if len(kv) > 4:
                     try:
@@ -1300,6 +1302,12 @@ class RunScreenController:
                         return
 
                 time.sleep(.25)
+
+    def _save_sequence(self):
+        open_file_path = QtWidgets.QFileDialog.getExistingDirectory(self.screen, 'Select Folder to save to')
+        if open_file_path == -1:
+            return
+        self.hardware.save_buffer(open_file_path, 'capture.avi')
 
     def save_plot(self):
 
@@ -1568,6 +1576,7 @@ class RunScreenController:
                         self._load_insert()
 
                 self.methods.append(data)
+                self.methods_id.append( open_file_path.split('/')[-1][:-4] )
                 self._add_row(open_file_path, data.steps[0]['Summary'])
 
     def remove_method(self):
@@ -1575,6 +1584,7 @@ class RunScreenController:
         self.screen.sequence_display.removeRow(current_row)
         try:
             self.methods.pop(current_row)
+            self.methods_id.pop(current_row)
         except IndexError:
             logging.warning("Methods popped incorrectly")
 
@@ -1898,9 +1908,10 @@ class RunScreenController:
         if not self.check_system():
             logging.error('Unable to start run.')
 
-        for method in self.methods:
+        for method, method_id in zip(self.methods, self.methods_id):
+
             repetitions = self.screen.repetition_input.value()
-            run_state = self.run_method(method, repetitions)
+            run_state = self.run_method(method, repetitions, method_id)
             if not run_state:
                 logging.info('Run stopped.')
                 self._stop_thread_flag.clear()
@@ -1917,7 +1928,7 @@ class RunScreenController:
         self._last_cell_positions['obj'] = obj
         return
 
-    def run_method(self, method, repetitions):
+    def run_method(self, method, repetitions, method_id):
         def check_flags():
             while self._pause_flag.is_set():
                 if self._stop_thread_flag.is_set():
@@ -2015,7 +2026,7 @@ class RunScreenController:
             state = wait_sleep(duration)
             # Save Data
             now = datetime.datetime.now()
-            file_name = "Separation_step{}_Rep{}.csv".format(step_id, rep)
+            file_name = "{}_{}_step_{}_rep_{}.csv".format( self.screen.run_prefix.text(),method_id, step_id, rep)
             save_path = os.path.join(save_dir, file_name)
             self.hardware.save_data(save_path)
             self.hardware.set_voltage(0)
@@ -2063,6 +2074,8 @@ class RunScreenController:
                 if cap is not None:
                     move_objective(obj)
             self._inject_flag.set()
+
+
             return True
 
         def inject():
@@ -2092,9 +2105,15 @@ class RunScreenController:
                     state_n = check_flags()
                     if not state_n:
                         return False
+
                     else:
                         self.hardware.set_objective(rel_h=-1500)
+                        # Save video feed data
+                        file_name = "{}_{}_step{}_rep{}".format(self.screen.run_prefix.text(), method_id, step_id, rep)
+                        save_path = os.path.join(save_dir, file_name)
+                        self.hardware.save_buffer(save_path, 'cell_lysis.avi')
                         self.hardware.objective_control.wait_for_move()
+
 
             if pressure_state:
                 self.hardware.pressure_rinse_start()

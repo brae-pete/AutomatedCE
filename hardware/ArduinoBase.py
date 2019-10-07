@@ -15,7 +15,7 @@ class ArduinoBase:
         if self.com == "Auto":
             self.com = self.getCom()
         self.serial = serial.Serial()
-        self.serial.timeout = 0.3
+        self.serial.timeout = 0.5
         self.serial.baudrate = 1000000
         self.serial.baudrate = 1000000
 
@@ -147,9 +147,13 @@ class ArduinoBase:
         """read outlet z position, return um
         when offset is true, tells Control class the arduino has been reset
         """
+
         if self.home:
             return random.random()
-        self.serial.write("ER\n".encode())
+        try:
+            self.serial.write("ER\n".encode())
+        except serial.serialutil.SerialTimeoutException:
+            self.serial.write("ER\n".encode())
         offset = self.outlet_reset
         self.objective_reset = False
         response = self.serial.readlines()

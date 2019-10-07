@@ -6,7 +6,7 @@ import logging
 from PyQt5 import QtCore, QtGui, QtWidgets
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 cwd = os.getcwd()
 contents = os.listdir(cwd)
@@ -908,6 +908,8 @@ class RunScreen(QtWidgets.QMainWindow):
         self.live_feed_pixmap = QtWidgets.QGraphicsPixmapItem()
         self.camera_load = QtWidgets.QPushButton('Open Camera')
         self.camera_close = QtWidgets.QPushButton('Close Camera')
+        self.buffer_save = QtWidgets.QPushButton('Save Buffer Seq')
+
 
         live_feed_window = QtWidgets.QMainWindow()
 
@@ -921,6 +923,7 @@ class RunScreen(QtWidgets.QMainWindow):
         control_layout.addWidget(self.focus_feed)
         control_layout.addWidget(self.camera_load)
         control_layout.addWidget(self.camera_close)
+        control_layout.addWidget(self.buffer_save)
         control_layout.addStretch()
         control_widget.setLayout(control_layout)
         live_feed_control.setWidget(control_widget)
@@ -1051,10 +1054,11 @@ class RunScreen(QtWidgets.QMainWindow):
             if item != self.feed_pointer:
                 self.live_feed_scene.removeItem(item)
 
-    def update_plots(self, rfu, current, dt):
+    def update_plots(self, rfu, current, freq):
 
-        self.plot_panel.canvas.update_current(current,dt)
-        self.plot_panel.canvas.update_rfu(rfu,dt)
+
+        self.plot_panel.canvas.update_rfu(rfu,freq)
+        self.plot_panel.canvas.update_current(current, freq)
         self.plot_panel.canvas.set_style()
         try:
             self.plot_panel.canvas.draw()
@@ -1802,12 +1806,14 @@ class RunPlot(FigureCanvas):
         self.axes_rfu.set_ylabel("PMT (V)", fontsize=title_font_size)
         self.axes_rfu.set_facecolor('#FFFFFF')
 
-    def update_rfu(self, rfu, dt):
+    def update_rfu(self, rfu, freq):
         self.axes_rfu.clear()
+        dt = np.arange(0, len(rfu) / freq, 1 / freq).tolist()
         self.axes_rfu.plot(dt, rfu, linewidth=2)
 
-    def update_current(self, current, dt):
+    def update_current(self, current, freq):
         self.axes_current.clear()
+        dt = np.arange(0, len(current) / freq, 1 / freq).tolist()
         self.axes_current.plot(dt, current, linewidth=1, color="C2", alpha = 0.7)
 
 

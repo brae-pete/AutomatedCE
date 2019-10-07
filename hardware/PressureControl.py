@@ -38,8 +38,8 @@ class PressureControl:
         with self.lock:
             self.state = self.arduino.removePressure()
             logging.info("Released Pressure")
-        time.sleep(1.5)
-        self.close_valve()
+        #time.sleep(1.5)
+        #self.close_valve()
 
     def open_valve(self):
         with self.lock:

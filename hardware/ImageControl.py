@@ -1,5 +1,6 @@
 import sys
 import os
+import shutil
 import cv2
 import time
 import numpy as np
@@ -14,6 +15,7 @@ import matplotlib.animation as animation
 from pyvcam import pvc
 from pyvcam.camera import Camera
 import threading
+
 
 """
 For Micromanager, you need to transfer the Micromanager 2.0 gamma folder from the barracuda PC to the computer you are 
@@ -76,6 +78,15 @@ class ImageControl:
 
     contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
     rotate = 90
+    _frame_num = 0
+    _capture_ref=[]
+    buffer_time = 30 # time to buffer images in seconds
+    _capture_lock = threading.Lock()
+    live_running=threading.Event()
+    save_sequence = threading.Event()
+    sequence_filepath = os.getcwd()
+    sequence_prefix = "IMGS"
+    capture_folder = os.path.join(sequence_filepath, 'Capture')
 
     def open(self):
         """Opens the camera resources"""
@@ -167,6 +178,87 @@ class ImageControl:
         ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
         plt.show()
 
+    def capture_save(self, frame, passed_time):
+        """ Saves a 30 s buffer of camera images.
+         Ordered Dictionary where the first element is checked to see if it is more than 30 s old.
+         If so that frame is deleted.
+
+         A new frame is added to the dictionary with the time it was taken at in ms it was taken at
+         as the key for the filename.
+
+         Filename is the frame number.
+         """
+        # Check if capture folder exists
+        if not os.path.exists(self.capture_folder):
+            os.makedirs(self.capture_folder)
+
+        # Save the frame to the file and add to the capture dictionary
+        # Make this thread safe so we can save it without removing older frames
+        with self._capture_lock:
+            filepath = os.path.join(self.capture_folder,'{:09d}.png'.format(self._frame_num))
+            self._capture_ref.append([passed_time,filepath])
+            self.save_image(frame, filepath)
+            self._frame_num += 1
+
+            # Check if first frame in the buffer is older than the buffer period
+            # Remove the expired file
+            if passed_time -self._capture_ref[0][0] > self.buffer_time:
+                _, old_file = self._capture_ref.pop(0)
+                os.remove(old_file)
+
+    def _get_unique_folder(self,parent,folder):
+        """ Returns a unique folder name """
+        tracker=0
+        folder = folder +' ({})'.format(tracker)
+        while os.path.exists(os.path.join(parent, folder)):
+            tracker+=1
+            folder = folder + ' ({})'.format(tracker)
+
+        return folder
+
+    def _clear_buffer(self):
+        for file_del in os.listdir(self.capture_folder):
+            file_path = os.path.join(self.capture_folder, file_del)
+            if file_path.endswith('.png'):
+                os.remove(file_path)
+        return
+
+    def save_capture_sequence(self, out_folder, name='capture_movie.avi', fps=5):
+        """
+        saves the capture buffer to a avi video and copies all of the formatted images (not originals)
+        :param out_folder: folder to save, should not be the same as other buffers must be unique
+        :param name: must end with .avi. What the video file will be called
+        :param fps: frames per second
+        :return:
+        """
+        capture_folder = os.path.join(out_folder, 'capture_sequence')
+        if os.path.exists(capture_folder):
+            logging.error('Output folder {}\n for capture sequence already exists'.format(capture_folder))
+            capture_folder = os.path.join(out_folder, self._get_unique_folder(out_folder,'capture_sequence'))
+            logging.error("New folder is {}".format(capture_folder))
+
+        if name[-4:] != '.avi':
+            logging.error('Image file name {} must end with .avi. Attempting to append'.format(name))
+            name=name+'.avi'
+        outfile = os.path.join(out_folder, name)
+
+        # keep this thread safe, copy the files with a lock on the sequence
+        with self._capture_lock:
+            # copy the sequence to the destination
+            shutil.copytree(self.capture_folder, capture_folder)
+
+        # get all files in copied folder
+        frames = [img for img in os.listdir(capture_folder) if img.endswith('.png')]
+        frame = cv2.imread(os.path.join(capture_folder, frames[0]))
+        height, width, layers = frame.shape
+
+        # Save the video to avi format
+        video = cv2.VideoWriter(outfile, 0, fps, (width, height))
+        for frame in frames:
+            img = cv2.imread(os.path.join(capture_folder, frame))
+            video.write(img)
+        video.release()
+
 
 class PVCamImageControl(ImageControl):
     """GUI will read an image (recentImage). Uses PVCAM drivers.
@@ -187,10 +279,17 @@ class PVCamImageControl(ImageControl):
     save_sequence = threading.Event()
     sequence_filepath = os.getcwd()
     sequence_prefix = "IMGS"
+    capture_folder = os.path.join(sequence_filepath, 'Capture')
     sequence_start_time = time.perf_counter()
+    _frame_num = 0
+    _capture_ref=[]
+    buffer_time = 30 # time to buffer images in seconds
+    _capture_lock = threading.Lock()
     def __init__(self, lock = threading.RLock()):
         self.lock = lock
         self.open()
+        # Clear the camera buffer
+        self._clear_buffer()
 
     def open(self):
         """Opens the MMC resources"""
@@ -246,21 +345,17 @@ class PVCamImageControl(ImageControl):
 
         img = self._get_image()
         st = time.perf_counter() # Record when the picture was acquired
+
         # keep a copy of the original for debugging ( you could remove this )
         self.img = img.copy()
+        # adjust size, rotation, brightness and contrast
         img = self._adjust_size(img, size)
         img = self._rotate_img(img, rotation)
         img = self.image_conversion(img)
         # convert to 8 bit image (with proper rescaling)
         img = img_as_ubyte(img)
         self.process_time = time.perf_counter()-st
-
-        # Save Feed if required
-        if self.save_sequence.is_set():
-            passed_time = int(self.sequence_start_time-st)*1000
-            file_name = "{}_{:05d}.png".format(self.sequence_prefix, passed_time)
-            file_path = os.path.join(self.sequence_filepath, file_name)
-            self.save_image(img, file_path)
+        self.capture_save(img, st)
         return img
 
     def _get_image(self):
@@ -355,6 +450,7 @@ class MicroManagerControl(ImageControl):
         img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         cv2.imwrite(filename, img)
+
 
     def _get_image(self):
         try:

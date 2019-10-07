@@ -203,6 +203,16 @@ class BaseSystem:
         # Only fill out stop_feed if you can fill out start_feed.
         logging.error('stop_feed not implemented in hardware class.')
 
+    def save_buffer(self, folder, name, fps=5):
+        """
+        Saves the camera buffer to the folder as .avi file. Also copies sequence of images as reference.
+        :param folder: folder to store data
+        :param name: video file to save to, will overwrite existing files
+        :param fps: frames per second to store the video at, defaults to 5 fps irregardless of camera frame rate
+        :return:
+        """
+        logging.error('save_buffer for camera is not implemented in hardware class')
+
     def get_image(self):
         """Returns the most recent image from the camera."""
         logging.error('get_image not implemented in hardware class.')
@@ -431,6 +441,17 @@ class BarracudaSystem(BaseSystem):
         self.image_control.stop_video_feed()
         return True
 
+    def save_buffer(self, folder, name, fps=5):
+        """
+        Saves the camera buffer to the folder as .avi file. Also copies sequence of images as reference.
+        :param folder: folder to store data
+        :param name: video file to save to, will overwrite existing files
+        :param fps: frames per second to store the video at, defaults to 5 fps irregardless of camera frame rate
+        :return: True
+        """
+        self.image_control.save_capture_sequence(folder, name, fps)
+        return True
+
     def camera_state(self):
         """ Checks if camera resources are available"""
         return self.image_control.camera_state()
@@ -590,6 +611,13 @@ class BarracudaSystem(BaseSystem):
 
     def get_rfu_data(self):
         return self.daq_board_control.data['ai3']
+
+    def get_data(self):
+        with self.daq_board_control.data_lock:
+            rfu = self.daq_board_control.data['avg']
+            volts = self.daq_board_control.data[self._daq_voltage_readout]
+            current = self.daq_board_control.data[self._daq_current_readout]
+        return {'rfu':rfu, 'volts':volts, 'current':current}
 
     def stop_voltage(self):
         self.daq_board_control.change_voltage(0)
