@@ -14,7 +14,18 @@ conda create --name CEpy37 --file \path\to\env\txtfile\barracuda-env.txt
 ~~~
 
 
-### Micromanager Installation (if using Micromangaer to control the software)
+### BarracudaQt Download & PyCharm Setup
+
+Download the BarracudaQt repository and extract the files to the folder you want. Alternatively you can use git clone the repository to a folder. 
+
+~~~
+git clone https://github.com/aPeter1/BarracudaQt.git
+~~~
+
+If you are using PyCharm (Python IDE) you can open the BarracudaQt project folder. Set the project interpreter to CEpy37 (File>>Settings>>Project: BarracudaQt>>Project Interpreter). Click the settings button and select "Add" to add a new conda environment. Select Existing Environment and select the path location of the interpreter to be the python inside the conda env (for example: C:\Users\UserName\Miniconda3\envs\CEpy37\pyton.exe). Select 'OK' to keep the settings. 
+
+
+### Micromanager Installation (if using Micromangaer to control hardware and/or get images)
 
 Download micromanager from https://micro-manager.org/
 
@@ -26,11 +37,8 @@ Create the separate python environment for micromanager.
 conda create --name CEpy27 python=2.7
 ~~~
 
-### BarracudaQt Download
+Under the config folder. Place the configuration file for your stage, camera, or whatever hardware object you wish to use Micro-Manager for. Config files for Nikon Eclipse Ti, QCam3, and CoolSnap (PVCam) are already present. 
 
-Download the BarracudaQt repository and extract the files to the folder you want. Alternatively you can use git clone the repository to a folder. 
+### Hardware Checklist 
 
-~~~
-
-~~~
-
+You will need to check each piece of hardware is working individually before running the program. Under Testing there is a hardware-test file that will test each core component of the hardware folder. If that can run with no failures you are good to run the CE System. 
