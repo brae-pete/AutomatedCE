@@ -26,11 +26,15 @@ Create the separate python environment for micromanager.
 conda create --name CEpy27 python=2.7
 ~~~
 
-### BarracudaQt Download
+### BarracudaQt Download & PyCharm Setup
 
 Download the BarracudaQt repository and extract the files to the folder you want. Alternatively you can use git clone the repository to a folder. 
 
 ~~~
-
+git clone https://github.com/aPeter1/BarracudaQt.git
 ~~~
+
+If you are using PyCharm (Python IDE) you can open the BarracudaQt project folder. Set the project interpreter to CEpy37 (File>>Settings>>Project: BarracudaQt>>Project Interpreter). Click the settings button and select "Add" to add a new conda environment. Select Existing Environment and select the path location of the interpreter to be the python inside the conda env (for example: C:\Users\UserName\Miniconda3\envs\CEpy37\pyton.exe). Select 'OK' to keep the settings. 
+
+
 
