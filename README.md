@@ -11,8 +11,10 @@ Open the Anaconda Prompt. Create the barracuda environment by downloading the th
 cd \path\to\env\txtfile\
 
 conda create --name CEpy37 --file \path\to\env\txtfile\barracuda-env.txt
+conda activate CEpy37
+python -m pip install opencv_python
+conda deactivate
 ~~~
-
 
 ### BarracudaQt Download & PyCharm Setup
 
@@ -38,6 +40,9 @@ conda create --name CEpy27 python=2.7
 ~~~
 
 Under the config folder. Place the configuration file for your stage, camera, or whatever hardware object you wish to use Micro-Manager for. Config files for Nikon Eclipse Ti, QCam3, and CoolSnap (PVCam) are already present. 
+
+Under Hardware>>MicroControlClient.py change the PYTHON2_PATH variable to the python 2 executable for the CEpy27 environment.
+For example a common location will be: "C:\Users\UserName\Miniconda3\envs\CEPy27\python"
 
 ### Hardware Checklist 
 

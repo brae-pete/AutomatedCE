@@ -4,11 +4,13 @@ import subprocess
 import pickle
 import logging
 
+#Thhis should be the path to the python.exe file in the CEpy27 environment set up by conda.
+PYTHON2_PATH = r"C:\Users\NikonEclipseTi\Miniconda3\envs\CEpy27\python.exe"
 
 class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object
-
+    conn = None
     def __init__(self, port=6060):
         self.address = ('localhost', port)
         self.start_server()
@@ -30,22 +32,32 @@ class MicroControlClient:
         self.server.terminate()
 
     def start_server(self):
-        self.server = subprocess.Popen([r'C:\Users\NikonEclipseTi\Miniconda3\envs\CEpy27\python',
+        """
+        Opens the python2 subprocess that will run the server and micromanager code.
+        :return:
+        """
+        self.server = subprocess.Popen([PYTHON2_PATH,
                                         'MicroControlServer.py'], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
     def open(self):
-        if self.conn.closed:
+        """ Opens the Python 2 server and starts the connection"""
+        if self.conn is None:
+            self.start_server()
+            self.start_connection()
+        elif self.conn.closed:
+            self.start_server()
             self.start_connection()
         return True
 
     def close(self):
-        if not self.conn.closed:
-            self.close_server()
+        self.close_server()
         return True
 
     @staticmethod
     def ok_check(response,msg):
         """ Checks the response if it was recieved OK."""
-        if str(response)!= 'Ok':
+
+        if str(response.decode())!= 'Ok':
             logging.error('{}. Recieved: {}'.format(msg,response))
             return False
         return True
+

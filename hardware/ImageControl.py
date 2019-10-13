@@ -12,10 +12,16 @@ from skimage.util import img_as_ubyte
 from skimage.color import rgb2gray
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from pyvcam import pvc
-from pyvcam.camera import Camera
+
+try:
+    from pyvcam import pvc
+    from pyvcam.camera import Camera
+except ModuleNotFoundError:
+    logging.warning("PVCam is not installed")
+
 import threading
 
+from MicroControlClient import MicroControlClient
 
 """
 Notes for using this outside the Barracuda Repository: 
@@ -42,6 +48,8 @@ contents = os.listdir(cwd)
 
 if "config" in contents:
     CONFIG_FOLDER = os.path.join(cwd, "config")
+elif "ImageControl.py" in contents:
+    CONFIG_FOLDER = os.path.relpath('../config')
 elif "CEGraphic" in contents:
     contents = os.listdir(os.path.join(contents, "CEGraphic"))
     if "config" in contents:
@@ -64,14 +72,15 @@ class ImageControl:
     contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
     rotate = 90
     _frame_num = 0
-    _capture_ref=[]
-    buffer_time = 30 # time to buffer images in seconds
+    _capture_ref = []
+    buffer_time = 30  # time to buffer images in seconds
     _capture_lock = threading.Lock()
-    live_running=threading.Event()
+    live_running = threading.Event()
     save_sequence = threading.Event()
     sequence_filepath = os.getcwd()
     sequence_prefix = "IMGS"
     capture_folder = os.path.join(sequence_filepath, 'Capture')
+    raw_img = np.array((100, 100))  # Full raw image
 
     def open(self):
         """Opens the camera resources"""
@@ -115,10 +124,9 @@ class ImageControl:
         """ Returns camera exposure in milliseconds as a float"""
         pass
 
-    def set_exposure(self,exp):
+    def set_exposure(self, exp):
         """ Sets the camera exposure. Exp is exposure in milliseconds as a float"""
         pass
-
 
     @staticmethod
     def _adjust_size(img, size):
@@ -149,11 +157,16 @@ class ImageControl:
         """ Saves PIL image with filename"""
         io.imsave(filename, img)
 
+    def save_raw_image(self, filename):
+        """ Saves last raw image"""
+        io.imsave(filename, self.raw_img)
+
     def live_view(self):
         """ Simple window to view the camera feed using matplotlib
          Live update is performed using the animate functionality in matplotlib
 
          """
+
         def animate(i):
             # Get an image
             img = self.get_recent_image()
@@ -162,7 +175,7 @@ class ImageControl:
                 im.set_array(img)
             return im,
 
-        #initialize our matplotlib figure
+        # initialize our matplotlib figure
         fig = plt.figure()
         self.start_video_feed()
         time.sleep(1)
@@ -190,23 +203,23 @@ class ImageControl:
         # Save the frame to the file and add to the capture dictionary
         # Make this thread safe so we can save it without removing older frames
         with self._capture_lock:
-            filepath = os.path.join(self.capture_folder,'{:09d}.png'.format(self._frame_num))
-            self._capture_ref.append([passed_time,filepath])
+            filepath = os.path.join(self.capture_folder, '{:09d}.png'.format(self._frame_num))
+            self._capture_ref.append([passed_time, filepath])
             self.save_image(frame, filepath)
             self._frame_num += 1
 
             # Check if first frame in the buffer is older than the buffer period
             # Remove the expired file
-            if passed_time -self._capture_ref[0][0] > self.buffer_time:
+            if passed_time - self._capture_ref[0][0] > self.buffer_time:
                 _, old_file = self._capture_ref.pop(0)
                 os.remove(old_file)
 
-    def _get_unique_folder(self,parent,folder):
+    def _get_unique_folder(self, parent, folder):
         """ Returns a unique folder name """
-        tracker=0
-        folder = folder +' ({})'.format(tracker)
+        tracker = 0
+        folder = folder + ' ({})'.format(tracker)
         while os.path.exists(os.path.join(parent, folder)):
-            tracker+=1
+            tracker += 1
             folder = folder + ' ({})'.format(tracker)
 
         return folder
@@ -229,12 +242,12 @@ class ImageControl:
         capture_folder = os.path.join(out_folder, 'capture_sequence')
         if os.path.exists(capture_folder):
             logging.error('Output folder {}\n for capture sequence already exists'.format(capture_folder))
-            capture_folder = os.path.join(out_folder, self._get_unique_folder(out_folder,'capture_sequence'))
+            capture_folder = os.path.join(out_folder, self._get_unique_folder(out_folder, 'capture_sequence'))
             logging.error("New folder is {}".format(capture_folder))
 
         if name[-4:] != '.avi':
             logging.error('Image file name {} must end with .avi. Attempting to append'.format(name))
-            name=name+'.avi'
+            name = name + '.avi'
         outfile = os.path.join(out_folder, name)
 
         # keep this thread safe, copy the files with a lock on the sequence
@@ -267,20 +280,22 @@ class PVCamImageControl(ImageControl):
     contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
     rotate = 90
     img = None  # Copy of the raw image before processing
-    process_time = 0 # time it takes to process a single image for live feed
+    process_time = 0  # time it takes to process a single image for live feed
     name = 'None'
     serial_num = 'None'
-    live_running=threading.Event()
+    live_running = threading.Event()
     save_sequence = threading.Event()
     sequence_filepath = os.getcwd()
     sequence_prefix = "IMGS"
     capture_folder = os.path.join(sequence_filepath, 'Capture')
     sequence_start_time = time.perf_counter()
     _frame_num = 0
-    _capture_ref=[]
-    buffer_time = 30 # time to buffer images in seconds
+    _capture_ref = []
+    buffer_time = 30  # time to buffer images in seconds
     _capture_lock = threading.Lock()
-    def __init__(self, lock = threading.RLock()):
+    size = 0.5
+
+    def __init__(self, lock=threading.RLock()):
         self.lock = lock
         self.open()
         # Clear the camera buffer
@@ -299,7 +314,6 @@ class PVCamImageControl(ImageControl):
             self.serial_num = self.cam.serial_no
             self.name = self.cam.name
             time.sleep(1)
-
 
     def close(self):
         self.cam.close()
@@ -339,7 +353,7 @@ class PVCamImageControl(ImageControl):
         """Returns most recent image from the camera"""
 
         img = self._get_image()
-        st = time.perf_counter() # Record when the picture was acquired
+        st = time.perf_counter()  # Record when the picture was acquired
 
         # keep a copy of the original for debugging ( you could remove this )
         self.img = img.copy()
@@ -349,7 +363,7 @@ class PVCamImageControl(ImageControl):
         img = self.image_conversion(img)
         # convert to 8 bit image (with proper rescaling)
         img = img_as_ubyte(img)
-        self.process_time = time.perf_counter()-st
+        self.process_time = time.perf_counter() - st
         self.capture_save(img, st)
         return img
 
@@ -359,15 +373,17 @@ class PVCamImageControl(ImageControl):
             img = self.cam.get_live_frame()
         return img
 
+
 class MicroControl(ImageControl):
     """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
     Default uses micromanager (mmc). Instead you can use PVCAM shown below if using a PVCAM compatiable camera
     like the coolnap hq2
      """
     state = False
-    device_name = 'CoolCam' # Updated after configuation has been loaded
+    device_name = 'CoolCam'  # Updated after configuation has been loaded
+    size = 0.5
 
-    def __init__(self, mmc =None, config_file='CoolSnap.cfg'):
+    def __init__(self, mmc=None, config_file='CoolSnap.cfg'):
         self.mmc = mmc
         self.config = os.path.join(CONFIG_FOLDER, config_file)
         self._open_client()
@@ -376,7 +392,7 @@ class MicroControl(ImageControl):
     def _open_client(self):
         """Opens the micromanager communicator client"""
         if self.mmc is None:
-            pass #todo load communicator
+            self.mmc = MicroControlClient()
 
         self.mmc.open()
 
@@ -390,15 +406,15 @@ class MicroControl(ImageControl):
         self.mmc.send_command('core,load_config,{}'.format(self.config))
         response = self.mmc.read_response()
         msg = "Could not open Camera"
-        state = self.mmc.ok_check(response,msg)
+        state = self.mmc.ok_check(response, msg)
         if not state:
             return state
 
         # Get Camera Name
         self.mmc.send_command('camera,get_name\n')
-        self.device_name = str(self.mmc.read_response())
-
-        return self.mmc.ok_check(response,msg)
+        self.device_name = str(self.mmc.read_response().decode())
+        self.state = True
+        return self.mmc.ok_check(response, msg)
 
     def close(self):
         """Closes the camera resources
@@ -406,34 +422,38 @@ class MicroControl(ImageControl):
         self.mmc.send_command('core,unload_device,{}\n'.format(self.device_name))
         response = self.mmc.read_response()
         msg = "Could not close camera resources"
-        return self.mmc.ok_check(response,msg)
+        self.state = False
+        return self.mmc.ok_check(response, msg)
 
     def _snap_image(self):
         """Sends command to snap single image to the camera. """
         self.mmc.send_command('camera,snap\n')
         response = self.mmc.read_response()
         msg = 'Failed to Snap Image'
-        state = self.mmc.ok_check(response,msg)
+        state = self.mmc.ok_check(response, msg)
         return state
 
     def get_single_image(self):
         """Snaps single image, returns image"""
-        state=self._snap_image()
-        if state: # if we snapped image get the image
+        state = self._snap_image()
+        if state:  # if we snapped image get the image
             self.mmc.send_command('camera,get_image\n')
             img = self.mmc.read_response()
             if type(img) is not np.ndarray:
                 logging.error("Could not get image {}".format(img))
                 return None
             # todo add image processing
+            self.raw_img = img.copy()
+            img = self._adjust_size(img, self.size)
+            img = self.image_conversion()
             return img
 
-    def set_exposure(self,exp=10):
+    def set_exposure(self, exp=10):
         """ Sets the camera exposure im milliseconds"""
         self.mmc.send_command('camera,set_exposure,{}\n'.format(exp))
         response = self.mmc.read_response()
         msg = "Could not set camera exposure"
-        return self.mmc.ok_check(response,msg)
+        return self.mmc.ok_check(response, msg)
 
     def get_exposure(self):
         self.mmc.send_command('camera,get_exposure\n')
@@ -448,36 +468,40 @@ class MicroControl(ImageControl):
         self.mmc.send_command('camera,start_continuous\n')
         response = self.mmc.read_response()
         msg = "Could not start live video feed"
-        return self.mmc.ok_check(response,msg)
+        return self.mmc.ok_check(response, msg)
 
     def stop_video_feed(self):
         """Stops the live video feed"""
         self.mmc.send_command('camera,stop_continuous\n')
         response = self.mmc.read_response()
         msg = "Could not stop live video feed"
-        return self.mmc.ok_check(response,msg)
+        return self.mmc.ok_check(response, msg)
 
-
-    def get_recent_image(self, size=None):
+    def get_recent_image(self, size=0.5, rotation=0):
         """Returns most recent image from the camera circular buffer (live feed)
         performs image processing. Returns PIL image
         """
         self.mmc.send_command('camera,get_last\n')
+        st = time.perf_counter()
         img = self.mmc.read_response()
         if type(img) is not np.ndarray:
             logging.error("Could not get image {}".format(img))
             return None
-        # todo add image processing
+        # Preserve the original picture (this is saved for Tiff files)
+        self.raw_img = img.copy()
+        # Process image for live feed
+        img = self._adjust_size(img, size)
+        img = self._rotate_img(img, rotation)
+        img = self.image_conversion(img)
+        img = img_as_ubyte(img)
+        self.process_time = time.perf_counter() - st
+        self.capture_save(img, st)
         return img
-
-    def record_recent_image(self, filename):
-        """ Saves recent image from circular buffer to designaed file"""
-        pass
 
     def camera_state(self):
         """ Returns the camera state True is open, false is closed"""
-        return False
+        return self.state
 
 
 if __name__ == "__main__":
-    ic = PVCamImageControl()
+    ic = MicroControl()
