@@ -18,8 +18,11 @@ import threading
 
 
 """
-For Micromanager, you need to transfer the Micromanager 2.0 gamma folder from the barracuda PC to the computer you are 
-working with. Alternatively you can try building a python 3 compatible Micromanager. 
+Notes for using this outside the Barracuda Repository: 
+
+For Micromanager, you will need to install Python2 and use the Micromanager Communication Client. 
+Micromanager is not python3 compatible so we create a separate python process in the communication client
+that runs the Micromanager library. This library communicates over a local port specified by the client.
 
 For PVCAM, you will need to follow the install instructions for PVCAM python wrapper at https://github.com/Photometrics/PyVCAM
 Be sure you have PVCAM, PVCAM SDK, Misrosoft Visual C++ Build Tools all installed before running the python setup.py install
@@ -32,24 +35,6 @@ cv2 can be installed via python -m pip install opencv_python
 """
 
 io.use_plugin('pil')
-
-if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
-    sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
-prev_dir = os.getcwd()
-os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
-
-MMCOREPY_FATAL = False
-
-try:
-    import MMCorePy
-except ImportError:
-    logging.error('Can not import MMCorePy.')
-    if MMCOREPY_FATAL:
-        sys.exit()
-else:
-    logging.info('MMCorePy successfully imported.')
-
-os.chdir(prev_dir)
 
 # Locate the directory of config files
 cwd = os.getcwd()
@@ -125,6 +110,16 @@ class ImageControl:
     def camera_state(self):
         """ Returns the camera state True is open, false is closed"""
         return False
+
+    def get_exposure(self):
+        """ Returns camera exposure in milliseconds as a float"""
+        pass
+
+    def set_exposure(self,exp):
+        """ Sets the camera exposure. Exp is exposure in milliseconds as a float"""
+        pass
+
+
     @staticmethod
     def _adjust_size(img, size):
         ims = img.shape
@@ -364,130 +359,124 @@ class PVCamImageControl(ImageControl):
             img = self.cam.get_live_frame()
         return img
 
-
-class MicroManagerControl(ImageControl):
+class MicroControl(ImageControl):
     """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
     Default uses micromanager (mmc). Instead you can use PVCAM shown below if using a PVCAM compatiable camera
     like the coolnap hq2
      """
+    state = False
+    device_name = 'CoolCam' # Updated after configuation has been loaded
 
-    contrast_exposure = [2, 98]  # Low and high percintiles for contrast exposure
-    rotate = 90
-
-    def __init__(self, mmc=None, config=None, home=False):
+    def __init__(self, mmc =None, config_file='CoolSnap.cfg'):
         self.mmc = mmc
-        self.config = config
-        self.home = home
+        self.config = os.path.join(CONFIG_FOLDER, config_file)
+        self._open_client()
+        self.open()
 
-        if mmc is None:
-            self.mmc = MMCorePy.CMMCore()
-        if not home:
-            self.open()
+    def _open_client(self):
+        """Opens the micromanager communicator client"""
+        if self.mmc is None:
+            pass #todo load communicator
+
+        self.mmc.open()
+
+    def _close_client(self):
+        """ Closes the client resources, called when program exits"""
+        self.mmc.close()
 
     def open(self):
-        """Opens the MMC resources"""
-        try:
-            self.mmc.loadSystemConfiguration(CONFIG_FILE)
-        except MMCorePy.CMMError:
-            self.close()
-            time.sleep(1)
-            try:
-                cfg = r'C:\KivyBarracuda\BarracudaQt\BarracudaQt\config\PVCAM.cfg'
-                self.mmc.loadSystemConfiguration(cfg)
-            except MMCorePy.CMMError:
-                logging.warning("Could not load camera")
+        """ Opens the camera resources """
+        # Load the Config
+        self.mmc.send_command('core,load_config,{}'.format(self.config))
+        response = self.mmc.read_response()
+        msg = "Could not open Camera"
+        state = self.mmc.ok_check(response,msg)
+        if not state:
+            return state
+
+        # Get Camera Name
+        self.mmc.send_command('camera,get_name\n')
+        self.device_name = str(self.mmc.read_response())
+
+        return self.mmc.ok_check(response,msg)
 
     def close(self):
-        self.mmc.unloadAllDevices()
+        """Closes the camera resources
+        """
+        self.mmc.send_command('core,unload_device,{}\n'.format(self.device_name))
+        response = self.mmc.read_response()
+        msg = "Could not close camera resources"
+        return self.mmc.ok_check(response,msg)
 
-    def stop_video_feed(self):
-        if not self.home:
-            if self.mmc.isSequenceRunning():
-                self.mmc.stopSequenceAcquisition()
+    def _snap_image(self):
+        """Sends command to snap single image to the camera. """
+        self.mmc.send_command('camera,snap\n')
+        response = self.mmc.read_response()
+        msg = 'Failed to Snap Image'
+        state = self.mmc.ok_check(response,msg)
+        return state
 
     def get_single_image(self):
         """Snaps single image, returns image"""
-        self.mmc.snapImage()
-        image = self.mmc.getImage()
-        return image
-
-    def start_video_feed(self):
-        if not self.home:
-            self.mmc.startContinuousSequenceAcquisition(1)
-
-    def get_recent_image(self, size=None):
-        """Returns most recent image from the camera"""
-        if self.home:
-            time.sleep(0.25)
-
-        time.sleep(0.1)
-        if self.mmc.getRemainingImageCount() > 0:
-            img = self.mmc.getLastImage()
-            ims = img.shape
-            # From bring back from 32 bit to 3 rgb channels
-            img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]  # img = np.float32(img)
-            new_ims = [0, 0]
-            new_ims[0] = ims[0] / 4
-            new_ims[1] = ims[1] / 4
-            img = transform.resize(img, new_ims, anti_aliasing=True)
-            img = transform.rotate(img, 90, resize=True)
-            img = rgb2gray(img)
-            self.img = img.copy()
-            img = self.image_conversion(img)
-            """
-            try:
-                img = pilImage.fromarray(img, 'L')
-            except:
-                img = pilImage.fromarray(img)
-            """
+        state=self._snap_image()
+        if state: # if we snapped image get the image
+            self.mmc.send_command('camera,get_image\n')
+            img = self.mmc.read_response()
+            if type(img) is not np.ndarray:
+                logging.error("Could not get image {}".format(img))
+                return None
+            # todo add image processing
             return img
 
-    def record_recent_image(self, filename):
-        if self.home:
-            time.sleep(0.25)
-        img = self._get_image()
-        ims = img.shape
-        img = img.view(dtype=np.uint8).reshape(ims[0], ims[1], 4)[..., 2::-1]
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        cv2.imwrite(filename, img)
+    def set_exposure(self,exp=10):
+        """ Sets the camera exposure im milliseconds"""
+        self.mmc.send_command('camera,set_exposure,{}\n'.format(exp))
+        response = self.mmc.read_response()
+        msg = "Could not set camera exposure"
+        return self.mmc.ok_check(response,msg)
+
+    def get_exposure(self):
+        self.mmc.send_command('camera,get_exposure\n')
+        exp = self.mmc.read_response()
+        if type(exp) is not float:
+            logging.error("Could not get exposure: {}".format(exp))
+            return None
+        return exp
+
+    def start_video_feed(self):
+        """ Starts a live video feed, typicall using camera circular buffer """
+        self.mmc.send_command('camera,start_continuous\n')
+        response = self.mmc.read_response()
+        msg = "Could not start live video feed"
+        return self.mmc.ok_check(response,msg)
+
+    def stop_video_feed(self):
+        """Stops the live video feed"""
+        self.mmc.send_command('camera,stop_continuous\n')
+        response = self.mmc.read_response()
+        msg = "Could not stop live video feed"
+        return self.mmc.ok_check(response,msg)
 
 
-    def _get_image(self):
-        try:
-            img = self.mmc.getLastImage()
-        except MMCorePy.CMMError:
-            time.sleep(0.15)
-            img = self._get_image()
+    def get_recent_image(self, size=None):
+        """Returns most recent image from the camera circular buffer (live feed)
+        performs image processing. Returns PIL image
+        """
+        self.mmc.send_command('camera,get_last\n')
+        img = self.mmc.read_response()
+        if type(img) is not np.ndarray:
+            logging.error("Could not get image {}".format(img))
+            return None
+        # todo add image processing
         return img
 
-    def image_conversion(self, img):
-        """ Adjusts the contrast and brightness"""
-        p2, p98 = np.percentile(img, self.contrast_exposure)
-        img_rescale = exposure.rescale_intensity(img, in_range=(p2, p98))
-        return img_rescale
+    def record_recent_image(self, filename):
+        """ Saves recent image from circular buffer to designaed file"""
+        pass
 
-    @staticmethod
-    def save_image(img, filename):
-        io.imsave(filename, img)
-
-    def live_view(self):
-
-        def animate(i):
-            img = self.get_recent_image()
-            if img is not None:
-                im.set_array(img)
-            return im,
-
-        fig = plt.figure()
-        try:
-            self.start_video_feed()
-        except MMCorePy.CMMError:
-            logging.WARNING("Continuous already starting")
-        time.sleep(1)
-        img = self.get_recent_image()
-        im = plt.imshow(img, animated=True)
-        ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
-        plt.show()
+    def camera_state(self):
+        """ Returns the camera state True is open, false is closed"""
+        return False
 
 
 if __name__ == "__main__":

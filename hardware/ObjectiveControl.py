@@ -186,3 +186,113 @@ class ObjectiveControl:
                 output.write(line + '\n'.encode())
 
         print("Done. Saved %s bytes." % (len(content) - outsize))
+
+
+
+class MicroManagerObjective(ObjectiveControl):
+    """Class to control Z-stage for capillary/optical train
+    If switching controllers modify the function calls here
+    Make sure that what you program matches the inputs and outputs
+    This is called by the GUI and needs data types to match
+    """
+    inversion = -1
+
+    def __init__(self, mmc=None, lock=-1):
+        """com = Port, lock = threading.Lock, args = [home]
+        com should specify the port where resources are located,
+        lock is a threading.lock object that will prevent the resource from being
+        read/written two at multiple times.
+        """
+        self.pos = 0
+        self.mmc = mmc
+        if lock == -1:
+            lock = threading.Lock()
+        self.lock = lock
+        self.open()
+
+        return
+
+    def open(self):
+        """User initializes whatever resources are required
+         (open ports, create MMC + load config, etc...)
+         """
+        #Todo
+        if self.mmc is None:
+            self.mmc = MicroCommunicator.MicroCommunicator()
+
+        self.mmc.open()
+        return True
+
+    def read_z(self, *args):
+        """ returns float of current position in um
+        User requests to get current position of stage, returned in um
+        """
+        # Lock the resources we are going to use
+        with self.lock:
+            self.mmc.send_command('obj,get_position\n')
+            um = self.mmc.read_response()
+            if type(um) is not float and type(um) is not int:
+                logging.warning("Did not read objective position")
+            else:
+                self.pos = um
+        return self.pos
+
+    def set_z(self, set_z):
+        """ set_z (absolute position in mm)
+        returns False if unable to set_z, True if command went through
+        """
+        with self.lock:
+            self.mmc.send_command('obj,set_position,{}\n'.format(set_z))
+            rsp = str(self.mmc.read_response())
+            if rsp != 'Ok':
+                logging.warning("Could not set Z")
+                return False
+        return True
+
+    def set_rel_z(self, rel_z):
+        """
+        Moves the objective up or down by the amount specified in rel_z
+        :param rel_z: float, um
+        :return: True/False if succesful
+        """
+        self.read_z()
+        go_to = self.pos + rel_z
+        self.set_z(go_to)
+        return True
+
+    def stop_z(self):
+        """ Stops the objective motor where it is at. """
+        self.stop()
+        return True
+
+    def stop(self):
+        """Stop the Z-stage from moving"""
+        self.set_rel_z(0)
+        return True
+
+    def reset(self):
+        """Resets the resources for the stage"""
+        if self.home:
+            self.close()
+            return
+        self.close()
+        self.open()
+
+    def go_home(self):
+        """
+        Returns the objective to the home (zero) position
+        :return:
+        """
+        with self.lock:
+            self.mmc.send_command('obj,set_position,0\n')
+            response = str(self.mmc.read_response())
+        if response != 'Ok':
+            logging.warning("Could not move to 0 um")
+        return
+
+    def close(self):
+        """Closes the resources for the stage"""
+        if self.home:
+            return
+        self.mmc.close()
+

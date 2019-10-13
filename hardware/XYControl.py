@@ -5,24 +5,6 @@ import threading
 import random
 import serial
 
-if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
-    sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
-prev_dir = os.getcwd()
-os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
-
-MMCOREPY_FATAL = False
-
-try:
-    import MMCorePy
-except ImportError:
-    logging.error('Can not import MMCorePy.')
-    if MMCOREPY_FATAL:
-        sys.exit()
-else:
-    logging.info('MMCorePy successfully imported.')
-
-os.chdir(prev_dir)
-
 # Locate the directory of config files
 cwd = os.getcwd()
 contents = os.listdir(cwd)
@@ -50,166 +32,169 @@ travel_height = 70
 
 
 class XYControl:
-    """ Basic XY Control class. If you switch hardware so that it no longer uses MMC. You only need
-    to maintain the outputs for each method."""
-    scale = 1
-    x_inversion = 1
-    y_inversion = 1
+    """ Basic XY stage Control class. All future classes must define these methods to work with CESystems"""
+    scale = 1 # scalar value to multiply to get microns
+    x_inversion = 1 # -1 to invert the x-axis
+    y_inversion = 1 # -1 to invert the y-axis
 
-    """
-    def __init__(self, home=True, lock=-1, stage='XYStage', config_file = "PriorXY.cfg", loaded=False):
-        logging.info("{} IS LOCK {} IS HOME".format(lock, home))
+    def open(self):
+        """ Opens all the hardware resources that will be needed (ie open serial ports, micromanager config, etc..,.
 
-        if lock == -1:
-            lock = threading.Lock()
-        self.lock = lock
-        self.home = home
-        self.stageID = stage
-        self.config_file = os.path.join(CONFIG_FOLDER, config_file)
-        self.position = [0, 0]
-
-        if not home:
-            self.mmc = MMCorePy.CMMCore()
-            self.load_config()
-    """
-
-    def load_config(self):
-        """ starts MMC object, [config file] [home]
-        config file is mmc config file created by micro manager for the stage
-        home is a flag that allows the core functionality of XY control to be tested
-        without connecting to MMC. Good for testing GUI/debugging at home"""
+         """
         if self.home:
             logging.info("Non MMC XY Control-Testing Only")
             return self.home
-        logging.info("{} is lock".format(type(self.lock)))
-        with self.lock:
-            self.mmc.loadSystemConfiguration(self.config_file)
-            self.stageID = self.mmc.getXYStageDevice()
 
     def read_xy(self):
-        """ Reads the current XY position of the stage, sets XYControl.position and returns list [X, Y]  """
-        if self.home:
-            return [float(random.randint(0, 110000)), float(random.randint(-6000, 6000))]
-
-        # Get XY from Stage
-        with self.lock:
-            pos = [0, 0]
-
-            # For some reason the getXYPosition() in mmc isn't working.
-            pos[0] = self.mmc.getXPosition(self.stageID)
-            pos[1] = self.mmc.getYPosition(self.stageID)
-
-            pos = [x / self.scale for x in pos]
-            pos[0] *= self.x_inversion
-            pos[1] *= self.y_inversion
-
-        return pos
+        """ Reads the current XY position of the stage, and returns list [X, Y] in microns """
+        pass
 
     def set_xy(self, xy):
         """Moves stage to position defined by pos (x,y). Returns nothing
         pos must be defined in microns """
-        if self.home:
-            self.position = xy
-            return
-        pos = xy[:]
-        pos[0] *= self.x_inversion
-        pos[1] *= self.y_inversion
-        pos = [x * self.scale for x in pos]
-        logging.info("{} is XY MOVE".format(pos))
-
-        with self.lock:
-            self.mmc.setXYPosition(self.stageID, pos[0], pos[1])
+        pass
 
     def set_x(self, x):
-        if self.home:
-            self.position = [0, 0]
-            return
-        x = x * self.scale
-        pos = self.read_xy()
-        with self.lock:
-            self.mmc.setXYPosition(self.stageID, x, pos[1] * self.scale)
+        """ Sets absolute position for X in microngs"""
+        pass
 
     def set_y(self, y):
-        if self.home:
-            self.position = [0, 0]
-            return
-        y = y * self.scale
-        pos = self.read_xy()
-        with self.lock:
-            self.mmc.setXYPosition(self.stageID, pos[0] * self.scale, y)
+        """ Sts absolute position for Y in microns"""
+        pass
 
     def set_rel_xy(self, xy):
-        # setRelativeXYPosition()
-        if self.home:
-            self.position = xy
-            return
-        pos = xy[:]
-        pos[0] *= self.x_inversion
-        pos[1] *= self.y_inversion
-        pos = [x * self.scale for x in pos]
-
-        with self.lock:
-            self.mmc.setRelativeXYPosition(self.stageID, pos[0], pos[1])
+        """ Moves x and y by values specified in list 'xy' given in microns"""
+        pass
 
     def set_rel_x(self, x):
-        if self.home:
-            self.position = [0, 0]
-            return
-        x = x * self.scale
-        with self.lock:
-            self.mmc.setRelativeXYPosition(self.stageID, x, 0)
+        """ Moves x axis by value specified by x in microns"""
+        pass
 
     def set_rel_y(self, y):
-        if self.home:
-            self.position = [0, 0]
-            return
-        y = y * self.scale
-        with self.lock:
-            self.mmc.setRelativeXYPosition(self.stageID, 0, y)
+        """ Moves y axis b value specified by y in microns"""
+        pass
 
     def set_origin(self):
-        """Redefines current position as Origin. Calls XYControl.read_xy after reset"""
-        logging.info("Home is {}".format(self.home))
-        if self.home:
-            logging.info("Set Origin as 0,0")
-            self.position = [0, 0]
-            self.read_xy()
-            return
-        with self.lock:
-            self.mmc.setOriginXY(self.stageID)
-        self.read_xy()
+        """Redefines current position as Origin. """
+        pass
 
     def origin(self):
-        logging.info("Returning to origin.")
-        if self.home:
-            logging.info("At Home")
-            return
-        with self.lock:
-            self.mmc.home(self.stageID)
+        """ Moves to the origin position"""
+        pass
 
     def close(self):
         """Releases any communication ports that may be used"""
-        if self.home:
-            logging.info('XY Stage Released')
-            return
-        with self.lock:
-            self.mmc.reset()
+        pass
 
     def reset(self):
         """ Resets the device in case of a communication error elsewhere """
-        self.close()
-        if self.home:
-            logging.info("Device Re-Loaded")
-            return
-        with self.lock:
-            self.mmc.loadSystemConfiguration(CONFIG_FILE)
+        pass
 
     def stop(self):
-        if self.home:
-            logging.info("Stopping Device")
-            return
-        with self.lock:
-            self.mmc.stop(self.stageID)
+        """ Stops movement of the stage """
+        pass
+
+class MicroControl(XYControl):
+    """ Subclass of the XYControl class. Uses the MicroCommunicator to send commands to a python 2
+    process.
+    """
+    def __init__(self, mmc=None):
+        """
+        :param mmc: micromanager communicator object
+        """
+        self.mmc = mmc
+        self.open()
+        return
+
+    def open(self):
+        """ Creates a new Micromanager communicator if mmc is None. Runs the MMC.open command. MMC.open
+        checks if it is already running and opens the client if it is not.
+         """
+        if self.mmc is None:
+            self.mmc = MicroCommunicator.MicroControl()
+
+        self.mmc.open()
+
+    def read_xy(self):
+        """ Reads the current XY position of the stage, and returns list [X, Y] in microns """
+        self.mmc.send_command('xy,get_position\n')
+        um = self.mmc.read_response()
+        if type(um[0]) is not float and type(um[0]) is not int:
+            logging.warning("Did not read XY Stage position: {}".format(um))
+        um = [x / self.scale for x in um]
+        um[0] *= self.x_inversion
+        um[1] *= self.y_inversion
+        return um
+
+    def set_xy(self, xy):
+        """Moves stage to position defined by pos (x,y). Returns nothing
+        pos must be defined in microns """
+
+        xy[0] *= self.x_inversion
+        xy[1] *= self.y_inversion
+        xy = [x * self.scale for x in xy]
+
+        self.mmc.send_command('xy,set_xy,{},{}'.format(xy[0],xy[1]))
+        response = str(self.mmc.read_response())
+        msg = "Did not set XY Stage"
+        return self.mmc.ok_check(response,msg)
+
+    def set_x(self, x):
+        """ Sets absolute position for X in microns"""
+        xy = self.read_xy()
+        xy[0]=x
+        return self.set_xy(xy)
+
+    def set_y(self, y):
+        """ Sts absolute position for Y in microns"""
+        xy = self.read_xy()
+        xy[1]=y
+        return self.set_xy(xy)
+
+    def set_rel_xy(self, xy):
+        """ Moves x and y by values specified in list 'xy' given in microns"""
+
+        xy[0] *= self.x_inversion
+        xy[1] *= self.y_inversion
+        xy = [x * self.scale for x in xy]
+
+        self.mmc.send_command('xy,rel_position,{},{}'.format(xy[0],xy[1]))
+        response = str(self.mmc.read_response())
+        msg = "Did not set XY Stage"
+        return self.mmc.ok_check(response,msg)
+
+    def set_rel_x(self, x):
+        """ Moves x axis by value specified by x in microns"""
+        return self.set_rel_xy([x,0])
+
+    def set_rel_y(self, y):
+        """ Moves y axis b value specified by y in microns"""
+        return self.set_rel_xy([x,0])
+
+    def set_origin(self):
+        """Redefines current position as Origin in micromanager software """
+        self.mmc.send_command('xy,set_origin\n')
+        response = self.mmc.read_response()
+        msg = "Could not set XY Software Origin"
+        return self.mmc.ok_check(response,msg)
+
+    def origin(self):
+        """ Moves to the origin position"""
+        return self.set_xy([0,0])
+
+    def close(self):
+        """Releases any communication ports that may be used"""
+        self.mmc.close()
+
+    def reset(self):
+        """ Resets the device in case of a communication error elsewhere """
+        self.mmc.close()
+        self.mmc.open()
+
+    def stop(self):
+        """ Stops movement of the stage """
+        xy = self.read_xy()
+        self.set_xy(xy)
 
 
 class PriorControl(XYControl):
@@ -223,7 +208,7 @@ class PriorControl(XYControl):
     scale = 1
     x_inversion = 1
     y_inversion = 1
-    ser = serial.Serial()
+    ser = serial.Serial() # Serial port
 
     def __init__(self, port = "COM5", lock = threading.Lock()):
         self.ser.port = port
