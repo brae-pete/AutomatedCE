@@ -24,7 +24,6 @@ elif "CEGraphic" in contents:
 else:  # fixme prompt for program folder if it is not the cwd or within the cwd.
     CONFIG_FOLDER = os.getcwd()
 
-CONFIG_FILE = os.path.join(CONFIG_FOLDER, "PriorXY.cfg")
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -131,7 +130,6 @@ class MicroControl(XYControl):
         response = self.mmc.read_response()
         msg = "Could not open XYStage"
         state = self.mmc.ok_check(response, msg)
-
         return state
 
     def read_xy(self):
