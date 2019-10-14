@@ -11,7 +11,7 @@ class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object
     conn = None
-    def __init__(self, port=6060):
+    def __init__(self, port=6070):
         self.address = ('localhost', port)
         self.start_server()
 

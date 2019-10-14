@@ -18,7 +18,7 @@ class MicroServer:
     """
     authkey = b'barracuda'
 
-    def __init__(self, port=6060):
+    def __init__(self, port=6070):
         self.address = ('localhost', port)
         self.listener = Listener(self.address, authkey=self.authkey)
         self.micro = MicroControl()
@@ -187,21 +187,22 @@ class MicroControl:
 
     def set_xy_position(self, args):
         """ Set the xy stage position. args[2]=x, args[3]=y in microns"""
-        x = float(args[2])
-        y = float(args[3])
-        self.mmc.setXYPosition(x, y)
+
+        x = float(args[3])
+        y = float(args[4])
+        self.mmc.setXYPosition(args[2], x, y)
         return 'Ok'
 
     def set_rel_xy_position(self, args):
         """Set the relative xy stage position. args[2]=x, args[3]=y in microns"""
-        x = float(args[2])
-        y = float(args[3])
-        self.mmc.setRelativeXYPosition()
+        x = float(args[3])
+        y = float(args[4])
+        self.mmc.setRelativeXYPosition(args[2],x,y)
         return 'Ok'
 
     def set_xy_origin(self, args):
         """ Sets the software XY stage origin"""
-        self.mmc.setXYOrigin()
+        self.mmc.setOriginXY(args[2])
         return 'Ok'
 
     def parse_command(self, message):
@@ -218,6 +219,9 @@ class MicroControl:
 
             elif cmd[0] == 'obj':
                 response = self.obj_commands[cmd[1]](cmd)
+
+            elif cmd[0] == 'xy':
+                response = self.stage_commands[cmd[1]](cmd)
 
         except KeyError:
             response = 'Error: {} Is not a Valid Command. Check the valid commands in the MicroControl class'.format(
