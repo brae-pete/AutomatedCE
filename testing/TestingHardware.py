@@ -5,6 +5,7 @@ import time
 sys.path.insert(0,os.pardir)
 from hardware import ZStageControl
 from hardware import ObjectiveControl
+from hardware import XYControl
 
 class ZStageTestCase(unittest.TestCase):
 

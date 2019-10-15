@@ -3,7 +3,7 @@ from hardware import ArduinoBase
 import pickle
 import logging
 import time
-from MicroControlClient import MicroControlClient
+from hardware import MicroControlClient
 import os
 
 # Locate the directory of config files
@@ -308,7 +308,7 @@ class MicroControl(ObjectiveControl):
     """
     inversion = -1
 
-    def __init__(self, mmc=None, config_file='NikonEclipseTi-NoLight.cfg'):
+    def __init__(self, mmc=None, port = 5511, config_file='NikonEclipseTi-NoLight.cfg'):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -317,17 +317,17 @@ class MicroControl(ObjectiveControl):
         self.pos = 0
         self.mmc = mmc
         self.config = os.path.join(CONFIG_FOLDER, config_file)
-        self._open_client()
+        self._open_client(port)
         self.open()
 
         return
 
-    def _open_client(self):
+    def _open_client(self,port):
         """ Creates a new Micromanager communicator if mmc is None. Runs the MMC.open command. MMC.open
         checks if it is already running and opens the client if it is not.
          """
         if self.mmc is None:
-            self.mmc = MicroControlClient()
+            self.mmc = MicroControlClient.MicroControlClient(port)
         self.mmc.open()
 
     def _close_client(self):

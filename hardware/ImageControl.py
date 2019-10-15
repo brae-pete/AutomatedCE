@@ -21,7 +21,7 @@ except ModuleNotFoundError:
 
 import threading
 
-from MicroControlClient import MicroControlClient
+from hardware import MicroControlClient
 
 """
 Notes for using this outside the Barracuda Repository: 
@@ -383,16 +383,16 @@ class MicroControl(ImageControl):
     device_name = 'CoolCam'  # Updated after configuation has been loaded
     size = 0.5
 
-    def __init__(self, mmc=None, config_file='CoolSnap.cfg'):
+    def __init__(self, mmc=None, port = 6412, config_file='CoolSnap.cfg'):
         self.mmc = mmc
         self.config = os.path.join(CONFIG_FOLDER, config_file)
-        self._open_client()
+        self._open_client(port)
         self.open()
 
-    def _open_client(self):
+    def _open_client(self,port):
         """Opens the micromanager communicator client"""
         if self.mmc is None:
-            self.mmc = MicroControlClient()
+            self.mmc = MicroControlClient.MicroControlClient(port=port)
 
         self.mmc.open()
 
@@ -445,7 +445,7 @@ class MicroControl(ImageControl):
             # todo add image processing
             self.raw_img = img.copy()
             img = self._adjust_size(img, self.size)
-            img = self.image_conversion()
+            img = self.image_conversion(img)
             return img
 
     def set_exposure(self, exp=10):

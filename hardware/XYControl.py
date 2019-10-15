@@ -4,7 +4,9 @@ import logging
 import threading
 import random
 import serial
-from MicroControlClient import MicroControlClient
+import sys
+
+from hardware import MicroControlClient
 
 # Locate the directory of config files
 cwd = os.getcwd()
@@ -116,7 +118,7 @@ class MicroControl(XYControl):
         checks if it is already running and opens the client if it is not.
          """
         if self.mmc is None:
-            self.mmc = MicroControlClient()
+            self.mmc = MicroControlClient.MicroControlClient()
         self.mmc.open()
 
     def _close_client(self):

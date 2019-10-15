@@ -11,7 +11,7 @@ class OutletControl:
     """
     invert = -1
     default_pos = -6.2
-    def __init__(self, com="COM9", arduino=-1, lock=-1, home=True):
+    def __init__(self, com="COM7", arduino=-1, lock=-1, home=True):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being

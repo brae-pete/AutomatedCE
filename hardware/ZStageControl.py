@@ -415,7 +415,7 @@ class PowerStep:
             self.set_z(0.1)
             cz=self.wait_for_move()
             logging.info("{} is current z".format(cz))
-            self.save_history()
+
 
     def set_z(self, set_z):
         """ set_z (absolute position in mm)

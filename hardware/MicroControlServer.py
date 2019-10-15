@@ -10,6 +10,7 @@ import numpy as np
 # Server class
 import pickle
 from multiprocessing.connection import Listener
+import logging
 
 
 class MicroServer:
@@ -232,8 +233,19 @@ class MicroControl:
         return response
 
 
-def main(*args):
-    sock = MicroServer()
+def main(args):
+    logging.warning("Python 2 Subprocess started...")
+    with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt','a') as fout:
+        fout.write("Python 2 started {}\n".format(args))
+
+    if len(args)>1:
+        logging.warning("Starting Python 2 Server at port {}".format(args[1]))
+        port = int(args[1])
+        sock = MicroServer(port=port)
+    else:
+        sock = MicroServer()
     sock.start_server()
 
-main()
+main(sys.argv)
+with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt', 'a') as fout:
+    fout.write("Python 2 closed {}\n".format(args))

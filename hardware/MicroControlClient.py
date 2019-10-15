@@ -6,14 +6,14 @@ import logging
 
 #Thhis should be the path to the python.exe file in the CEpy27 environment set up by conda.
 PYTHON2_PATH = r"C:\Users\NikonEclipseTi\Miniconda3\envs\CEpy27\python.exe"
-
+SERVER_FILE = r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\hardware\MicroControlServer.py'
 class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object
     conn = None
-    def __init__(self, port=6070):
+    def __init__(self, port=5030):
         self.address = ('localhost', port)
-        self.start_server()
+        #self.start_server()
 
     def start_connection(self):
         self.conn = Client(self.address, authkey=b'barracuda')
@@ -37,7 +37,7 @@ class MicroControlClient:
         :return:
         """
         self.server = subprocess.Popen([PYTHON2_PATH,
-                                        'MicroControlServer.py'], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+                                        SERVER_FILE, '{}'.format(self.address[1])], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
     def open(self):
         """ Opens the Python 2 server and starts the connection"""
         if self.conn is None:
