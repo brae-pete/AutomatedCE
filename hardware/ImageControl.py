@@ -383,8 +383,9 @@ class MicroControl(ImageControl):
     device_name = 'CoolCam'  # Updated after configuation has been loaded
     size = 0.5
 
-    def __init__(self, mmc=None, port = 6412, config_file='CoolSnap.cfg'):
+    def __init__(self, mmc=None, port = 6412, config_file='CoolSnap.cfg', lock = threading.Lock()):
         self.mmc = mmc
+        self.lock = lock
         self.config = os.path.join(CONFIG_FOLDER, config_file)
         self._open_client(port)
         self.open()
@@ -403,32 +404,35 @@ class MicroControl(ImageControl):
     def open(self):
         """ Opens the camera resources """
         # Load the Config
-        self.mmc.send_command('core,load_config,{}'.format(self.config))
-        response = self.mmc.read_response()
-        msg = "Could not open Camera"
-        state = self.mmc.ok_check(response, msg)
-        if not state:
-            return state
+        with self.lock:
+            self.mmc.send_command('core,load_config,{}'.format(self.config))
+            response = self.mmc.read_response()
+            msg = "Could not open Camera"
+            state = self.mmc.ok_check(response, msg)
+            if not state:
+                return state
 
-        # Get Camera Name
-        self.mmc.send_command('camera,get_name\n')
-        self.device_name = str(self.mmc.read_response().decode())
-        self.state = True
+            # Get Camera Name
+            self.mmc.send_command('camera,get_name\n')
+            self.device_name = str(self.mmc.read_response().decode())
+            self.state = True
         return self.mmc.ok_check(response, msg)
 
     def close(self):
         """Closes the camera resources
         """
-        self.mmc.send_command('core,unload_device,{}\n'.format(self.device_name))
-        response = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('core,unload_device,{}\n'.format(self.device_name))
+            response = self.mmc.read_response()
         msg = "Could not close camera resources"
         self.state = False
         return self.mmc.ok_check(response, msg)
 
     def _snap_image(self):
         """Sends command to snap single image to the camera. """
-        self.mmc.send_command('camera,snap\n')
-        response = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('camera,snap\n')
+            response = self.mmc.read_response()
         msg = 'Failed to Snap Image'
         state = self.mmc.ok_check(response, msg)
         return state
@@ -437,8 +441,9 @@ class MicroControl(ImageControl):
         """Snaps single image, returns image"""
         state = self._snap_image()
         if state:  # if we snapped image get the image
-            self.mmc.send_command('camera,get_image\n')
-            img = self.mmc.read_response()
+            with self.lock:
+                self.mmc.send_command('camera,get_image\n')
+                img = self.mmc.read_response()
             if type(img) is not np.ndarray:
                 logging.error("Could not get image {}".format(img))
                 return None
@@ -450,14 +455,16 @@ class MicroControl(ImageControl):
 
     def set_exposure(self, exp=10):
         """ Sets the camera exposure im milliseconds"""
-        self.mmc.send_command('camera,set_exposure,{}\n'.format(exp))
-        response = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('camera,set_exposure,{}\n'.format(exp))
+            response = self.mmc.read_response()
         msg = "Could not set camera exposure"
         return self.mmc.ok_check(response, msg)
 
     def get_exposure(self):
-        self.mmc.send_command('camera,get_exposure\n')
-        exp = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('camera,get_exposure\n')
+            exp = self.mmc.read_response()
         if type(exp) is not float:
             logging.error("Could not get exposure: {}".format(exp))
             return None
@@ -465,15 +472,17 @@ class MicroControl(ImageControl):
 
     def start_video_feed(self):
         """ Starts a live video feed, typicall using camera circular buffer """
-        self.mmc.send_command('camera,start_continuous\n')
-        response = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('camera,start_continuous\n')
+            response = self.mmc.read_response()
         msg = "Could not start live video feed"
         return self.mmc.ok_check(response, msg)
 
     def stop_video_feed(self):
         """Stops the live video feed"""
-        self.mmc.send_command('camera,stop_continuous\n')
-        response = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('camera,stop_continuous\n')
+            response = self.mmc.read_response()
         msg = "Could not stop live video feed"
         return self.mmc.ok_check(response, msg)
 
@@ -481,9 +490,10 @@ class MicroControl(ImageControl):
         """Returns most recent image from the camera circular buffer (live feed)
         performs image processing. Returns PIL image
         """
-        self.mmc.send_command('camera,get_last\n')
-        st = time.perf_counter()
-        img = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('camera,get_last\n')
+            st = time.perf_counter()
+            img = self.mmc.read_response()
         if type(img) is not np.ndarray:
             logging.error("Could not get image {}".format(img))
             return None

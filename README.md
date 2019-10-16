@@ -44,6 +44,11 @@ Under the config folder. Place the configuration file for your stage, camera, or
 Under Hardware>>MicroControlClient.py change the PYTHON2_PATH variable to the python 2 executable for the CEpy27 environment.
 For example a common location will be: "C:\Users\UserName\Miniconda3\envs\CEPy27\python"
 
-### Hardware Checklist 
+Also in the same file you will need to update the filepath for the MicroControlServer.py file. This probably could be fixed in the future to where it found it automatically
 
-You will need to check each piece of hardware is working individually before running the program. Under Testing there is a hardware-test file that will test each core component of the hardware folder. If that can run with no failures you are good to run the CE System. 
+### Hardware Functionality
+
+Create a new CESystems class or use a pre-defined class. Make sure that every function in the class works ( or at least the functions you require).
+When your CESystems class is working, change the CESystems subclass object under CEControl. Alternatively you can make your own program using the CESystems.
+For testing new functionality you may find it is easier to run CESystems from a Console, or Jupyter Notebook then when the
+changes have been finalized move to adding it to the GUI. 

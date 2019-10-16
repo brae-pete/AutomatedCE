@@ -308,7 +308,7 @@ class MicroControl(ObjectiveControl):
     """
     inversion = -1
 
-    def __init__(self, mmc=None, port = 5511, config_file='NikonEclipseTi-NoLight.cfg'):
+    def __init__(self, mmc=None, port = 5511, config_file='NikonEclipseTi-NoLight.cfg', lock=threading.Lock()):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -316,6 +316,7 @@ class MicroControl(ObjectiveControl):
         """
         self.pos = 0
         self.mmc = mmc
+        self.lock = lock
         self.config = os.path.join(CONFIG_FOLDER, config_file)
         self._open_client(port)
         self.open()
@@ -337,8 +338,9 @@ class MicroControl(ObjectiveControl):
     def open(self):
         """ Opens the stage and Nikon Resources"""
         # Load the Config
-        self.mmc.send_command('core,load_config,{}'.format(self.config))
-        response = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('core,load_config,{}'.format(self.config))
+            response = self.mmc.read_response()
         msg = "Could not open Objective"
         state = self.mmc.ok_check(response, msg)
         return state
@@ -347,8 +349,9 @@ class MicroControl(ObjectiveControl):
         """ returns float of current position in um
         User requests to get current position of stage, returned in um
         """
-        self.mmc.send_command('obj,get_position\n')
-        um = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('obj,get_position\n')
+            um = self.mmc.read_response()
         if type(um) is not float and type(um) is not int:
             logging.warning("Did not read objective position")
         else:
@@ -359,8 +362,9 @@ class MicroControl(ObjectiveControl):
         """ set_z (absolute position in mm)
         returns False if unable to set_z, True if command went through
         """
-        self.mmc.send_command('obj,set_position,{}\n'.format(set_z))
-        rsp = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('obj,set_position,{}\n'.format(set_z))
+            rsp = self.mmc.read_response()
         msg = "Could not Set Z"
         return self.mmc.ok_check(rsp, msg)
 
@@ -398,9 +402,9 @@ class MicroControl(ObjectiveControl):
         Returns the objective to the home (zero) position
         :return:
         """
-
-        self.mmc.send_command('obj,set_position,0\n')
-        response = self.mmc.read_response()
+        with self.lock:
+            self.mmc.send_command('obj,set_position,0\n')
+            response = self.mmc.read_response()
         msg = "Could not set Objective to 0 um"
         return self.mmc.ok_check(response, msg)
 

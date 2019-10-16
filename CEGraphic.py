@@ -1161,6 +1161,8 @@ class AnimatedPushButton(QtWidgets.QPushButton):
 
 
 class GraphicsScene(QtWidgets.QGraphicsScene):
+
+    # where does this emit to?
     calibrating_crosshairs = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):

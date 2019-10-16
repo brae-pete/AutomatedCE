@@ -71,6 +71,10 @@ class BaseSystem:
         """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
         logging.error('set_xy_home not implemented in hardware class.')
 
+    def wait_xy(self):
+        """ Waits for the stage to stop moving (blocking)"""
+        logging.error('wait_xy not implented in hardware class')
+
     def home_xy(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
         logging.error('home_xy not implemented in hardware class.')
@@ -285,15 +289,21 @@ class NikonEclipseTi(BaseSystem):
     _pressure_com = 'COM7'
 
     _daq_dev = "/Dev1/"  # fixme not sure what to put here ("/Dev1/" is from Barracuda)
+    _daq_current_readout = "ai5"
+    _daq_voltage_readout = "ai1"
     _daq_voltage_control = 'ao1'
-    _daq_current_readout = 'ai0'
-    _daq_voltage_readout = 'ai1'
-    _daq_rfu = 'ai3'
+    _daq_rfu = "ai3"
 
     _z_stage_lock = threading.RLock()
     _outlet_lock = threading.RLock()
     _pressure_lock = threading.RLock()
+    _scope_lock = threading.Lock()
+    _cam_lock = threading.Lock()
     _led_lock = _outlet_lock
+
+    xy_stage_inversion = [1, -1]
+    xy_stage_size =[50000,50000]
+    xy_stage_offset= [0,0]
 
     def __init__(self):
         super(NikonEclipseTi, self).__init__()
@@ -324,11 +334,11 @@ class NikonEclipseTi(BaseSystem):
         outlet.join()
 
         # Image Control uses separate MMC
-        self.image_control = ImageControl.MicroControl(port = 3121)
+        self.image_control = ImageControl.MicroControl(port = 3121, lock = self._cam_lock)
 
         #Nikon Scope shares a MMC
-        self.objective_control = ObjectiveControl.MicroControl(port = 7812) # Use Presets
-        self.xy_stage_control = XYControl.MicroControl(mmc=self.objective_control.mmc)
+        self.objective_control = ObjectiveControl.MicroControl(port = 7812, lock = self._scope_lock) # Use Presets
+        self.xy_stage_control = XYControl.MicroControl(mmc=self.objective_control.mmc, lock = self._scope_lock)
 
         # Set up and start DAQ
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
@@ -351,11 +361,28 @@ class NikonEclipseTi(BaseSystem):
         self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
 
     def close_system(self):
-        self.close_image()
-        self.close_objective()
-        self.close_outlet()
-        self.close_voltage()
-        self.close_z()
+        try:
+            self.close_image()
+        except:
+            logging.warning("Did not shut down Z")
+
+        try:
+            self.close_objective()
+        except:
+            logging.warning("Did not shut down Z")
+
+        try:
+            self.close_outlet()
+        except:
+            logging.warning("Did not shut down Z")
+        try:
+            self.close_voltage()
+        except:
+            logging.warning("Did not shut down Z")
+        try:
+            self.close_z()
+        except:
+            logging.warning("Did not shut down Z")
         return True
 
     def record_image(self, filename):
@@ -410,6 +437,10 @@ class NikonEclipseTi(BaseSystem):
         elif rel_xy:
             self.xy_stage_control.set_rel_xy(rel_xy)
         return True
+
+    def wait_xy(self):
+        """ Waits for the stage to stop moving (blocking)"""
+        self.xy_stage_control.wait_for_move()
 
     def get_xy(self):
         return self.xy_stage_control.read_xy()
@@ -640,7 +671,7 @@ class BarracudaSystem(BaseSystem):
     image_size = 0.5
     objective_focus = 0
     xy_stage_size = [112792, 64340]  # Rough size in mm
-    xy_stage_upper_left = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_offset = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
     xy_stage_inversion = [-1, -1]
 
     _focus_network = CENetworks.BarracudaFocusClassifier()
@@ -1058,11 +1089,11 @@ class BarracudaSystem(BaseSystem):
 class OstrichSystem(BaseSystem):
     system_id = 'OSTRICH'
 
-    _daq_dev = "/Dev1/"  # fixme not sure what to put here ("/Dev1/" is from Barracuda)
+    _daq_dev = "/Dev1/"
+    _daq_current_readout = "ai2"
+    _daq_voltage_readout = "ai1"
     _daq_voltage_control = 'ao1'
-    _daq_current_readout = 'ai0'
-    _daq_voltage_readout = 'ai1'
-    _daq_rfu = 'ai3'
+    _daq_rfu = "ai3"
     _xy_stage_id = 'TIXYDrive'
     _z_stage_id = 'TIZDrive'
 

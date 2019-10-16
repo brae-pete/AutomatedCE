@@ -33,7 +33,7 @@ class ProgramController:
     def __init__(self):
         # Initialize system model, system hardware and the GUI
         self.repository = CEObjects.CERepository()
-        self.hardware = CESystems.BarracudaSystem()
+        self.hardware = CESystems.NikonEclipseTi()
         self.hardware.start_system()
 
         app = QtWidgets.QApplication(sys.argv)
@@ -135,12 +135,12 @@ class InsertScreenController:
 
         self._um2pix = 1 / 300
         self._mm2pix = 3
-        self._stage_offset = self.hardware.xy_stage_upper_left
+        self._stage_offset = self.hardware.xy_stage_offset
         self._stage_inversion = self.hardware.xy_stage_inversion
         self._initial = True
         self._initial_point = None
 
-        self.screen.image_view.setSceneRect(0, 0, 584, 312)
+        self.screen.image_view.setSceneRect(0, 0, 584, 584)
         self.screen.image_frame.controller = self
         self.insert = None
         self._set_callbacks()
@@ -181,13 +181,15 @@ class InsertScreenController:
         # The event we are sending holds the current coordinates of the stage and converts them to pixel
         event_location = self.hardware.get_xy()
         logging.info(event_location)
-        event_location = [event_location[0] - self.hardware.xy_stage_upper_left[0],
-                          event_location[1] - self.hardware.xy_stage_upper_left[1]]
+        event_location = [event_location[0] - self.hardware.xy_stage_offset[0],
+                          event_location[1] - self.hardware.xy_stage_offset[1]]
         logging.info(event_location)
-        logging.info(self.hardware.xy_stage_upper_left)
+        logging.info(self.hardware.xy_stage_offset)
+
+
         # We want the pixel location of the objective relative to the stage.
-        event = [(self.hardware.xy_stage_size[0] - event_location[0]) * self._um2pix,
-                 (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
+        event = [(self.hardware.xy_stage_size[0] - event_location[0]*self._stage_inversion[0]) * self._um2pix,
+                 (self.hardware.xy_stage_size[1] - event_location[1]*self._stage_inversion[1]) * self._um2pix]
         logging.info(event)
 
         # If the user is trying to create and array or circle but hasn't specified radius, simply throw error.
@@ -392,8 +394,8 @@ class InsertScreenController:
             location = self.screen.insert_table.item(row_index, 1)
 
             event_location = [float(x) for x in location.text().rsplit('(')[1].rsplit(')')[0].rsplit(',')]
-            pixel_location = [(self.hardware.xy_stage_size[0] - event_location[0]) * self._um2pix,
-                              (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
+            pixel_location = [(self.hardware.xy_stage_size[0] - event_location[0]*self._stage_inversion[0]) * self._um2pix,
+                              (self.hardware.xy_stage_size[1] - event_location[1]*self._stage_inversion[1]) * self._um2pix]
 
             label = self.screen.insert_table.item(row_index, 0).text()
             bounding_box = self.screen.image_frame.get_bounding_rect(pixel_location)
@@ -413,7 +415,7 @@ class MethodScreenController:
 
         self._um2pix = 1 / 300
         self._mm2pix = 3
-        self._stage_offset = self.hardware.xy_stage_upper_left
+        self._stage_offset = self.hardware.xy_stage_offset
         self._stage_inversion = self.hardware.xy_stage_inversion
         self._selecting = False
         self._step_well = None
@@ -421,7 +423,7 @@ class MethodScreenController:
         self._populating_table = False
         self._well_labels = ['None']
 
-        self.screen.image_view.setSceneRect(0, 0, 584, 312)
+        self.screen.image_view.setSceneRect(0, 0, 512, 512)
         self.screen.image_frame.controller = self
 
         self.dialogs = {'Separate': CEGraphic.SeparateDialog,
@@ -1006,11 +1008,11 @@ class RunScreenController:
         self._um2pix = 1 / 300
         self._mm2pix = self._um2pix * 1000
         self._detector = Detection.CellDetector(self.hardware)
-        self._stage_offset = self.hardware.xy_stage_upper_left
+        self._stage_offset = [0,0]
         self._stage_inversion = self.hardware.xy_stage_inversion
         self._new_pixmap = None
         self._event = None
-        self.screen.live_feed_scene.setSceneRect(0, 0, 512, 384)
+        self.screen.live_feed_scene.setSceneRect(0, 0, 512, 512)
 
         # Set up logging window in the run screen.
         self.log_handler = CEGraphic.QPlainTextEditLogger(self.screen.output_window)
@@ -1272,8 +1274,8 @@ class RunScreenController:
 
             elif self.hardware.hasXYControl:
                 event_location = self.hardware.get_xy()
-                self._event = [(self.hardware.xy_stage_size[0] - event_location[0]) * self._um2pix,
-                               (self.hardware.xy_stage_size[1] - event_location[1]) * self._um2pix]
+                self._event = [(self.hardware.xy_stage_size[0] - event_location[0]*self._stage_inversion[0]) * self._um2pix,
+                               (self.hardware.xy_stage_size[1] - event_location[1] *self._stage_inversion[1]) * self._um2pix]
 
                 self.screen.xy_updated.emit()
             else:
@@ -1285,9 +1287,10 @@ class RunScreenController:
         if self.hardware.hasVoltageControl:
             while True:
                 data = self.hardware.get_data()
-                rfu = data['rfu']
-                kv = data['volts']
-                ua = data['current']
+                with self.hardware.daq_board_control.data_lock:
+                    rfu = data['rfu'][:]
+                    kv = data['volts'][:]
+                    ua = data['current'][:]
                 freq = self.hardware.daq_board_control.downsampled_freq
 
 
@@ -1973,7 +1976,7 @@ class RunScreenController:
                 logging.error('Unable to make next XY movement.')
                 return False
             self.hardware.set_xy(xy=inlet_location)
-            time.sleep(2)
+            self.hardware.wait_xy()
             return check_flags()
 
         def wait_sleep(wait_time):

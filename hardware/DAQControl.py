@@ -305,7 +305,7 @@ class DAQBoard:
             for i in range(len(data['ai3'])):
                 t_point = float(i * (1 / self.downsampled_freq))
                 rfu = data['ai3'][i]
-                ua = data['ai2'][i]
+                ua = data['ai5'][i]
                 kv = data['ai1'][i]
                 avg = data['avg'][i]
                 raw = data['raw'][i]

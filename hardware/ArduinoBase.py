@@ -25,6 +25,9 @@ class ArduinoBase:
         # When arduino is reset, ensure the offsets are updated
         self.objective_reset = False
         self.outlet_reset = False
+        
+    def _read_until(self):
+        return self.serial.readlines()
 
     def getCom(self):
         """Returns the first Arduino Mega instance"""
@@ -90,7 +93,7 @@ class ArduinoBase:
             return pos, offset
         try:
             # logging.info(response)
-            response = float(response.strip("\n".encode()))
+            #response = float(response.strip("\n".encode()))
             self.pos = pos = float(response)
         except ValueError:
             return self.pos, offset
