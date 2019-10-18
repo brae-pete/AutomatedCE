@@ -37,6 +37,9 @@ Create the separate python environment for micromanager.
 
 ~~~
 conda create --name CEpy27 python=2.7
+conda activate CEpy27
+conda install numpy
+conda deactivate
 ~~~
 
 Under the config folder. Place the configuration file for your stage, camera, or whatever hardware object you wish to use Micro-Manager for. Config files for Nikon Eclipse Ti, QCam3, and CoolSnap (PVCam) are already present. 
