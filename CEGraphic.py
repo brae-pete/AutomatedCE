@@ -903,7 +903,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.live_option = SwitchButton(w1='Live', w2='Insert', width=80)
         self.focus_feed = QtWidgets.QPushButton('Temp Focus Button')
         self.live_feed_scene = GraphicsScene()
-        self.live_feed_scene.setSceneRect(0, 0, 512, 384)
+        self.live_feed_scene.setSceneRect(0, 0, 512, 512)
         self.live_feed_view = QtWidgets.QGraphicsView()
         self.live_feed_pixmap = QtWidgets.QGraphicsPixmapItem()
         self.camera_load = QtWidgets.QPushButton('Open Camera')

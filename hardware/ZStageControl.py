@@ -11,24 +11,6 @@ try:
 except ModuleNotFoundError:
     import ArduinoBase
 
-if r"C:\Program Files\Micro-Manager-2.0gamma" not in sys.path:
-    sys.path.append(r"C:\Program Files\Micro-Manager-2.0gamma")
-prev_dir = os.getcwd()
-os.chdir(r"C:\Program Files\Micro-Manager-2.0gamma")
-
-MMCOREPY_FATAL = False
-
-try:
-    import MMCorePy
-except ImportError:
-    logging.error('Can not import MMCorePy.')
-    if MMCOREPY_FATAL:
-        sys.exit()
-else:
-    logging.info('MMCorePy successfully imported.')
-
-os.chdir(prev_dir)
-
 class ZStageControl:
     """Class to control Z-stage for capillary/optical train
     If switching controllers modify the function calls here
