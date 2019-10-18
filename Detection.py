@@ -13,7 +13,8 @@ import numpy as np
 import time
 
 from BarracudaQt import CESystems
-CENTER =
+CENTER =[3730, -1957]
+RADIUS = 7500
 
 def get_blobs(img, thresh=0.1, scale=1):
     """ This is the main function for getting cell objects from an image. You can test this function against
@@ -239,12 +240,12 @@ class CellDetector:
         return [abs_x, abs_y]
 
 class Mover:
-    max_radius = 7500
+    max_radius = RADIUS
     rand_radius = 1000
     exclusion_list = []
     exclusion_length = 250
 
-    def __init__(self, center =  [3730, -1957]):
+    def __init__(self, center =  CENTER):
         self.center = center
 
     def move_random(self, currentxy):
@@ -296,15 +297,15 @@ class FocusGetter:
     _plane_vectors = []
     _plane_coefficients = [0, 0, 0, 0]
 
-    def __init__(self, detector=CellDetector(), center = CENTER, radius = RADIUS,laser_spot=(235, 384)):
+    def __init__(self, detector, mover, center = CENTER, radius = RADIUS,laser_spot=(235, 384)):
         self.hardware = detector.hardware
         self.detector = detector
         self.laser_spot = laser_spot
-        self.mover = mover
         self.center = center
-        self.radius
+        self.radius =radius
+        self.mover = mover
 
-    def move_cell(self, focal_range, steps):
+    def move_focus(self, focal_range, steps):
         """
         Moves the cell up and down 'focal_range' in um, at a number of 'steps'. For example if focal range is 9
         will move the objective up 9 um. If steps is equal to 2, it will perform this in two steps +4.5 um and +9 um.
@@ -373,7 +374,7 @@ class FocusGetter:
             return False
 
     def _diameter_check(self, blob):
-        return blob.minor_axis_length > self.pixel_cell_diameter_min = 15
+        return blob.minor_axis_length > self.pixel_cell_diameter_min
 
     def find_a_plane(self):
 
@@ -391,14 +392,26 @@ class FocusGetter:
         return True
 
     def gather_plane_points(self):
-        self.
-        self.move_cell(200, 50)
-        x, y = self.hardware.get_xy()
-        z = self.hardware.get_objective()
-        self._plane_vectors.append([x, y, z])
-        if len(self._plane_vectors) == 3:
-            self.find_a_plane()
-            return
+        positions = [0,120,240 ] # Theta positions to check
+        # Reset the plane vectors
+        self._plane_vectors=[]
+        for theta in positions:
+            x = self.radius * np.cos(np.deg2rad(theta)) + self.center[0]
+            y = self.radius * np.sin(np.deg2rad(theta)) + self.center[1]
+            self.hardware.set_xy([x,y])
+
+            # Find a cell and scan at high resolution to bring it into focus
+            cell = False
+            while not cell:
+                self.detector.mover_find_cell(self.mover)
+                self.move_focus(200, 50)
+                cell =self.cell_check()
+
+            x, y = self.hardware.get_xy()
+            z = self.hardware.get_objective()
+            self._plane_vectors.append([x, y, z])
+
+        self.find_a_plane()
 
     def get_plane_focus(self):
         # If spline is not set up, keep the objective at the same position
@@ -418,3 +431,6 @@ if __name__ == "__main__":
     hardware.start_system()
     hardware.image_control.live_view()
     det = CellDetector(hardware)
+    mov = Mover(hardware)
+    fc = FocusGetter(det,mov)
+
