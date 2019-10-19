@@ -5,8 +5,9 @@ import threading
 import time
 import numpy as np
 
-from BarracudaQt import CESystems, CEObjects
+from BarracudaQt import CESystems, CEObjects, Detection, Lysis
 
+LYSIS_ADJUST = 0 # how far up or down to move the lysis laser
 
 class RunMethod:
     _pause_flag = threading.Event()
@@ -20,10 +21,23 @@ class RunMethod:
     rep = 0  # What repetition we are on for the method
     method = CEObjects.Method(None, None)
     method_id = 0 # method id
+    cell_finders = {} # List of Focus Getters
 
     injection_wait = 6  # How long to wait after an injection for repeatable spontaneous fluid displacement
 
-    def __init__(self, hardware, methods, repetitions, methods_id, flags, insert, folder):
+    def __init__(self, hardware, methods, repetitions, methods_id,
+                 flags, insert, folder, cap_control ):
+        """
+        Logic to run a CE run
+        :param hardware: CESystems object
+        :param methods: CEObject.Method object
+        :param repetitions: # of repetions for each method
+        :param methods_id: int, method identification
+        :param flags: list of control flags [pause, stop, inject, and plot]
+        :param insert: CEObject.Insert object
+        :param folder: string, will be prefix for data and folders
+        :param cap_control: Lysis.CapillaryControl object
+        """
         if hardware is None:
             hardware = CESystems.NikonEclipseTi()
         self.hardware = hardware
@@ -36,6 +50,7 @@ class RunMethod:
         self._plot_data = flags[3]
         self.insert = insert
         self.folder = folder
+        self.cap_control = cap_control
 
     def start_run(self):
         for self.method, self.method_id in zip(self.methods, self.methods_id):
@@ -87,6 +102,7 @@ class RunMethod:
         if self._stop_thread_flag.is_set():
             return
         self.hardware.set_outlet(rel_h=outlet_travel)
+        self.hardware.pressure_close() # Close pressure to prevent siphon injections
         self.hardware.wait_outlet()
         return self.check_flags()
 
@@ -183,7 +199,7 @@ class RunMethod:
 
         return True
 
-    def semi_auto_cell(self):
+    def cell_move(self):
         if self._stop_thread_flag.is_set():
             return
         # If wells are the same move back one.
@@ -200,11 +216,66 @@ class RunMethod:
             obj = self._last_cell_positions['obj']
             if cap is not None:
                 self.move_objective(obj)
-        self._inject_flag.set()
 
+    def auto_cell(self):
+        """ Move cell to last position,
+            Find and Focus a Cell
+            (Start loading that cell)
+            Lyse that cell
+            Load the cell
+            Finish
+        """
+        self.cell_move()
+        if self.step_id not in self.focus_finders.keys():
+            center = self.insert.get_well_xy(self.step['Inlet'])
+            mov = Detection.Mover(center = center)
+            # fixme: Hey so 0.4329 and (235,384) are they pixel to um conversion and laser location on the image
+            # These will need to be adjusted for each system
+            laser_spot = (235,384)
+            det = Detection.CellDetector(self.hardware,0.4329, laser_spot)
+            fc = Detection.FocusGetter(det, mov, laser_spot)
+            self.cell_finders[self.step_id] = [det,fc, mov]
+
+            # We need to create a focal plane at the start of the method:
+            logging.info("Pausing Run....")
+            logging.info("Please bring 3 cells into focus at 3 corners of the well")
+            logging.info("Press 'Start' after a cell is into focus")
+            for i in range(3):
+                logging.info("Focus Point #{}".format(i+1))
+                self._pause_flag.set()
+                state = self.check_flags()
+                if not state:
+                    return state
+                fc.add_focus_point()
+
+        else:
+            _,fc,_ = self.cell_finders[self.step_id]
+        logging.info("Finding a cell, press pause to manually find a cell")
+        fc.find_plane_focus()
+        state = self.check_flags()
+
+        # Lower the Capillary
+        get_focus = self.cap_control.move_cap_above_cell()
+        if not get_focus:
+            self._pause_flag.set()
+            logging.info("Bring Capillary into the correct position and record its location")
+            logging.info("Press Start to Continue...")
+        self.hardware.wait_z()
+
+        #Adjust the focal plane for lysis
+        self.hardware.set_objective(rel_h = LYSIS_ADJUST)
+        return state
+
+
+
+    def semi_auto_cell(self):
+        """ Move the cell to the last  position and start"""
+        self.cell_move()
+        self._inject_flag.set()
         return True
 
     def inject(self):
+
         if self._stop_thread_flag.is_set():
             return
         pressure_state = False
@@ -219,11 +290,11 @@ class RunMethod:
             return False
 
         duration = float(self.step['ValuesDurationEdit'])
-
+        lyse = False
         if self.step['SingleCell']:
             if self.step['AutoSingleCell']:
                 logging.info("Automated single cell....")
-
+                lyse = self.auto_cell()
             else:
                 self.semi_auto_cell()
                 logging.info('Run is paused. Locate and lyse cell.')
@@ -232,12 +303,17 @@ class RunMethod:
                 if not state_n:
                     return False
 
+        # Open the outlet to outside air or apply a pressure
         if pressure_state:
             self.hardware.pressure_rinse_start()
-
+        else:
+            self.hardware.pressure_rinse_stop()
         if voltage_level:
             self.hardware.set_voltage(voltage_level)
-
+        time.sleep(0.5)
+        # Fire the laser half a second after starting the load velocity
+        if lyse:
+            self.hardware.laser_fire()
         time.sleep(duration)
         self.hardware.set_objective(h=1000)
         self.hardware.set_voltage(0)

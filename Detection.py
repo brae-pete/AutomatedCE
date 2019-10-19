@@ -1,3 +1,5 @@
+import threading
+
 import cv2
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -397,6 +399,23 @@ class FocusGetter:
         self._plane_coefficients = [a, b, c, d]
 
         return True
+
+    def add_focus_point(self):
+        x,y = self.hardware.get_xy()
+        z = self.hardware.get_objective()
+        self._plane_vectors.append([x,y,z])
+
+    def find_plane_focus(self, flag=threading.Event()):
+        cell = False
+        while not cell and not flag.is_set():
+            self.detector.mover_find_cell(self.mover)
+            time.sleep(0.5)
+            self.plane_focus()
+            time.sleep(0.5)
+            self.move_focus(5,1)
+            time.sleep(0.5)
+            cell = self.cell_check()
+
 
     def gather_plane_points(self):
         positions = [0, 120, 240]  # Theta positions to check

@@ -1916,7 +1916,7 @@ class RunScreenController:
         repetitions = self.screen.repetition_input.value()
         flags = [self._pause_flag, self._stop_thread_flag, self._inject_flag, self._plot_data]
         runs = CERunLogic.RunMethod(self.hardware, self.methods, repetitions, self.methods_id,
-                                    flags, self.insert, self.screen.run_prefix.text())
+                                    flags, self.insert, self.screen.run_prefix.text(), self.lyse.cap_control)
         state = runs.start_run()
         return state
         """

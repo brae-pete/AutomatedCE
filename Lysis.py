@@ -91,9 +91,10 @@ class CapillaryControl:
         """
         if self.last_cap_height is None or self.last_obj_height is None:
             logging.warning("You have not set the capillary or cell focal planes")
-            return
+            return False
 
         self.hardware.set_z(self.calculate_cap_difference())
+        return True
 
 
 if __name__ == "__main__":
