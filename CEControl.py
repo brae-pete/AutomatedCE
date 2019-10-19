@@ -19,6 +19,8 @@ import Lysis
 from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
 
+from BarracudaQt import CERunLogic
+
 HOME = False
 
 
@@ -1911,7 +1913,13 @@ class RunScreenController:
     def run(self):
         if not self.check_system():
             logging.error('Unable to start run.')
-
+        repetitions = self.screen.repetition_input.value()
+        flags = [self._pause_flag, self._stop_thread_flag, self._inject_flag, self._plot_data]
+        runs = CERunLogic.RunMethod(self.hardware, self.methods, repetitions, self.methods_id,
+                                    flags, self.insert, self.screen.run_prefix.text())
+        state = runs.start_run()
+        return state
+        """
         for method, method_id in zip(self.methods, self.methods_id):
 
             repetitions = self.screen.repetition_input.value()
@@ -1922,6 +1930,7 @@ class RunScreenController:
                 return False
         logging.info('Sequence Completed.')
         return True
+        """
 
     def record_cell_info(self):
         xy = self.hardware.get_xy()
@@ -2100,8 +2109,8 @@ class RunScreenController:
 
             if step['SingleCell']:
                 if step['AutoSingleCell']:
-                    logging.info('Focusing, locating and lysing cell.')
-                    pass
+                    logging.info("Automated single cell....")
+
                 else:
                     semi_auto_cell()
                     logging.info('Run is paused. Locate and lyse cell.')

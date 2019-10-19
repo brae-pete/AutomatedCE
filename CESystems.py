@@ -123,6 +123,9 @@ class BaseSystem:
         """Stops current movement of the outlet stage/motor."""
         logging.error('stop_outlet not implemented in hardware class.')
 
+    def wait_outlet(self):
+        logging.error("Waits for the outlet to finish moving")
+
     def set_outlet_home(self):
         """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
         logging.error('set_outlet_home not implemented in hardware class.')
@@ -514,6 +517,9 @@ class NikonEclipseTi(BaseSystem):
             return True
 
         return False
+
+    def wait_outlet(self):
+        return self.outlet_control.wait_for_move()
 
     def get_outlet(self):
         return self.outlet_control.read_z()

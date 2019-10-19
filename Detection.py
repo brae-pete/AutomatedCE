@@ -13,8 +13,10 @@ import numpy as np
 import time
 
 from BarracudaQt import CESystems
-CENTER =[3730, -1957]
-RADIUS = 7500
+
+CENTER = [3730, -1957]
+RADIUS = 5000
+
 
 def get_blobs(img, thresh=0.1, scale=1):
     """ This is the main function for getting cell objects from an image. You can test this function against
@@ -58,9 +60,9 @@ class CellDetector:
     excluded_xy = []
     excluded_minimum = 100  # distance from previous laser lysis spot
     move_distance = 250
-    img_shape = [250,250] # This will change to whatever the image shape is
+    img_shape = [250, 250]  # This will change to whatever the image shape is
     blob_exclusion_image = r"C:\Users\NikonEclipseTi\Documents\Barracuda\EasyAccess\Background.png"  # Path to empty image (no cells, just the dust and noise on the lens)
-    max_diameter = 200 # Maximum radius in ums, anything larger will be excluded.
+    max_diameter = 200  # Maximum radius in ums, anything larger will be excluded.
     debug = True
     thresh = 0.1
     scale = 1
@@ -86,16 +88,18 @@ class CellDetector:
         self.fig, self.axes = plt.subplots()
         return
 
-    def mover_find_cell(self, mover):
+    def mover_find_cell(self, mover,xy = None):
         """
         Automated cell finding algorithm
         :param mover: Mover Object, moves to random locations
         :return:
         """
+        if xy is None:
+            xy = self.hardware.get_xy()
         cell = self.find_cell()
         starting = 0
         while not cell and starting < 10:
-            xy = mover.move_random(self.hardware.get_xy())
+            xy = mover.move_random(xy)
             self.hardware.set_xy(xy)
             time.sleep(0.5)
             cell = self.find_cell()
@@ -136,25 +140,25 @@ class CellDetector:
 
          """
         if skimage.__version__ >= "0.16":
-            return centroid # Centroid is already Row, Column
+            return centroid  # Centroid is already Row, Column
         else:
             logging.warning("Skimage will be changing soon to row, column, but we should be okay! XD")
-            return [centroid[1],centroid[0]] # Change centroid to row, columnn
+            return [centroid[1], centroid[0]]  # Change centroid to row, columnn
 
     def move_blobs(self, cell):
         """ Moves a blob to the laser_spot location """
-        c,r = self._get_centroid(cell.centroid)
+        c, r = self._get_centroid(cell.centroid)
         laser_r = self.laser_spot[1]
         laser_c = self.laser_spot[0]
         dr = (laser_r - r) * self.pix2um
         dc = (laser_c - c) * self.pix2um
-        logging.warning("{},{} is laser spot".format(laser_c,laser_r))
-        logging.warning("{},{} is cell spot".format(c,r))
-        logging.warning("{},{} is laser dx (column), dy (row)".format(dc/self.pix2um, dr/self.pix2um))
+        logging.warning("{},{} is laser spot".format(laser_c, laser_r))
+        logging.warning("{},{} is cell spot".format(c, r))
+        logging.warning("{},{} is laser dx (column), dy (row)".format(dc / self.pix2um, dr / self.pix2um))
         # A higher row is equal to a lower y so invert the relative request on the Y axis
         xy = self.hardware.get_xy()
-        self.hardware.set_xy(rel_xy=[dc,-dr])
-        xy = [xy[0]+dc, xy[1]-dr]
+        self.hardware.set_xy(rel_xy=[dc, -dr])
+        xy = [xy[0] + dc, xy[1] - dr]
         self.excluded_xy.append(self.get_absolute(cell.centroid))
         return xy
 
@@ -191,7 +195,7 @@ class CellDetector:
                 new_blobs.append(blob)
         return new_blobs
 
-    def check_radius(self,blobs):
+    def check_radius(self, blobs):
         """ Excludes cells with a diameter larger than the maximum"""
         new_blobs = []
         for i, blob in enumerate(blobs):
@@ -232,12 +236,13 @@ class CellDetector:
         :param centroid: row column (xy) for image
         :return:
         """
-        x,y = self._get_centroid(centroid)
+        x, y = self._get_centroid(centroid)
 
         xy = self.hardware.get_xy()
         abs_x = xy[0] + x * self.pix2um
         abs_y = xy[1] - y * self.pix2um
         return [abs_x, abs_y]
+
 
 class Mover:
     max_radius = RADIUS
@@ -245,11 +250,11 @@ class Mover:
     exclusion_list = []
     exclusion_length = 250
 
-    def __init__(self, center =  CENTER):
+    def __init__(self, center=CENTER):
         self.center = center
 
-    def move_random(self, currentxy):
-        xy = self.verify_random(currentxy)
+    def move_random(self, current_xy):
+        xy = self.verify_random(current_xy)
         return xy
 
     def verify_random(self, current_xy):
@@ -278,9 +283,9 @@ class Mover:
                     if max_dist < new_dist:
                         max_dist = new_dist
                         max_xy = [dx, dy]
-                max_dist = distance.euclidean([dx, dy], self.center)
+                big_dist = distance.euclidean([dx, dy], self.center)
                 # Reject if its outside the bounds
-                if max_dist > self.max_radius:
+                if big_dist > self.max_radius:
                     all_clear = False
             # if the random point doesnt have an issue with any of the spots continue outside the loop
             if all_clear:
@@ -296,13 +301,14 @@ class FocusGetter:
     fm = []
     _plane_vectors = []
     _plane_coefficients = [0, 0, 0, 0]
+    pixel_cell_diameter_min = 20
 
-    def __init__(self, detector, mover, center = CENTER, radius = RADIUS,laser_spot=(235, 384)):
+    def __init__(self, detector, mover, laser_spot=(235, 384)):
         self.hardware = detector.hardware
         self.detector = detector
         self.laser_spot = laser_spot
-        self.center = center
-        self.radius =radius
+        self.center = mover.center
+        self.radius = mover.max_radius
         self.mover = mover
 
     def move_focus(self, focal_range, steps):
@@ -313,7 +319,7 @@ class FocusGetter:
         It calculates a focus measure at each point and moves to the highest focus after it has completed.
 
         :param focal_range: float, the range in one direction to test focus
-        :param step: float, the number of steps to check between current position and the focal_range
+        :param steps: float, the number of steps to check between current position and the focal_range
         :return: [ max_fm, max_fm_objective_position]
         """
         # Get the absolute positions to  move up and down
@@ -329,13 +335,14 @@ class FocusGetter:
         # Cycle through the positions, move the objective, get the focus measure, and compare to old focus measures
         for abs_position in positions:
             self.hardware.set_objective(h=abs_position)
-            time.sleep(0.2)
+            time.sleep(0.25)
             img = self.hardware.get_image()
             focus_measure = self._get_focus_measure(self._roi_img(img))
             self.fm.append(focus_measure)
             if focus_measure > focus_measure_max[0]:
                 focus_measure_max = [focus_measure, abs_position]
         self.hardware.set_objective(h=focus_measure_max[1])
+        time.sleep(0.5)
         return focus_measure_max
 
     @staticmethod
@@ -392,21 +399,29 @@ class FocusGetter:
         return True
 
     def gather_plane_points(self):
-        positions = [0,120,240 ] # Theta positions to check
+        positions = [0, 120, 240]  # Theta positions to check
         # Reset the plane vectors
-        self._plane_vectors=[]
+        self._plane_vectors = []
+        plt.figure()
+        starting = self.hardware.get_objective()
         for theta in positions:
             x = self.radius * np.cos(np.deg2rad(theta)) + self.center[0]
             y = self.radius * np.sin(np.deg2rad(theta)) + self.center[1]
-            self.hardware.set_xy([x,y])
-
+            self.hardware.set_xy([x, y])
+            time.sleep(1)
             # Find a cell and scan at high resolution to bring it into focus
             cell = False
             while not cell:
+                self.hardware.set_objective(starting)
+                time.sleep(1)
                 self.detector.mover_find_cell(self.mover)
-                self.move_focus(200, 50)
-                cell =self.cell_check()
-
+                time.sleep(1)
+                self.move_focus(75, 75)
+                time.sleep(1)
+                cell = self.cell_check()
+            plt.scatter(fc.um,fc.fm)
+            plt.show()
+            time.sleep(2)
             x, y = self.hardware.get_xy()
             z = self.hardware.get_objective()
             self._plane_vectors.append([x, y, z])
@@ -431,6 +446,6 @@ if __name__ == "__main__":
     hardware.start_system()
     hardware.image_control.live_view()
     det = CellDetector(hardware)
-    mov = Mover(hardware)
-    fc = FocusGetter(det,mov)
-
+    mov = Mover(CENTER)
+    fc = FocusGetter(det, mov)
+    #fc.gather_plane_points()
