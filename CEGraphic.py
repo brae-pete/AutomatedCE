@@ -814,11 +814,13 @@ class RunScreen(QtWidgets.QMainWindow):
         self.inject_cell_pos = QtWidgets.QPushButton('Cell Focus')
         self.inject_cap_pos = QtWidgets.QPushButton('Cap. Focus')
         self.inject_lower_cap = QtWidgets.QPushButton('Lower Cap')
-        self.inject_burst_lyse = QtWidgets.QPushButton('Diamond Lysis')
+        self.inject_burst_lyse = QtWidgets.QPushButton('Load Cap ')
+        self.save_cap = QtWidgets.QPushButton('Save Cap')
         row_3.addWidget(self.inject_cell_pos)
         row_3.addWidget(self.inject_cap_pos)
         row_3.addWidget(self.inject_lower_cap)
         row_3.addWidget(self.inject_burst_lyse)
+        row_3.addWidget(self.save_cap)
 
 
         self.sequence_display.setColumnCount(3)
@@ -909,6 +911,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.camera_load = QtWidgets.QPushButton('Open Camera')
         self.camera_close = QtWidgets.QPushButton('Close Camera')
         self.buffer_save = QtWidgets.QPushButton('Save Buffer Seq')
+        self.finder_button = QtWidgets.QPushButton('Find a Cell')
+
+
 
 
         live_feed_window = QtWidgets.QMainWindow()
@@ -924,6 +929,7 @@ class RunScreen(QtWidgets.QMainWindow):
         control_layout.addWidget(self.camera_load)
         control_layout.addWidget(self.camera_close)
         control_layout.addWidget(self.buffer_save)
+        control_layout.addWidget(self.finder_button)
         control_layout.addStretch()
         control_widget.setLayout(control_layout)
         live_feed_control.setWidget(control_widget)

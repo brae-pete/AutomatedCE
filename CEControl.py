@@ -19,8 +19,15 @@ import Lysis
 from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
 import importlib
-import BarracudaQt.Detection
-from BarracudaQt import CERunLogic
+try:
+    import BarracudaQt.Detection
+except ModuleNotFoundError:
+    import Detection
+try:
+    from BarracudaQt import CERunLogic
+except:
+    import CERunLogic
+
 
 HOME = False
 
@@ -1151,6 +1158,7 @@ class RunScreenController:
             self.screen.camera_load.released.connect(lambda: self.hardware.open_image())
             self.screen.camera_close.released.connect(lambda: self.hardware.close_image())
             self.screen.buffer_save.released.connect(lambda: self._save_sequence())
+            self.screen.finder_button.released.connect(lambda:self._find_a_cell())
         else:
             self.screen.enable_live_feed(False)
 
@@ -1178,10 +1186,8 @@ class RunScreenController:
         self.screen.inject_cell_pos.released.connect(lambda: self.lyse.cap_control.record_cell_height())
         self.screen.inject_cap_pos.released.connect(lambda: self.lyse.cap_control.record_cap_height())
         self.screen.inject_lower_cap.released.connect(lambda: self.lyse.lower_capillary())
-        self.screen.inject_burst_lyse.released.connect(lambda pfn=self.screen.laser_pfn,
-                                                       attn=self.screen.laser_attenuation,
-                                                       : threading.Thread(target = self.lyse.post_movement_lysis, args= (pfn.text(),
-                                                                                       attn.text())).start())
+        self.screen.inject_burst_lyse.released.connect(lambda: self.load_cap_control())
+        self.screen.save_cap.released.connect(lambda: self.save_cap_control())
 
         self.screen.clear_output.released.connect(lambda: self.clear_output_window())
         self.screen.save_output.released.connect(lambda: self.save_output_window())
@@ -1914,14 +1920,29 @@ class RunScreenController:
             self.hardware.set_objective(rel_h=-80)
             self.hardware.objective_control.wait_for_move()
 
+
+    def save_cap_control(self):
+
+        pass
+    def load_cap_control(self):
+        pass
+
+
+    def _find_a_cell(self):
+        try:
+            self.runs.current_fc.quickcheck()
+        except Exception as e:
+            logging.error("Could not manually auto find cell")
+            logging.error(e)
+
     def run(self):
         if not self.check_system():
             logging.error('Unable to start run.')
         repetitions = self.screen.repetition_input.value()
         flags = [self._pause_flag, self._stop_thread_flag, self._inject_flag, self._plot_data]
-        runs = CERunLogic.RunMethod(self.hardware, self.methods, repetitions, self.methods_id,
+        self.runs = CERunLogic.RunMethod(self.hardware, self.methods, repetitions, self.methods_id,
                                     flags, self.insert, self.screen.run_prefix.text(), self.lyse.cap_control)
-        state = runs.start_run()
+        state = self.runs.start_run()
         return state
         """
         for method, method_id in zip(self.methods, self.methods_id):
@@ -2255,7 +2276,11 @@ class SystemScreenController:
 
 
     def load_detection(self):
-        logging.info("Reloading Detection.py")
-        importlib.reload(BarracudaQt.Detection)
-        logging.info("Reloading RunMethod")
-        importlib.reload(BarracudaQt.CERunLogic)
+        try:
+            logging.info("Reloading Detection.py")
+            importlib.reload(BarracudaQt.Detection)
+            logging.info("Reloading RunMethod")
+            importlib.reload(BarracudaQt.CERunLogic)
+        except:
+            importlib.reload(Detection)
+            importlib.reload(CERunLogic)
