@@ -6,13 +6,23 @@ import threading
 import time
 import numpy as np
 
-from BarracudaQt import CESystems, CEObjects, Detection, Lysis
+try:
+    from BarracudaQt import CESystems, CEObjects, Detection, Lysis
+except ModuleNotFoundError:
+    import CESystems, CEObjects, Detection, Lysis
 
 LYSIS_ADJUST = 0  # how far up or down to move the lysis laser
 # For testing:
 TEST_METHOD = r"C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\Methods\Testing\SimpleAutoTest.met"
 
 class RunMethod:
+    """
+    Logic behind running an automated CE Method.
+    Feel free to change the logic method which contains the order of events for a given step.
+    You can test out changes by Loading the GUI, then under system tab pressing the Detection button to reload
+    all your changes to RunMethod.py and Detection.py. The next method you run will have reloaded RunMethod and Detection.py
+    modules.
+    """
     _pause_flag = threading.Event()
     _stop_thread_flag = threading.Event()
     _inject_flag = threading.Event()
@@ -207,7 +217,7 @@ class RunMethod:
 
         return True
 
-    def cell_move(self):
+    def cell_move(self, semi = True):
         if self._stop_thread_flag.is_set():
             return
         # If wells are the same move back one.
@@ -222,9 +232,9 @@ class RunMethod:
                 self.hardware.set_z(cap)
 
             obj = self._last_cell_positions['obj']
-            if cap is not None:
+            if obj is not None and semi:
                 self.move_objective(obj)
-                time.sleep(2)
+                time.sleep(10)
 
     def auto_cell(self):
         """ Move cell to last position,
@@ -234,7 +244,7 @@ class RunMethod:
             Load the cell
             Finish
         """
-        self.cell_move()
+        self.cell_move(False)
         if self.step_id not in self.cell_finders.keys():
             center = self.insert.get_well_xy(self.step['Inlet'])
             mov = Detection.Mover(center=center)
@@ -260,8 +270,20 @@ class RunMethod:
 
         else:
             _, fc, _ = self.cell_finders[self.step_id]
+            self.current_fc = fc
+
         logging.info("Finding a cell, press pause to manually find a cell")
-        fc.find_plane_focus(self._pause_flag)
+
+        self.hardware.set_objective(h = fc.last_z)
+
+        logging.info("Moving Objective into Focus")
+        while np.abs(self.hardware.get_objective() - fc.last_z ) > 5:
+            time.sleep(0.5)
+        logging.info("Pausing Run... Allow the program to find a cell.\n "
+                     "When a cell is found focus the cell manually \n"
+                     "Press Start when finished \n ")
+        # Move the objective into position
+        fc.quickcheck(self._pause_flag)
         state = self.check_flags()
 
         # Lower the Capillary
@@ -274,9 +296,6 @@ class RunMethod:
             if not state:
                 return state
         self.hardware.wait_z()
-
-        # Adjust the focal plane for lysis
-        self.hardware.set_objective(rel_h=LYSIS_ADJUST)
         return state
 
     def semi_auto_cell(self):
@@ -323,22 +342,27 @@ class RunMethod:
         if voltage_level:
             self.hardware.set_voltage(voltage_level)
         time.sleep(0.5)
+
         # Fire the laser half a second after starting the load velocity
         if lyse:
             self.hardware.laser_fire()
         time.sleep(duration)
-        self.hardware.set_objective(rel_h = -1000)
         self.hardware.set_voltage(0)
+
+        # Move the capillary up to see if it was successful
+        self.hardware.set_z(z=1)
+        time.sleep(3)
+
+        # Move then objective down
+        self.hardware.set_objective(h=50)
         self.hardware.pressure_rinse_stop()
 
         # Record buffer of injection after lysis.
-
         if self.step['SingleCell']:
             file_name = "{}_{}_step{}_rep{}".format(self.folder, self.method_id, self.step_id, self.rep)
             save_path = os.path.join(self.save_dir, file_name)
             threading.Thread(target =  self.hardware.save_buffer, args = (save_path, 'cell_lysis.avi')).start()
         self.hardware.objective_control.wait_for_move()
-
         return True
 
     def create_run_folder(self):
@@ -354,7 +378,6 @@ class RunMethod:
 
     def logic(self):
         self.save_dir = self.create_run_folder()
-
         for self.rep in range(self.repetitions):
             state = self.check_flags()
             if not state:
@@ -365,10 +388,11 @@ class RunMethod:
                 if 'Type' in self.step.keys():
                     logging.info('{} Step: {}'.format(self.step['Type'], self.step['Summary']))
                     state = self.check_flags()
+
                     if not state:
                         return False
-                    step_start = time.time()
 
+                    step_start = time.time()
                     state = self.move_inlet(0.25)
 
                     if not state:

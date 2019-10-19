@@ -14,7 +14,10 @@ import logging
 import numpy as np
 import time
 
-from BarracudaQt import CESystems
+try:
+    from BarracudaQt import CESystems
+except ModuleNotFoundError:
+    import CESystems
 
 CENTER = [3730, -1957]
 RADIUS = 5000
@@ -144,7 +147,7 @@ class CellDetector:
         if skimage.__version__ >= "0.16":
             return centroid  # Centroid is already Row, Column
         else:
-            logging.warning("Skimage will be changing soon to row, column, but we should be okay! XD")
+            #logging.warning("Skimage will be changing soon to row, column, but we should be okay! XD")
             return [centroid[1], centroid[0]]  # Change centroid to row, columnn
 
     def move_blobs(self, cell):
@@ -225,7 +228,7 @@ class CellDetector:
                 verified = True
                 for old_cell in self.excluded_xy:
                     dist = distance.euclidean(abs_xy, old_cell)
-                    logging.warning("{} is dist to add".format(dist))
+                    #logging.warning("{} is dist to add".format(dist))
                     if dist < self.excluded_minimum:
                         verified = False
                 if verified:
@@ -365,7 +368,8 @@ class FocusGetter:
         """ Returns the ROI from an image
         bbox = [rox_min, col_min, row_max, col_max]
         """
-        bbox = [self.laser_spot[0] - 75, self.laser_spot[1] - 75, self.laser_spot[0] + 75, self.laser_spot[1] + 75]
+        buffer = 150
+        bbox = [self.laser_spot[0] - buffer, self.laser_spot[1] - buffer, self.laser_spot[0] + buffer, self.laser_spot[1] + buffer]
         roi = img[bbox[0]:bbox[2], bbox[1]:bbox[3]]
         return roi
 
@@ -405,18 +409,18 @@ class FocusGetter:
         x,y = self.hardware.get_xy()
         z = self.hardware.get_objective()
         self._plane_vectors.append([x,y,z])
+        self.last_z = z
 
     def find_plane_focus(self, flag=threading.Event()):
         cell = False
+        logging.info("Verision 0.1")
         while not cell and not flag.is_set():
-            time.sleep(2)
             self.get_plane_focus()
-            time.sleep(3)
-            logging.info("We are heare")
+            time.sleep(0.75)
             self.detector.mover_find_cell(self.mover)
-            time.sleep(2)
-            self.move_focus(5,5)
-            time.sleep(2)
+            time.sleep(0.5)
+            self.move_focus(14,14)
+            time.sleep(0.5)
             cell = self.cell_check()
 
 
@@ -460,6 +464,13 @@ class FocusGetter:
         z = (d - (a * xy[0]) - (b * xy[1])) / c
         logging.info("Focus position is {} ".format(z))
         self.hardware.set_objective(h=z)
+        self.last_z = z
+
+    def quickcheck(self):
+        self.get_plane_focus()
+        time.sleep(0.4)
+        self.det.mover_find_cell(mov)
+
 
 
 if __name__ == "__main__":
