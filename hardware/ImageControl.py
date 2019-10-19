@@ -500,6 +500,7 @@ class MicroControl(ImageControl):
             img = self.mmc.read_response()
         if type(img) is not np.ndarray:
             logging.error("Could not get image {}".format(img))
+            time.sleep(0.3)
             return None
         # Preserve the original picture (this is saved for Tiff files)
         self.raw_img = img.copy()

@@ -401,6 +401,7 @@ class FocusGetter:
         return True
 
     def add_focus_point(self):
+        logging.info("adding point...what...who said that")
         x,y = self.hardware.get_xy()
         z = self.hardware.get_objective()
         self._plane_vectors.append([x,y,z])
@@ -408,12 +409,14 @@ class FocusGetter:
     def find_plane_focus(self, flag=threading.Event()):
         cell = False
         while not cell and not flag.is_set():
+            time.sleep(2)
+            self.get_plane_focus()
+            time.sleep(3)
+            logging.info("We are heare")
             self.detector.mover_find_cell(self.mover)
-            time.sleep(0.5)
-            self.plane_focus()
-            time.sleep(0.5)
-            self.move_focus(5,1)
-            time.sleep(0.5)
+            time.sleep(2)
+            self.move_focus(5,5)
+            time.sleep(2)
             cell = self.cell_check()
 
 
@@ -455,6 +458,7 @@ class FocusGetter:
         xy = self.hardware.get_xy()
         a, b, c, d = self._plane_coefficients
         z = (d - (a * xy[0]) - (b * xy[1])) / c
+        logging.info("Focus position is {} ".format(z))
         self.hardware.set_objective(h=z)
 
 

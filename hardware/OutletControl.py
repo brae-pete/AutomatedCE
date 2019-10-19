@@ -1,4 +1,6 @@
 import threading
+
+import serial
 from hardware import ArduinoBase
 import logging
 import time
@@ -125,7 +127,12 @@ class OutletControl:
 
         :return: current_pos, float in mm of where the stage is at
         """
-        prev_pos = self.read_z()
+        time.sleep(0.1)
+        try:
+            prev_pos = self.read_z()
+        except serial.serialutil.SerialException:
+            logging.warning(" Arduino is confused... port is closed? ")
+            self.open()
         current_pos = prev_pos + 1
         # Update position while moving
         while prev_pos != current_pos:

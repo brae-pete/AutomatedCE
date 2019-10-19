@@ -18,7 +18,8 @@ import Lysis
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
-
+import importlib
+import BarracudaQt.Detection
 from BarracudaQt import CERunLogic
 
 HOME = False
@@ -59,6 +60,9 @@ class ProgramController:
 
         self.d_screen = self.program_window.data_screen
         self.d_control = DataScreenController(self.d_screen, self.hardware, self.repository)
+
+        self.s_screen = self.program_window.system_screen
+        self.s_control = SystemScreenController(self.s_screen, self.hardware, self.repository)
 
         self.program_window.show()
         sys.exit(app.exec_())
@@ -2244,3 +2248,14 @@ class SystemScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
+        self._set_callbacks()
+
+    def _set_callbacks(self):
+        self.screen.detection_load.released.connect(lambda: self.load_detection())
+
+
+    def load_detection(self):
+        logging.info("Reloading Detection.py")
+        importlib.reload(BarracudaQt.Detection)
+        logging.info("Reloading RunMethod")
+        importlib.reload(BarracudaQt.CERunLogic)

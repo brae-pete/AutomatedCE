@@ -1074,7 +1074,20 @@ class DataScreen(QtWidgets.QMainWindow):
 class SystemScreen(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
+        main_layout = QtWidgets.QVBoxLayout()
+        main_layout.addStretch()
 
+        self.detection_load = QtWidgets.QPushButton('Detection')
+
+        main_layout.addWidget(self.detection_load)
+        reload_panel = QtWidgets.QDockWidget()
+        reload_panel.setTitleBarWidget(QtWidgets.QWidget())
+        temper_wid = QtWidgets.QWidget()
+        temper_wid.setLayout(main_layout)
+        temper_wid = wrap_widget(temper_wid)
+        temper_wid.setFixedWidth(380)
+        reload_panel.setWidget(temper_wid)
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, reload_panel)
 
 class AlteredTabBar(QtWidgets.QTabBar):
 

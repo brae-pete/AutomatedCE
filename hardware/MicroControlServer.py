@@ -248,4 +248,4 @@ def main(args):
 
 main(sys.argv)
 with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt', 'a') as fout:
-    fout.write("Python 2 closed {}\n".format(args))
+    fout.write("Python 2 closed {}\n".format(sys.argv))

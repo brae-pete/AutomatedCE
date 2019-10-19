@@ -1,34 +1,42 @@
 import datetime
 import logging
 import os
+import pickle
 import threading
 import time
 import numpy as np
 
 from BarracudaQt import CESystems, CEObjects, Detection, Lysis
 
-LYSIS_ADJUST = 0 # how far up or down to move the lysis laser
+LYSIS_ADJUST = 0  # how far up or down to move the lysis laser
+# For testing:
+TEST_METHOD = r"C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\Methods\Testing\SimpleAutoTest.met"
 
 class RunMethod:
     _pause_flag = threading.Event()
     _stop_thread_flag = threading.Event()
     _inject_flag = threading.Event()
     _plot_data = threading.Event()
-    _last_cell_positions = {}  # xy, cap, obj are the keys
+    _last_cell_positions = {'xy':None,'cap':None,'obj':None}  # xy, cap, obj are the keys
     step = {}  # Method dictionary
     save_dir = ""  # Directory where the runs will be saved
     step_id = 0  # which step we currently are running
     rep = 0  # What repetition we are on for the method
     method = CEObjects.Method(None, None)
-    method_id = 0 # method id
-    cell_finders = {} # List of Focus Getters
+    method_id = 0  # method id
+    cell_finders = {}  # List of Focus Getters
 
     injection_wait = 6  # How long to wait after an injection for repeatable spontaneous fluid displacement
 
     def __init__(self, hardware, methods, repetitions, methods_id,
-                 flags, insert, folder, cap_control ):
+                 flags, insert, folder, cap_control):
         """
         Logic to run a CE run
+
+        Includes methods for moving the various parts
+        The logic method contains the logic, or sequence of events for each step
+        Feel free to add or adjust any part of this and give it a test.
+
         :param hardware: CESystems object
         :param methods: CEObject.Method object
         :param repetitions: # of repetions for each method
@@ -102,7 +110,7 @@ class RunMethod:
         if self._stop_thread_flag.is_set():
             return
         self.hardware.set_outlet(rel_h=outlet_travel)
-        self.hardware.pressure_close() # Close pressure to prevent siphon injections
+        self.hardware.pressure_valve_close()  # Close pressure to prevent siphon injections
         self.hardware.wait_outlet()
         return self.check_flags()
 
@@ -216,6 +224,7 @@ class RunMethod:
             obj = self._last_cell_positions['obj']
             if cap is not None:
                 self.move_objective(obj)
+                time.sleep(2)
 
     def auto_cell(self):
         """ Move cell to last position,
@@ -226,32 +235,33 @@ class RunMethod:
             Finish
         """
         self.cell_move()
-        if self.step_id not in self.focus_finders.keys():
+        if self.step_id not in self.cell_finders.keys():
             center = self.insert.get_well_xy(self.step['Inlet'])
-            mov = Detection.Mover(center = center)
+            mov = Detection.Mover(center=center)
             # fixme: Hey so 0.4329 and (235,384) are they pixel to um conversion and laser location on the image
             # These will need to be adjusted for each system
-            laser_spot = (235,384)
-            det = Detection.CellDetector(self.hardware,0.4329, laser_spot)
+            laser_spot = (235, 384)
+            det = Detection.CellDetector(self.hardware, 0.4329, laser_spot)
             fc = Detection.FocusGetter(det, mov, laser_spot)
-            self.cell_finders[self.step_id] = [det,fc, mov]
+            self.cell_finders[self.step_id] = [det, fc, mov]
 
             # We need to create a focal plane at the start of the method:
-            logging.info("Pausing Run....")
+            logging.info("Pausing Run...For now...")
             logging.info("Please bring 3 cells into focus at 3 corners of the well")
             logging.info("Press 'Start' after a cell is into focus")
             for i in range(3):
-                logging.info("Focus Point #{}".format(i+1))
+                logging.info("Focus Point #{}".format(i + 1))
                 self._pause_flag.set()
                 state = self.check_flags()
                 if not state:
                     return state
                 fc.add_focus_point()
+            fc.find_a_plane()
 
         else:
-            _,fc,_ = self.cell_finders[self.step_id]
+            _, fc, _ = self.cell_finders[self.step_id]
         logging.info("Finding a cell, press pause to manually find a cell")
-        fc.find_plane_focus()
+        fc.find_plane_focus(self._pause_flag)
         state = self.check_flags()
 
         # Lower the Capillary
@@ -260,13 +270,14 @@ class RunMethod:
             self._pause_flag.set()
             logging.info("Bring Capillary into the correct position and record its location")
             logging.info("Press Start to Continue...")
+            state = self.check_flags()
+            if not state:
+                return state
         self.hardware.wait_z()
 
-        #Adjust the focal plane for lysis
-        self.hardware.set_objective(rel_h = LYSIS_ADJUST)
+        # Adjust the focal plane for lysis
+        self.hardware.set_objective(rel_h=LYSIS_ADJUST)
         return state
-
-
 
     def semi_auto_cell(self):
         """ Move the cell to the last  position and start"""
@@ -275,7 +286,8 @@ class RunMethod:
         return True
 
     def inject(self):
-
+        st=time.time()
+        logging.info("Starting Injection {}".format(time.time()-st))
         if self._stop_thread_flag.is_set():
             return
         pressure_state = False
@@ -315,7 +327,7 @@ class RunMethod:
         if lyse:
             self.hardware.laser_fire()
         time.sleep(duration)
-        self.hardware.set_objective(h=1000)
+        self.hardware.set_objective(rel_h = -1000)
         self.hardware.set_voltage(0)
         self.hardware.pressure_rinse_stop()
 
@@ -324,8 +336,7 @@ class RunMethod:
         if self.step['SingleCell']:
             file_name = "{}_{}_step{}_rep{}".format(self.folder, self.method_id, self.step_id, self.rep)
             save_path = os.path.join(self.save_dir, file_name)
-            self.hardware.save_buffer(save_path, 'cell_lysis.avi')
-
+            threading.Thread(target =  self.hardware.save_buffer, args = (save_path, 'cell_lysis.avi')).start()
         self.hardware.objective_control.wait_for_move()
 
         return True
@@ -410,3 +421,26 @@ class RunMethod:
 
                     previous_step = self.step['Type']
         return True
+
+
+def test_run(hardware):
+    fin = open(TEST_METHOD,'rb')
+    data = pickle.load(fin)
+    insert = data.insert
+    cap_control = Lysis.CapillaryControl(hardware)
+    flags = [threading.Event() for i in range(4)]
+    rm = RunMethod(hardware,[data],3,[0],flags,insert,'testing',cap_control)
+    return rm
+
+def start_run(rm):
+    threading.Thread(target = rm.start_run).start()
+
+
+if __name__ == "__main__":
+    hardware = CESystems.NikonEclipseTi()
+    rm = test_run(hardware)
+    hardware.start_system()
+    hardware.image_control.live_view()
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.INFO)
+
