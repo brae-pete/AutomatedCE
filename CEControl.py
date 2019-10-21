@@ -18,6 +18,16 @@ import Lysis
 # Installed modules
 from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
+import importlib
+try:
+    import BarracudaQt.Detection
+except ModuleNotFoundError:
+    import Detection
+try:
+    from BarracudaQt import CERunLogic
+except:
+    import CERunLogic
+
 
 HOME = False
 
@@ -57,6 +67,9 @@ class ProgramController:
 
         self.d_screen = self.program_window.data_screen
         self.d_control = DataScreenController(self.d_screen, self.hardware, self.repository)
+
+        self.s_screen = self.program_window.system_screen
+        self.s_control = SystemScreenController(self.s_screen, self.hardware, self.repository)
 
         self.program_window.show()
         sys.exit(app.exec_())
@@ -1116,14 +1129,15 @@ class RunScreenController:
             self.screen.enable_z_stage_form(False)
 
         if self.hardware.hasLaserControl:
+            self.screen.laser_fire_check.setEnabled(True)
             self.screen.laser_pfn.returnPressed.connect(
                 lambda: self.hardware.set_laser_parameters(pfn=self.screen.laser_pfn.text()))
             self.screen.laser_attenuation.returnPressed.connect(
                 lambda: self.hardware.set_laser_parameters(att=self.screen.laser_attenuation.text()))
             self.screen.laser_burst_count.returnPressed.connect(
                 lambda: self.hardware.set_laser_parameters(burst=self.screen.laser_burst_count.text()))
-            self.screen.laser_fire.released.connect(lambda: self.fire_laser())
-            self.screen.laser_standby.released.connect(lambda: self.laser_on())
+            self.screen.laser_fire.released.connect(lambda: self.hardware.laser_fire())
+            self.screen.laser_standby.released.connect(lambda: self.hardware.laser_standby())
             self.screen.laser_stop.released.connect(lambda: self.hardware.laser_stop())
             self.screen.laser_off.released.connect(lambda: self.stop_laser())
             self.screen.laser_check.released.connect(lambda: threading.Thread(target=self.hardware.laser_check).start())
@@ -1144,6 +1158,7 @@ class RunScreenController:
             self.screen.camera_load.released.connect(lambda: self.hardware.open_image())
             self.screen.camera_close.released.connect(lambda: self.hardware.close_image())
             self.screen.buffer_save.released.connect(lambda: self._save_sequence())
+            self.screen.finder_button.released.connect(lambda:self._find_a_cell())
         else:
             self.screen.enable_live_feed(False)
 
@@ -1171,10 +1186,8 @@ class RunScreenController:
         self.screen.inject_cell_pos.released.connect(lambda: self.lyse.cap_control.record_cell_height())
         self.screen.inject_cap_pos.released.connect(lambda: self.lyse.cap_control.record_cap_height())
         self.screen.inject_lower_cap.released.connect(lambda: self.lyse.lower_capillary())
-        self.screen.inject_burst_lyse.released.connect(lambda pfn=self.screen.laser_pfn,
-                                                       attn=self.screen.laser_attenuation,
-                                                       : threading.Thread(target = self.lyse.post_movement_lysis, args= (pfn.text(),
-                                                                                       attn.text())).start())
+        self.screen.inject_burst_lyse.released.connect(lambda: self.load_cap_control())
+        self.screen.save_cap.released.connect(lambda: self.save_cap_control())
 
         self.screen.clear_output.released.connect(lambda: self.clear_output_window())
         self.screen.save_output.released.connect(lambda: self.save_output_window())
@@ -1907,10 +1920,31 @@ class RunScreenController:
             self.hardware.set_objective(rel_h=-80)
             self.hardware.objective_control.wait_for_move()
 
+
+    def save_cap_control(self):
+
+        pass
+    def load_cap_control(self):
+        pass
+
+
+    def _find_a_cell(self):
+        try:
+            self.runs.current_fc.quickcheck()
+        except Exception as e:
+            logging.error("Could not manually auto find cell")
+            logging.error(e)
+
     def run(self):
         if not self.check_system():
             logging.error('Unable to start run.')
-
+        repetitions = self.screen.repetition_input.value()
+        flags = [self._pause_flag, self._stop_thread_flag, self._inject_flag, self._plot_data]
+        self.runs = CERunLogic.RunMethod(self.hardware, self.methods, repetitions, self.methods_id,
+                                    flags, self.insert, self.screen.run_prefix.text(), self.lyse.cap_control)
+        state = self.runs.start_run()
+        return state
+        """
         for method, method_id in zip(self.methods, self.methods_id):
 
             repetitions = self.screen.repetition_input.value()
@@ -1921,6 +1955,7 @@ class RunScreenController:
                 return False
         logging.info('Sequence Completed.')
         return True
+        """
 
     def record_cell_info(self):
         xy = self.hardware.get_xy()
@@ -2099,8 +2134,8 @@ class RunScreenController:
 
             if step['SingleCell']:
                 if step['AutoSingleCell']:
-                    logging.info('Focusing, locating and lysing cell.')
-                    pass
+                    logging.info("Automated single cell....")
+
                 else:
                     semi_auto_cell()
                     logging.info('Run is paused. Locate and lyse cell.')
@@ -2109,15 +2144,6 @@ class RunScreenController:
                     if not state_n:
                         return False
 
-                    else:
-                        self.hardware.set_objective(rel_h=-1500)
-                        # Save video feed data
-                        file_name = "{}_{}_step{}_rep{}".format(self.screen.run_prefix.text(), method_id, step_id, rep)
-                        save_path = os.path.join(save_dir, file_name)
-                        self.hardware.save_buffer(save_path, 'cell_lysis.avi')
-                        self.hardware.objective_control.wait_for_move()
-
-
             if pressure_state:
                 self.hardware.pressure_rinse_start()
 
@@ -2125,8 +2151,18 @@ class RunScreenController:
                 self.hardware.set_voltage(voltage_level)
 
             time.sleep(duration)
+            self.hardware.set_objective(h=1000)
             self.hardware.set_voltage(0)
             self.hardware.pressure_rinse_stop()
+
+            #Record buffer of injection after lysis.
+
+            if step['SingleCell']:
+                file_name = "{}_{}_step{}_rep{}".format(self.screen.run_prefix.text(), method_id, step_id, rep)
+                save_path = os.path.join(save_dir, file_name)
+                self.hardware.save_buffer(save_path, 'cell_lysis.avi')
+
+            self.hardware.objective_control.wait_for_move()
 
             return True
 
@@ -2203,6 +2239,7 @@ class RunScreenController:
 
                     elif step['Type'] == 'Inject':
                         executed = inject()
+
                         if not executed:
                             return False
 
@@ -2232,3 +2269,18 @@ class SystemScreenController:
         self.screen = screen
         self.hardware = hardware
         self.repository = repository
+        self._set_callbacks()
+
+    def _set_callbacks(self):
+        self.screen.detection_load.released.connect(lambda: self.load_detection())
+
+
+    def load_detection(self):
+        try:
+            logging.info("Reloading Detection.py")
+            importlib.reload(BarracudaQt.Detection)
+            logging.info("Reloading RunMethod")
+            importlib.reload(BarracudaQt.CERunLogic)
+        except:
+            importlib.reload(Detection)
+            importlib.reload(CERunLogic)

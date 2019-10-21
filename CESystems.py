@@ -123,6 +123,9 @@ class BaseSystem:
         """Stops current movement of the outlet stage/motor."""
         logging.error('stop_outlet not implemented in hardware class.')
 
+    def wait_outlet(self):
+        logging.error("Waits for the outlet to finish moving")
+
     def set_outlet_home(self):
         """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
         logging.error('set_outlet_home not implemented in hardware class.')
@@ -150,6 +153,10 @@ class BaseSystem:
     def set_objective_home(self):
         """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
         logging.error('set_objective_home not implemented in hardware class.')
+
+    def wait_objective(self):
+        """ Waits till the objective has stopped moving"""
+        logging.error("wait_objective not implemented in hardware class")
 
     def home_objective(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
@@ -726,8 +733,8 @@ class BarracudaSystem(BaseSystem):
 class NikonEclipseTi(BaseSystem):
     system_id = 'ECLIPSETI'
     _z_stage_com = 'COM3'
-    _outlet_com = 'COM7'
-    _pressure_com = 'COM7'
+    _outlet_com = 'COM4'
+    _pressure_com = 'COM4'
 
     _daq_dev = "/Dev1/"  # fixme not sure what to put here ("/Dev1/" is from Barracuda)
     _daq_current_readout = "ai5"
@@ -752,7 +759,7 @@ class NikonEclipseTi(BaseSystem):
 
         self.hasCameraControl = True
         self.hasInletControl = True
-        self.hasLaserControl = False
+        self.hasLaserControl = True
         self.hasObjectiveControl = True
         self.hasOutletControl = True
         self.hasVoltageControl = True
@@ -811,7 +818,6 @@ class NikonEclipseTi(BaseSystem):
             self.close_objective()
         except:
             logging.warning("Did not shut down Z")
-
         try:
             self.close_outlet()
         except:
@@ -824,7 +830,14 @@ class NikonEclipseTi(BaseSystem):
             self.close_z()
         except:
             logging.warning("Did not shut down Z")
+
+        try:
+            self.close_daq()
+        except:
+            logging.warning("Did not close DAQ tasks")
         return True
+
+
 
     def record_image(self, filename):
         self.image_control.record_recent_image(filename)
@@ -946,6 +959,9 @@ class NikonEclipseTi(BaseSystem):
 
         return False
 
+    def wait_outlet(self):
+        return self.outlet_control.wait_for_move()
+
     def get_outlet(self):
         return self.outlet_control.read_z()
 
@@ -976,6 +992,11 @@ class NikonEclipseTi(BaseSystem):
 
         return False
 
+    def wait_objective(self):
+        """ Waits till the objective has stopped moving"""
+        self.objective_control.wait_for_move()
+        return True
+
     def get_objective(self):
         return self.objective_control.read_z()
 
@@ -987,6 +1008,8 @@ class NikonEclipseTi(BaseSystem):
         """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
         self.objective_control.set_origin()
         return True
+
+
 
     def home_objective(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
@@ -1031,25 +1054,16 @@ class NikonEclipseTi(BaseSystem):
     def stop_voltage(self):
         self.daq_board_control.change_voltage(0)
 
+    def close_daq(self):
+        try:
+            self.stop_voltage()
+        except Exception as e:
+            logging.error("Could not close voltage: {}".format(e))
 
-    def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
-        if pfn:
-            self.laser_control.set_pfn('{:03d}'.format(int(pfn)))
-
-        if att:
-            self.laser_control.set_attenuation('{:03d}'.format(int(att)))
-
-        if energy:
-            logging.info('Cannot set energy of laser currently.')
-
-        if mode:
-            self.laser_control.set_mode('0')
-            self.laser_control.set_rep_rate('010')
-
-        if burst:
-            self.laser_control.set_burst('{:04d}'.format(int(burst)))
-
-        return True
+        try:
+            self.laser_close()
+        except Exception as e:
+            logging.error("Could not close laser: {}".format(e))
 
     def pressure_close(self):
         self.pressure_control.close()
@@ -1082,6 +1096,22 @@ class NikonEclipseTi(BaseSystem):
 
     def turn_off_dance(self):
         self.led_control.dance_stop.set()
+
+    def laser_standby(self):
+        """Puts laser in a standby 'fire-ready' mode."""
+        self.daq_board_control.laser_standby()
+
+    def laser_fire(self):
+        """Fires the laser."""
+        threading.Thread(target = self.daq_board_control.laser_fire).start()
+
+    def laser_stop(self):
+        """Stops current firing of the laser."""
+        self.daq_board_control.laser_shutdown()
+
+    def laser_close(self):
+        """Removes immediate functionality of the laser."""
+        self.laser_stop()
 
 
 class NikonTE3000(BaseSystem):

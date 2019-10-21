@@ -10,7 +10,7 @@ import os
 import matplotlib.pyplot as plt
 
 DEV = "/Dev1/"
-CURRENT_OUT = "ai2"
+CURRENT_OUT = "ai5"
 VOLTAGE_IN = "ai1"
 VOLTAGE_OUT = 'ao1'
 RFU = "ai3"
@@ -38,6 +38,12 @@ class DAQBoard:
     middle_data=None
     downsampled_freq=8
 
+    # Laser States
+    _pin3 = False # Set to High to enable Laser
+    _pin5 = True # Set to Lo to enable laser
+
+
+
     def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None):
         self.dev = dev
         self.voltage_control = voltage_control
@@ -46,6 +52,10 @@ class DAQBoard:
         self.rfu_chan = rfu_read
         self._clear_data()
         self.filter_setup()
+
+        # Set up laser (Could move to new class perhaps)
+        self.laser_task = nidaqmx.Task()
+        self.start_laser_task()
 
         if stop is None:
 
@@ -61,6 +71,10 @@ class DAQBoard:
             except FileNotFoundError:
                 pass
         return
+
+    def close_tasks(self):
+        self.laser_task.close()
+
 
     def callback(self, *args):
         """Add data to the data variable every so many samples
@@ -115,85 +129,6 @@ class DAQBoard:
             # Apply butter filter to the data
             #self.data[self.rfu_chan] = self.filter_data(self.data[self.rfu_chan])
         return 0
-    @staticmethod
-    def raw_data(data, points):
-        raws = []
-        for i in range(points):
-            idx = int(len(data)/points)
-            raws.append(data[idx*i])
-        return raws
-    @staticmethod
-    def average_data(data, points,conversion=1):
-        avgs = []
-        for i in range(points):
-            idx = int(len(data)/points)
-            avgs.append(np.mean(data[idx*i:idx*i+idx])*conversion)
-        return avgs
-
-    def decimate_data(self,data):
-        """ Decimates the data by applying a LP filter and then down sampling by a factor of 10
-        FIR filter is used since it will be more stable if the user changes things up slightly
-        returns data that has been downsampled
-        """
-        if self.old_data is None:
-            self.old_data = data[:]
-        elif self.middle_data is None:
-            self.middle_data = data[:]
-        else:
-            self.middle_data.extend(data)
-            self.old_data.extend(self.middle_data)
-            data = self.old_data
-        while len(data) > 30:
-            try:
-                data = signal.decimate(data, 10, 40, 'fir')
-            except IndexError:
-                self.stop.set()
-                print(len(data))
-                break
-
-
-        data=data.tolist()
-        data=data[int(len(data)/3):-int(len(data)/3)]
-        return data
-
-
-    def filter_data(self,data):
-        """ Applies a digital butter filter to the data """
-        logging.debug("FilterData")
-        if len(data) < 10:
-            return data
-        if self.sos is None:
-            # Apply filter forwards and backwards to remove ringing at start
-            # Padlength must be less than the rows in our data
-            pad = 3 * max(len(self.ba[0]), len(self.ba[1]))
-            if pad >= len(data) - 1:
-                pad = 0
-
-            data = signal.filtfilt(self.ba[0], self.ba[1], data, padlen=pad).tolist()
-        else:
-            data = signal.sosfilt(self.sos, data).tolist()
-
-        return data
-
-    def filter_setup(self, poles=8, method='filtfilt'):
-        """
-        Sets up butter filter
-        """
-        def get_wn(desired, smpls):
-            return desired / (smpls / 2)
-
-        cutoff = self.cutoff
-        sampling = self.freq
-        if method == 'filtfilt':
-            # Create a low pass filter without ringing
-            b, a = signal.butter(poles, get_wn(cutoff, sampling), 'lp', analog=False)
-            self.ba = (b, a)
-
-        else:
-            sos = signal.butter(poles, get_wn(cutoff, sampling), 'lp', analog=False, output='sos')
-            self.sos = sos
-
-
 
 
     def sample_config(self, task):
@@ -206,38 +141,12 @@ class DAQBoard:
         return task
 
     def analog_out_config(self, task):
-        chan = self.dev + self.voltage_control
-        task.ao_channels.add_ao_voltage_chan(chan)
+        voltage_chan = self.dev + self.voltage_control
+        task.ao_channels.add_ao_voltage_chan(voltage_chan)
         task.timing.cfg_samp_clk_timing(self.output_freq)
         return task
 
-    def change_voltage(self, voltage):
-        """ voltage in kV, used to adjust analog output (divided voltage-conversion factor"""
-        # Convert kV to daq V
-        voltage = float(voltage) / self.voltage_conversion
-        diff = float(voltage) - self.voltage
-        if diff == 0:
-            self.output_task.write(0)
-            self.voltage = voltage
-            return
-        # Get samples to send DAQ
-        samples = self.get_voltage_ramp(voltage, diff)
-        # Reset current voltage
-        self.output_task.write(samples)
-        self.voltage = voltage
-        logging.info('Voltage set to {}'.format(voltage))
 
-    def get_voltage_ramp(self, voltage, diff):
-        """When changing voltages, ramp up the voltage output"""
-        # Create a ramp from the current voltage to the set voltage
-
-        ramp_time = abs(float(diff) / self.voltage_ramp)
-        logging.info(ramp_time)
-        samples = round(ramp_time * self.output_freq)
-        logging.info(samples)
-        self.samples = samples = np.linspace(self.voltage, voltage, samples)
-
-        return samples
 
     def analog_in_config(self, task, chan='ai3'):
         """Set up the analog read channels here"""
@@ -247,7 +156,6 @@ class DAQBoard:
         task.ai_channels.add_ai_voltage_chan(chan)
         chan = self.dev + self.rfu_chan
         task.ai_channels.add_ai_voltage_chan(chan)
-
 
         s_terminal = self.dev + self.sample_terminal
         task.timing.cfg_samp_clk_timing(self.freq, source=s_terminal,
@@ -298,6 +206,55 @@ class DAQBoard:
                 # Sleep our thread every 5 ms and check. Does not consume core during sleep
                 time.sleep(0.005)
 
+    def start_laser_task(self):
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line0') # pin3, Computer Control Channel
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line1') # pin 5, Laser OnOFf Channel
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line5') # Pulse Command Channel
+        self.laser_task.write([False, True, False])
+
+
+    def laser_fire(self):
+        """
+        This is a thread blocking task. Requires the laser to be in standby mode before firing. We set the pulse to
+        50 ms.
+        :return:
+        """
+
+        self.laser_task.write([True, True, True]) # Read the docs, good luck
+        time.sleep(0.05)
+        self.laser_task.write([False, True, False])
+
+
+
+    def change_voltage(self, voltage):
+        """ voltage in kV, used to adjust analog output (divided voltage-conversion factor"""
+        # Convert kV to daq V
+        voltage = float(voltage) / self.voltage_conversion
+        diff = float(voltage) - self.voltage
+        if diff == 0:
+            self.output_task.write(0)
+            self.voltage = voltage
+            return
+        # Get samples to send DAQ
+        samples = self.get_voltage_ramp(voltage, diff)
+        # Reset current voltage
+        self.output_task.write(samples)
+        self.voltage = voltage
+        logging.info('Voltage set to {}'.format(voltage))
+
+    def get_voltage_ramp(self, voltage, diff):
+        """When changing voltages, ramp up the voltage output"""
+        # Create a ramp from the current voltage to the set voltage
+
+        ramp_time = abs(float(diff) / self.voltage_ramp)
+        logging.info(ramp_time)
+        samples = round(ramp_time * self.output_freq)
+        logging.info(samples)
+        self.samples = samples = np.linspace(self.voltage, voltage, samples)
+
+        return samples
+
+
     def save_data(self, filename):
         with open(filename, 'w') as f_in:
             f_in.write('time, rfu, kV, uA, avg, raw\n')
@@ -319,6 +276,88 @@ class DAQBoard:
             shutil.move(self.temp_file, destination)
         except FileNotFoundError:
             logging.warning('Could not find {}'.format(self.temp_file))
+
+
+    @staticmethod
+    def raw_data(data, points):
+        raws = []
+        for i in range(points):
+            idx = int(len(data)/points)
+            raws.append(data[idx*i])
+        return raws
+
+
+    @staticmethod
+    def average_data(data, points,conversion=1):
+        avgs = []
+        for i in range(points):
+            idx = int(len(data)/points)
+            avgs.append(np.mean(data[idx*i:idx*i+idx])*conversion)
+        return avgs
+
+    def decimate_data(self,data):
+        """ Decimates the data by applying a LP filter and then down sampling by a factor of 10
+        FIR filter is used since it will be more stable if the user changes things up slightly
+        returns data that has been downsampled
+        """
+        if self.old_data is None:
+            self.old_data = data[:]
+        elif self.middle_data is None:
+            self.middle_data = data[:]
+        else:
+            self.middle_data.extend(data)
+            self.old_data.extend(self.middle_data)
+            data = self.old_data
+        while len(data) > 30:
+            try:
+                data = signal.decimate(data, 10, 40, 'fir')
+            except IndexError:
+                self.stop.set()
+                print(len(data))
+                break
+
+
+        data=data.tolist()
+        data=data[int(len(data)/3):-int(len(data)/3)]
+        return data
+
+    def filter_data(self,data):
+        """ Applies a digital butter filter to the data """
+        logging.debug("FilterData")
+        if len(data) < 10:
+            return data
+        if self.sos is None:
+            # Apply filter forwards and backwards to remove ringing at start
+            # Padlength must be less than the rows in our data
+            pad = 3 * max(len(self.ba[0]), len(self.ba[1]))
+            if pad >= len(data) - 1:
+                pad = 0
+
+            data = signal.filtfilt(self.ba[0], self.ba[1], data, padlen=pad).tolist()
+        else:
+            data = signal.sosfilt(self.sos, data).tolist()
+
+        return data
+
+    def filter_setup(self, poles=8, method='filtfilt'):
+        """
+        Sets up butter filter
+        """
+        def get_wn(desired, smpls):
+            return desired / (smpls / 2)
+
+        cutoff = self.cutoff
+        sampling = self.freq
+        if method == 'filtfilt':
+            # Create a low pass filter without ringing
+            b, a = signal.butter(poles, get_wn(cutoff, sampling), 'lp', analog=False)
+            self.ba = (b, a)
+
+        else:
+            sos = signal.butter(poles, get_wn(cutoff, sampling), 'lp', analog=False, output='sos')
+            self.sos = sos
+
+
 
 
 

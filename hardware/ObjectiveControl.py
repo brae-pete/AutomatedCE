@@ -111,7 +111,7 @@ class ObjectiveControl:
         current_pos = prev_pos + 1
         # Update position while moving
         while prev_pos != current_pos:
-            time.sleep(0.1)
+            time.sleep(0.25)
             prev_pos = current_pos
             current_pos = self.read_z()
         return current_pos

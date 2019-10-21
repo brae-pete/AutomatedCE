@@ -814,11 +814,13 @@ class RunScreen(QtWidgets.QMainWindow):
         self.inject_cell_pos = QtWidgets.QPushButton('Cell Focus')
         self.inject_cap_pos = QtWidgets.QPushButton('Cap. Focus')
         self.inject_lower_cap = QtWidgets.QPushButton('Lower Cap')
-        self.inject_burst_lyse = QtWidgets.QPushButton('Diamond Lysis')
+        self.inject_burst_lyse = QtWidgets.QPushButton('Load Cap ')
+        self.save_cap = QtWidgets.QPushButton('Save Cap')
         row_3.addWidget(self.inject_cell_pos)
         row_3.addWidget(self.inject_cap_pos)
         row_3.addWidget(self.inject_lower_cap)
         row_3.addWidget(self.inject_burst_lyse)
+        row_3.addWidget(self.save_cap)
 
 
         self.sequence_display.setColumnCount(3)
@@ -903,12 +905,15 @@ class RunScreen(QtWidgets.QMainWindow):
         self.live_option = SwitchButton(w1='Live', w2='Insert', width=80)
         self.focus_feed = QtWidgets.QPushButton('Temp Focus Button')
         self.live_feed_scene = GraphicsScene()
-        self.live_feed_scene.setSceneRect(0, 0, 512, 384)
+        self.live_feed_scene.setSceneRect(0, 0, 512, 512)
         self.live_feed_view = QtWidgets.QGraphicsView()
         self.live_feed_pixmap = QtWidgets.QGraphicsPixmapItem()
         self.camera_load = QtWidgets.QPushButton('Open Camera')
         self.camera_close = QtWidgets.QPushButton('Close Camera')
         self.buffer_save = QtWidgets.QPushButton('Save Buffer Seq')
+        self.finder_button = QtWidgets.QPushButton('Find a Cell')
+
+
 
 
         live_feed_window = QtWidgets.QMainWindow()
@@ -924,6 +929,7 @@ class RunScreen(QtWidgets.QMainWindow):
         control_layout.addWidget(self.camera_load)
         control_layout.addWidget(self.camera_close)
         control_layout.addWidget(self.buffer_save)
+        control_layout.addWidget(self.finder_button)
         control_layout.addStretch()
         control_widget.setLayout(control_layout)
         live_feed_control.setWidget(control_widget)
@@ -1074,7 +1080,20 @@ class DataScreen(QtWidgets.QMainWindow):
 class SystemScreen(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
+        main_layout = QtWidgets.QVBoxLayout()
+        main_layout.addStretch()
 
+        self.detection_load = QtWidgets.QPushButton('Detection')
+
+        main_layout.addWidget(self.detection_load)
+        reload_panel = QtWidgets.QDockWidget()
+        reload_panel.setTitleBarWidget(QtWidgets.QWidget())
+        temper_wid = QtWidgets.QWidget()
+        temper_wid.setLayout(main_layout)
+        temper_wid = wrap_widget(temper_wid)
+        temper_wid.setFixedWidth(380)
+        reload_panel.setWidget(temper_wid)
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, reload_panel)
 
 class AlteredTabBar(QtWidgets.QTabBar):
 

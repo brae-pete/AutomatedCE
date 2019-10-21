@@ -21,7 +21,11 @@ except ModuleNotFoundError:
 
 import threading
 
-from hardware import MicroControlClient
+try:
+    from hardware import MicroControlClient
+except:
+    sys.path.append(os.path.relpath('..'))
+    from hardware import MicroControlClient
 
 """
 Notes for using this outside the Barracuda Repository: 
@@ -144,7 +148,7 @@ class ImageControl:
     def _rotate_img(img, rotation):
         if rotation == 0:
             return img
-        return transform.rotate(img, 90, resize=True)
+        return transform.rotate(img, rotation, resize=True)
 
     def image_conversion(self, img):
         """ Adjusts the contrast and brightness"""
@@ -486,7 +490,7 @@ class MicroControl(ImageControl):
         msg = "Could not stop live video feed"
         return self.mmc.ok_check(response, msg)
 
-    def get_recent_image(self, size=0.5, rotation=0):
+    def get_recent_image(self, size=0.5, rotation=270):
         """Returns most recent image from the camera circular buffer (live feed)
         performs image processing. Returns PIL image
         """
@@ -496,6 +500,7 @@ class MicroControl(ImageControl):
             img = self.mmc.read_response()
         if type(img) is not np.ndarray:
             logging.error("Could not get image {}".format(img))
+            time.sleep(0.3)
             return None
         # Preserve the original picture (this is saved for Tiff files)
         self.raw_img = img.copy()
