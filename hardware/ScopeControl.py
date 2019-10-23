@@ -134,6 +134,9 @@ class ShutterControl:
         logging.warning("ShutterControl.get_shutter not implmented in hardware class")
 
 class ShutterMicroControl(ShutterControl):
+
+    device = 'IntensiLightShutter'
+
     def __init__(self, mmc=None, port = 5511, config_file='IntensiShutter.cfg', lock=threading.Lock()):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
@@ -154,7 +157,6 @@ class ShutterMicroControl(ShutterControl):
          """
         if self.mmc is None:
             self.mmc = MicroControlClient.MicroControlClient(self.port)
-        self.mmc.open()
 
     def _close_client(self):
         """ Closes the client resources, called when program exits"""
@@ -166,14 +168,14 @@ class ShutterMicroControl(ShutterControl):
         with self.lock:
             self.mmc.send_command('core,load_config,{}'.format(self.config))
             response = self.mmc.read_response()
-        msg = "Could not open Shutter"
+        msg = "Could not open Shutter: {}".format(response)
         state = self.mmc.ok_check(response, msg)
         return state
 
     def open_shutter(self):
         """ Returns the current filter channel """
         with self.lock:
-            self.mmc.send_command('shutter,open\n'
+            self.mmc.send_command('shutter,open,{}\n'.format(self.device))
             response = self.mmc.read_response()
         msg = "Could not oPEN shutter"
         state = self.mmc.ok_check(response, msg)
@@ -182,17 +184,27 @@ class ShutterMicroControl(ShutterControl):
     def close_shutter(self):
         """ Returns the current filter channel """
         with self.lock:
-            self.mmc.send_command('shutter\n')
-            response = self.mmc.read_response()
-            msg = "Could not CLOSE shutter"
+            self.mmc.send_command('shutter,close,{}\n'.format(self.device))
+        response = self.mmc.read_response()
+        msg = "Could not CLOSE shutter"
         state = self.mmc.ok_check(response, msg)
         return state
 
     def get_shutter(self):
         """ Sets the filter channel"""
         with self.lock:
-            self.mmc.send_command('shutter,get\n')
+            self.mmc.send_command('shutter,get,{}\n'.format(self.device))
             response = self.mmc.read_response()
-        msg = "Could not read shutter"
-        state = self.mmc.ok_check(response, msg)
-        return state
+        if type(response) is not bool:
+            logging.warning("could not read Shutter channel")
+            response = False
+
+        return response
+
+    def _check_open(self,msg):
+        """ Checks if mmc has loaded all the way """
+        if msg.find('No device with label') != -1:
+            self.open()
+
+
+

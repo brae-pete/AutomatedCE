@@ -95,7 +95,7 @@ class MicroControl:
 
         self.shutter_commands = {'get':self.get_shutter,
                                  'open':self.open_shutter,
-                                 'close':self.close_shutter}
+                                 'close': self.close_shutter}
 
         self.mmc = MMCorePy.CMMCore()
 
@@ -217,28 +217,28 @@ class MicroControl:
 
     def set_filter_channel(self, args):
         """ Sets the filter channel """
-        device = args[3]
-        channel = int(args[4])
+        device = args[2]
+        channel = int(args[3])
         self.mmc.setState(device, channel)
         return 'Ok'
 
     def get_filter_channel(self, args):
         """ Returns the filter Channel"""
-        device = args[3]
+        device = args[2]
         return self.mmc.getState(device)
 
     def get_shutter(self,args):
         """ Returns the shutter state"""
-        return self.mmc.getShutterOpen()
+        return self.mmc.getShutterOpen(args[2])
 
     def open_shutter(self,args):
         """ Opens the shutter """
-        self.mmc.setShutterOpen(True)
+        self.mmc.setShutterOpen(args[2], True)
         return 'Ok'
 
     def close_shutter(self, args):
         """ Closes the shutter """
-        self.mmc.setShutterOpen(False)
+        self.mmc.setShutterOpen(args[2],False)
         return 'Ok'
 
     def parse_command(self, message):

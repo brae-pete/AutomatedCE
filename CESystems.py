@@ -370,10 +370,15 @@ class NikonEclipseTi(BaseSystem):
         #Nikon Scope shares a MMC
         self.objective_control = ObjectiveControl.MicroControl(port = 7812, lock = self._scope_lock) # Use Presets
         self.xy_stage_control = XYControl.MicroControl(mmc=self.objective_control.mmc, lock = self._scope_lock)
+        self.filter_control = ScopeControl.FilterMicroControl(mmc=self.objective_control.mmc,
+                                                              lock=self._scope_lock)
+        # MMC needs some time to think before giving a new config
+        time.sleep(0.5)
         self.shutter_control = ScopeControl.ShutterMicroControl(mmc=self.objective_control.mmc,
                                                                 lock=self._scope_lock)
-        self.filter_control = ScopeControl.FilterMicroControl(mmc=self.objective_control.mmc, config='Shared',
-                                                              lock=self._scope_lock)
+        time.sleep(0.5)
+        self.shutter_control.open()
+
         # Set up and start DAQ
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
@@ -705,23 +710,23 @@ class NikonEclipseTi(BaseSystem):
 
     def shutter_open(self):
         """ Opens the shutter"""
-        logging.error(" Shutter Open is not supported in hardware class")
+        self.shutter_control.open_shutter()
 
     def shutter_close(self):
         """ Closes the shutter"""
-        logging.error(" Shutter Close is not supported in hardware class")
+        self.shutter_control.close_shutter()
 
     def shutter_get(self):
         """ Gets shutter state """
-        logging.error(" Shutter Get is not supported in hardware class ")
+        return self.shutter_control.get_shutter()
 
     def filter_set(self, channel):
         """ Sets the filter cube channel"""
-        logging.error(" Filter Set is not supported in hardware class")
+        self.filter_control.set_state(channel)
 
     def filter_get(self):
         """ Returns the current filter channel"""
-        logging.error(" Filter Get is not supported in hardware class")
+        return self.filter_control.get_state()
 
 
 class BarracudaSystem(BaseSystem):
@@ -1413,3 +1418,11 @@ class OstrichSystem(BaseSystem):
     def pressure_valve_close(self):
         """Closes pressure valve."""
         pass
+
+def test():
+    hardware = NikonEclipseTi()
+    hardware.start_system()
+    return hardware
+
+if __name__=="__main__":
+    hardware = test()
