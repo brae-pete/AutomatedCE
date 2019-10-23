@@ -82,12 +82,21 @@ class MicroControl:
 
         self.obj_commands = {'get_position': self.get_obj_position,
                              'set_position': self.set_obj_position}
+
         self.core_commands = {'load': self.load_devices,
                               'init': self.init_devices,
                               'unload': self.unload_devices,
                               'unload_device':self.unload_device,
                               'init_device':self.init_device,
                               'load_config':self.load_config}
+
+        self.filter_commands = {'set':self.set_filter_channel,
+                                'get':self.get_filter_channel}
+
+        self.shutter_commands = {'get':self.get_shutter,
+                                 'open':self.open_shutter,
+                                 'close':self.close_shutter}
+
         self.mmc = MMCorePy.CMMCore()
 
     def load_devices(self, args):
@@ -206,6 +215,32 @@ class MicroControl:
         self.mmc.setOriginXY(args[2])
         return 'Ok'
 
+    def set_filter_channel(self, args):
+        """ Sets the filter channel """
+        device = args[3]
+        channel = int(args[4])
+        self.mmc.setState(device, channel)
+        return 'Ok'
+
+    def get_filter_channel(self, args):
+        """ Returns the filter Channel"""
+        device = args[3]
+        return self.mmc.getState(device)
+
+    def get_shutter(self,args):
+        """ Returns the shutter state"""
+        return self.mmc.getShutterOpen()
+
+    def open_shutter(self,args):
+        """ Opens the shutter """
+        self.mmc.setShutterOpen(True)
+        return 'Ok'
+
+    def close_shutter(self, args):
+        """ Closes the shutter """
+        self.mmc.setShutterOpen(False)
+        return 'Ok'
+
     def parse_command(self, message):
 
         cmd = message.split(',')
@@ -224,6 +259,13 @@ class MicroControl:
             elif cmd[0] == 'xy':
                 response = self.stage_commands[cmd[1]](cmd)
 
+            elif cmd[0] == 'filter':
+                response = self.filter_commands[cmd[1]](cmd)
+
+            elif cmd[0] == 'shutter':
+                response = self.shutter_commands[cmd[1]](cmd)
+
+
         except KeyError:
             response = 'Error: {} Is not a Valid Command. Check the valid commands in the MicroControl class'.format(
                 message)
@@ -231,6 +273,7 @@ class MicroControl:
         except Exception as e:
             response = 'Error: ' + str(e)
         return response
+
 
 
 def main(args):

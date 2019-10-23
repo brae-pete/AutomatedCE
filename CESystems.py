@@ -14,6 +14,7 @@ from hardware import ObjectiveControl
 from hardware import LaserControl
 from hardware import PressureControl
 from hardware import LightControl
+from hardware import ScopeControl
 from hardware import MicroControlClient
 
 # Network Module
@@ -289,6 +290,27 @@ class BaseSystem:
         """ Turns off the flashing RGB """
         logging.error("LED Dance is not supported in hardware class")
 
+    def shutter_open(self):
+        """ Opens the shutter"""
+        logging.error(" Shutter Open is not supported in hardware class")
+
+    def shutter_close(self):
+        """ Closes the shutter"""
+        logging.error(" Shutter Close is not supported in hardware class")
+
+    def shutter_get(self):
+        """ Gets shutter state """
+        logging.error(" Shutter Get is not supported in hardware class ")
+
+    def filter_set(self, channel):
+        """ Sets the filter cube channel"""
+        logging.error(" Filter Set is not supported in hardware class")
+
+    def filter_get(self):
+        """ Returns the current filter channel"""
+        logging.error(" Filter Get is not supported in hardware class")
+
+
 class NikonEclipseTi(BaseSystem):
     system_id = 'ECLIPSETI'
     _z_stage_com = 'COM3'
@@ -325,6 +347,8 @@ class NikonEclipseTi(BaseSystem):
         self.hasPressureControl = True
         self.hasXYControl = True
         self.hasLEDControl=True
+        self.hasShutterControl = True
+        self.hasFilterControl = True
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -346,7 +370,10 @@ class NikonEclipseTi(BaseSystem):
         #Nikon Scope shares a MMC
         self.objective_control = ObjectiveControl.MicroControl(port = 7812, lock = self._scope_lock) # Use Presets
         self.xy_stage_control = XYControl.MicroControl(mmc=self.objective_control.mmc, lock = self._scope_lock)
-
+        self.shutter_control = ScopeControl.ShutterMicroControl(mmc=self.objective_control.mmc,
+                                                                lock=self._scope_lock)
+        self.filter_control = ScopeControl.FilterMicroControl(mmc=self.objective_control.mmc, config='Shared',
+                                                              lock=self._scope_lock)
         # Set up and start DAQ
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
@@ -370,6 +397,7 @@ class NikonEclipseTi(BaseSystem):
     def close_system(self):
         try:
             self.close_image()
+            self.image_control._close_client()
         except:
             logging.warning("Did not shut down Z")
 
@@ -412,12 +440,15 @@ class NikonEclipseTi(BaseSystem):
 
     def close_image(self):
         self.image_control.close()
-        self.image_control._close_client()
+        #self.image_control._close_client()
         return True
 
     def open_image(self):
         self.image_control.open()
         return True
+
+    def _close_client(self):
+        self.image_control._close_client()
 
     def start_feed(self):
         if self.camera_state():
@@ -671,6 +702,26 @@ class NikonEclipseTi(BaseSystem):
     def laser_close(self):
         """Removes immediate functionality of the laser."""
         self.laser_stop()
+
+    def shutter_open(self):
+        """ Opens the shutter"""
+        logging.error(" Shutter Open is not supported in hardware class")
+
+    def shutter_close(self):
+        """ Closes the shutter"""
+        logging.error(" Shutter Close is not supported in hardware class")
+
+    def shutter_get(self):
+        """ Gets shutter state """
+        logging.error(" Shutter Get is not supported in hardware class ")
+
+    def filter_set(self, channel):
+        """ Sets the filter cube channel"""
+        logging.error(" Filter Set is not supported in hardware class")
+
+    def filter_get(self):
+        """ Returns the current filter channel"""
+        logging.error(" Filter Get is not supported in hardware class")
 
 
 class BarracudaSystem(BaseSystem):

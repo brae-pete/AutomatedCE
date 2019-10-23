@@ -1005,6 +1005,7 @@ class RunScreenController:
     _stop.set()
     _stop.clear()
     _last_cell_positions = {'xy': None, 'cap': None, 'obj': None, 'well': None}
+    cell_focus_getters = {}
 
     # Screen Background Functions
     def __init__(self, screen, hardware, repository):
@@ -1936,14 +1937,17 @@ class RunScreenController:
             logging.error(e)
 
     def run(self):
+
         if not self.check_system():
             logging.error('Unable to start run.')
         repetitions = self.screen.repetition_input.value()
         flags = [self._pause_flag, self._stop_thread_flag, self._inject_flag, self._plot_data]
         self.runs = CERunLogic.RunMethod(self.hardware, self.methods, repetitions, self.methods_id,
-                                    flags, self.insert, self.screen.run_prefix.text(), self.lyse.cap_control)
+                                         flags, self.insert, self.screen.run_prefix.text(), self.lyse.cap_control,
+                                         self.cell_focus_getters)
         state = self.runs.start_run()
         return state
+
         """
         for method, method_id in zip(self.methods, self.methods_id):
 

@@ -216,7 +216,11 @@ class ImageControl:
             # Remove the expired file
             if passed_time - self._capture_ref[0][0] > self.buffer_time:
                 _, old_file = self._capture_ref.pop(0)
-                os.remove(old_file)
+                try:
+                    os.remove(old_file)
+                except Exception as e:
+                    logging.error("Image Error...{}".format(e))
+
 
     def _get_unique_folder(self, parent, folder):
         """ Returns a unique folder name """
