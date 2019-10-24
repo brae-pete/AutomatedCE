@@ -231,8 +231,8 @@ class RunMethod:
 
             cap = self._last_cell_positions['cap']
             if cap is not None:
-                self.hardware.set_z(cap)
-
+                #self.hardware.set_z(cap)
+                pass
             obj = self._last_cell_positions['obj']
             if obj is not None and semi:
                 self.move_objective(obj)
@@ -289,6 +289,53 @@ class RunMethod:
         # Move the objective into position
         fc.quickcheck()
         state = self.check_flags()
+        # Take a Snapshot
+        if not self.step['Video']:
+            logging.info("Taking Brightfield image...")
+            # Take a Brightfield Picture
+            savepath= self.get_save_path(prefix='BF',suffix='.png')
+            self.hardware.save_raw_image(savepath)
+        if self.step['FluorSnap']:
+            logging.info("Taking Fluorescent image...")
+            # Take a Fluorescence Picture
+            # Stop Live Feed
+            self.hardware.stop_feed()
+            # Adjust Exposure
+            old_exp = self.hardware.get_exposure()
+            exp = self.step['Exposure']
+            self.hardware.set_exposure(exp)
+            # Adjust Filter
+            old_chnl = self.hardware.filter_get()
+            chnl = self.step['FilterChannel']
+            self.hardware.filter_set(chnl)
+            time.sleep(1)
+            # Turn off the LED
+            old_leds = self.hardware.led_control.channel_states.copy()
+            for led in old_leds:
+                if old_leds[led]:
+                    self.hardware.turn_off_led(led)
+
+            # Adjust Shutter
+            self.hardware.shutter_open()
+            time.sleep(0.2)
+            # Snap
+            filepath = self.get_save_path(prefix='FL', suffix='.tiff')
+            time.sleep((exp / 1000) + 1.5)
+            self.hardware.snap_image()
+
+            self.hardware.save_raw_image(filepath)
+            # Close Shutter
+            self.hardware.shutter_close()
+            # Start LED
+            for led in old_leds:
+                if old_leds[led]:
+                    self.hardware.turn_on_led(led)
+            # Adjust Filter
+            self.hardware.filter_set(old_chnl)
+            # Adjust Exposure
+            self.hardware.set_exposure(100)
+            # Restart Live Feed
+            self.hardware.start_feed()
 
         # Lower the Capillary
         get_focus = self.cap_control.move_cap_above_cell()
@@ -381,17 +428,27 @@ class RunMethod:
             # Move then objective down
 
             self.hardware.pressure_rinse_stop()
-
-            # Record buffer of injection after lysis.
+            # Take a picture if we are in single cell mode
             if self.step['SingleCell']:
-                file_name = "{}_{}_step{}_rep{}".format(self.folder, self.method_id, self.step_id, self.rep)
-                save_path = os.path.join(self.save_dir, file_name)
-                threading.Thread(target=self.hardware.save_buffer, args=(save_path, 'cell_lysis.avi')).start()
+                # Record buffer of injection after lysis.
+                if self.step['Video']:
+                    save_path = self.get_save_path()
+                    threading.Thread(target=self.hardware.save_buffer, args=(save_path, 'cell_lysis.avi')).start()
+                else:
+                    logging.info("Taking Brightfield image...")
+                    # Take a Brightfield Picture
+                    savepath = self.get_save_path(prefix='Post_BF', suffix='.png')
+                    self.hardware.save_raw_image(savepath)
             self.hardware.objective_control.wait_for_move()
             state_n = self.check_flags()
             if not state_n:
                 return False
         return True
+
+    def get_save_path(self, prefix='',suffix=''):
+        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder,prefix, self.method_id, self.step_id, self.rep,suffix)
+        return os.path.join(self.save_dir, file_name)
+
 
     def create_run_folder(self):
         cwd = os.getcwd()

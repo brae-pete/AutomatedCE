@@ -327,7 +327,7 @@ class NikonEclipseTi(BaseSystem):
     _outlet_lock = threading.RLock()
     _pressure_lock = threading.RLock()
     _scope_lock = threading.Lock()
-    _cam_lock = threading.Lock()
+    _cam_lock = threading.RLock()
     _led_lock = _outlet_lock
 
     xy_stage_inversion = [1, -1]
@@ -372,13 +372,9 @@ class NikonEclipseTi(BaseSystem):
         self.xy_stage_control = XYControl.MicroControl(mmc=self.objective_control.mmc, lock = self._scope_lock)
         self.filter_control = ScopeControl.FilterMicroControl(mmc=self.objective_control.mmc,
                                                               lock=self._scope_lock)
-        # MMC needs some time to think before giving a new config
-        time.sleep(0.5)
-        self.shutter_control = ScopeControl.ShutterMicroControl(mmc=self.objective_control.mmc,
+        # Shutter is on its own MMC
+        self.shutter_control = ScopeControl.ShutterMicroControl(port=7811,
                                                                 lock=self._scope_lock)
-        time.sleep(0.5)
-        self.shutter_control.open()
-
         # Set up and start DAQ
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
@@ -411,6 +407,10 @@ class NikonEclipseTi(BaseSystem):
         except:
             logging.warning("Did not shut down Z")
         try:
+            self.shutdown_shutter()
+        except:
+            logging.warning("Did not close shutter")
+        try:
             self.close_outlet()
         except:
             logging.warning("Did not shut down Z")
@@ -429,10 +429,10 @@ class NikonEclipseTi(BaseSystem):
             logging.warning("Did not close DAQ tasks")
         return True
 
-
-
     def record_image(self, filename):
-        self.image_control.record_recent_image(filename)
+        img = self.get_image()
+        self.image_control.save_image(img,filename)
+        return
 
     def get_image(self):
 
@@ -452,6 +452,14 @@ class NikonEclipseTi(BaseSystem):
         self.image_control.open()
         return True
 
+    def snap_image(self,filename=None):
+        self.image_control.get_single_image()
+        if filename is not None:
+            self.image_control.save_raw_image(filename)
+
+    def save_raw_image(self, filename):
+        self.image_control.save_raw_image(filename)
+
     def _close_client(self):
         self.image_control._close_client()
 
@@ -459,6 +467,13 @@ class NikonEclipseTi(BaseSystem):
         if self.camera_state():
             self.image_control.start_video_feed()
         return True
+
+    def set_exposure(self,exp):
+        self.image_control.set_exposure(exp)
+        return
+
+    def get_exposure(self):
+        return self.image_control.get_exposure()
 
     def stop_feed(self):
         self.image_control.stop_video_feed()
@@ -719,6 +734,12 @@ class NikonEclipseTi(BaseSystem):
     def shutter_get(self):
         """ Gets shutter state """
         return self.shutter_control.get_shutter()
+
+    def shutdown_shutter(self):
+        """ Shutsdown the Shutter client and mmc"""
+        self.shutter_control.close()
+        self.shutter_control._close_client()
+
 
     def filter_set(self, channel):
         """ Sets the filter cube channel"""

@@ -1,9 +1,8 @@
 import threading
-from hardware import ArduinoBase
+import sys
 import pickle
 import logging
 import time
-from hardware import MicroControlClient
 import os
 
 # Locate the directory of config files
@@ -23,6 +22,14 @@ elif "CEGraphic" in contents:
         CONFIG_FOLDER = os.getcwd()
 else:
     CONFIG_FOLDER = os.getcwd()
+
+try:
+    from hardware import MicroControlClient
+    from hardware import ArduinoBase
+except:
+    sys.path.append(os.path.relpath('..'))
+    from hardware import MicroControlClient
+    from hardware import ArduinoBase
 
 
 class FilterWheelControl:
@@ -157,6 +164,7 @@ class ShutterMicroControl(ShutterControl):
          """
         if self.mmc is None:
             self.mmc = MicroControlClient.MicroControlClient(self.port)
+        self.mmc.open()
 
     def _close_client(self):
         """ Closes the client resources, called when program exits"""
