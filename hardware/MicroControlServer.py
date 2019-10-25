@@ -1,3 +1,5 @@
+import datetime
+
 MICROMANAGER_DIRECTORY = r'C:\Program Files\Micro-Manager-1.4'
 
 import sys
@@ -11,6 +13,11 @@ import numpy as np
 import pickle
 from multiprocessing.connection import Listener
 import logging
+
+
+def log_output(msg, port, mode = 'a'):
+    with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log-{}.txt'.format(port), mode) as fout:
+        fout.write("{}-{}\n".format(datetime.datetime.now().strftime('%m/%d/%y %H:%M:%S'), msg))
 
 
 class MicroServer:
@@ -31,25 +38,36 @@ class MicroServer:
         conn = self.listener.accept()
         # Server will wait for a message
         while True:
-            msg = conn.recv()
-            # Close server when receiving the close command
-            if msg == 'close':
-                conn.close()
+            try:
+                msg = conn.recv()
+                # Close server when receiving the close command
+                if msg == 'close':
+                    conn.close()
+                    break
+
+                else:
+                    msg = str(msg)
+                    cmds = msg.split('\n')
+                    for cmd in cmds:
+
+                        message = cmd.replace('\n', '')
+                        if cmd != "":
+                            log_output(cmd,self.address[1])
+                            # Send the command to the MicroControl class
+                            response = self.micro.parse_command(cmd.replace('\n', ''))
+                            # Serialize the response using pickle ( This allows us to send it across a port
+                            response = pickle.dumps(response, 2)
+                            conn.send_bytes(response)
+            except Exception as e:
+                logging.error(e, self.address[1])
+                log_output(e, self.address[1])
                 break
-
-            else:
-                msg = str(msg)
-                cmds = msg.split('\n')
-                for cmd in cmds:
-                    message = cmd.replace('\n', '')
-                    if cmd != "":
-                        # Send the command to the MicroControl class
-                        response = self.micro.parse_command(cmd.replace('\n', ''))
-                        # Serialize the response using pickle ( This allows us to send it across a port
-                        response = pickle.dumps(response, 2)
-                        conn.send_bytes(response)
-
+        try:
+            self.micro.unload_devices('stuff')
+        except Exception as e:
+            log_output(e,self.address[1])
         self.listener.close()
+
 
 # Core Micromanager Class
 class MicroControl:
@@ -73,7 +91,7 @@ class MicroControl:
                                 'get_last': self.get_last,
                                 'set_exposure': self.set_exposure,
                                 'get_exposure': self.get_exposure,
-                                'get_name':self.get_camera_name}
+                                'get_name': self.get_camera_name}
 
         self.stage_commands = {'get_position': self.get_xy_position,
                                'rel_position': self.set_rel_xy_position,
@@ -86,15 +104,15 @@ class MicroControl:
         self.core_commands = {'load': self.load_devices,
                               'init': self.init_devices,
                               'unload': self.unload_devices,
-                              'unload_device':self.unload_device,
-                              'init_device':self.init_device,
-                              'load_config':self.load_config}
+                              'unload_device': self.unload_device,
+                              'init_device': self.init_device,
+                              'load_config': self.load_config}
 
-        self.filter_commands = {'set':self.set_filter_channel,
-                                'get':self.get_filter_channel}
+        self.filter_commands = {'set': self.set_filter_channel,
+                                'get': self.get_filter_channel}
 
-        self.shutter_commands = {'get':self.get_shutter,
-                                 'open':self.open_shutter,
+        self.shutter_commands = {'get': self.get_shutter,
+                                 'open': self.open_shutter,
                                  'close': self.close_shutter}
 
         self.mmc = MMCorePy.CMMCore()
@@ -120,22 +138,22 @@ class MicroControl:
         self.mmc.unloadAllDevices()
         return 'Ok'
 
-    def unload_device(self,args):
+    def unload_device(self, args):
         """ Unloads specified device"""
         self.mmc.unloadDevice(args[2])
         return 'Ok'
 
-    def init_device(self,args):
+    def init_device(self, args):
         """Initializes specified device"""
         self.mmc.initializeDevice(args[2])
         return 'Ok'
 
-    def load_config(self,args):
+    def load_config(self, args):
         """ Loads a system configuration file"""
         self.mmc.loadSystemConfiguration(args[2])
         return 'Ok'
 
-    def get_camera_name(self,args):
+    def get_camera_name(self, args):
         """ Returns the camera device name"""
         return self.mmc.getCameraDevice()
 
@@ -207,7 +225,7 @@ class MicroControl:
         """Set the relative xy stage position. args[2]=x, args[3]=y in microns"""
         x = float(args[3])
         y = float(args[4])
-        self.mmc.setRelativeXYPosition(args[2],x,y)
+        self.mmc.setRelativeXYPosition(args[2], x, y)
         return 'Ok'
 
     def set_xy_origin(self, args):
@@ -227,18 +245,18 @@ class MicroControl:
         device = args[2]
         return self.mmc.getState(device)
 
-    def get_shutter(self,args):
+    def get_shutter(self, args):
         """ Returns the shutter state"""
         return self.mmc.getShutterOpen(args[2])
 
-    def open_shutter(self,args):
+    def open_shutter(self, args):
         """ Opens the shutter """
         self.mmc.setShutterOpen(args[2], True)
         return 'Ok'
 
     def close_shutter(self, args):
         """ Closes the shutter """
-        self.mmc.setShutterOpen(args[2],False)
+        self.mmc.setShutterOpen(args[2], False)
         return 'Ok'
 
     def parse_command(self, message):
@@ -275,13 +293,13 @@ class MicroControl:
         return response
 
 
-
 def main(args):
     logging.warning("Python 2 Subprocess started...")
-    with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt','a') as fout:
+
+    with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt', 'a') as fout:
         fout.write("Python 2 started {}\n".format(args))
 
-    if len(args)>1:
+    if len(args) > 1:
         logging.warning("Starting Python 2 Server at port {}".format(args[1]))
         port = int(args[1])
         sock = MicroServer(port=port)
@@ -289,6 +307,6 @@ def main(args):
         sock = MicroServer()
     sock.start_server()
 
+
 main(sys.argv)
-with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt', 'a') as fout:
-    fout.write("Python 2 closed {}\n".format(sys.argv))
+

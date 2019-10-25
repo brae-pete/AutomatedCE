@@ -5,6 +5,8 @@ import time
 import ctypes
 
 # Custom Hardware Modules  fixme do a dynamic import so only those modules necessary are imported.
+import traceback
+
 from hardware import DAQControl
 from hardware import ImageControl
 from hardware import OutletControl
@@ -325,7 +327,6 @@ class NikonEclipseTi(BaseSystem):
 
     _z_stage_lock = threading.RLock()
     _outlet_lock = threading.RLock()
-    _pressure_lock = threading.RLock()
     _scope_lock = threading.Lock()
     _cam_lock = threading.RLock()
     _led_lock = _outlet_lock
@@ -384,7 +385,7 @@ class NikonEclipseTi(BaseSystem):
 
         #Pressure Runs on Outlet ARduino
         self.led_control = LightControl.CapillaryLED(arduino = self.outlet_control.arduino, lock = self._led_lock)
-        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
+        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._outlet_lock,
                                                                 arduino=self.outlet_control.arduino, home=HOME)
 
         pass
@@ -465,7 +466,11 @@ class NikonEclipseTi(BaseSystem):
 
     def start_feed(self):
         if self.camera_state():
-            self.image_control.start_video_feed()
+            try:
+                self.image_control.start_video_feed()
+            except Exception as e:
+                logging.info("{}".format(e))
+                traceback.print_last()
         return True
 
     def set_exposure(self,exp):
@@ -496,6 +501,9 @@ class NikonEclipseTi(BaseSystem):
 
     def set_xy(self, xy=None, rel_xy=None):
         """Move the XY Stage"""
+        if type(xy[0]) is not float:
+            logging.warning(" XY is not a valid position {}".format(xy))
+            return False
         if xy:
             self.xy_stage_control.set_xy(xy)
         elif rel_xy:

@@ -1068,10 +1068,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.plot_panel.canvas.update_rfu(rfu,freq)
         self.plot_panel.canvas.update_current(current, freq)
         self.plot_panel.canvas.set_style()
-        try:
-            self.plot_panel.canvas.draw()
-        except IndexError:
-            pass
+
 
 
 
