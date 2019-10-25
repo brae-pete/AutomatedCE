@@ -216,7 +216,11 @@ class ImageControl:
             # Remove the expired file
             if passed_time - self._capture_ref[0][0] > self.buffer_time:
                 _, old_file = self._capture_ref.pop(0)
-                os.remove(old_file)
+                try:
+                    os.remove(old_file)
+                except Exception as e:
+                    logging.error("Image Error...{}".format(e))
+
 
     def _get_unique_folder(self, parent, folder):
         """ Returns a unique folder name """
@@ -386,6 +390,7 @@ class MicroControl(ImageControl):
     state = False
     device_name = 'CoolCam'  # Updated after configuation has been loaded
     size = 0.5
+    raw_img = np.ndarray((512,512))
 
     def __init__(self, mmc=None, port = 6412, config_file='CoolSnap.cfg', lock = threading.Lock()):
         self.mmc = mmc
@@ -428,8 +433,8 @@ class MicroControl(ImageControl):
         with self.lock:
             self.mmc.send_command('core,unload_device,{}\n'.format(self.device_name))
             response = self.mmc.read_response()
-        msg = "Could not close camera resources"
-        self.state = False
+            msg = "Could not close camera resources"
+            self.state = False
         return self.mmc.ok_check(response, msg)
 
     def _snap_image(self):
@@ -443,19 +448,20 @@ class MicroControl(ImageControl):
 
     def get_single_image(self):
         """Snaps single image, returns image"""
-        state = self._snap_image()
-        if state:  # if we snapped image get the image
-            with self.lock:
-                self.mmc.send_command('camera,get_image\n')
-                img = self.mmc.read_response()
+        with self.lock:
+            state = self._snap_image()
+            if not state:
+                return self.raw_img
+            self.mmc.send_command('camera,get_image\n')
+            img = self.mmc.read_response()
             if type(img) is not np.ndarray:
                 logging.error("Could not get image {}".format(img))
-                return None
+                return img
             # todo add image processing
             self.raw_img = img.copy()
-            img = self._adjust_size(img, self.size)
-            img = self.image_conversion(img)
-            return img
+        img = self._adjust_size(img, self.size)
+        img = self.image_conversion(img)
+        return img
 
     def set_exposure(self, exp=10):
         """ Sets the camera exposure im milliseconds"""
@@ -471,7 +477,7 @@ class MicroControl(ImageControl):
             exp = self.mmc.read_response()
         if type(exp) is not float:
             logging.error("Could not get exposure: {}".format(exp))
-            return None
+            return 10
         return exp
 
     def start_video_feed(self):
@@ -498,18 +504,18 @@ class MicroControl(ImageControl):
             self.mmc.send_command('camera,get_last\n')
             st = time.perf_counter()
             img = self.mmc.read_response()
-        if type(img) is not np.ndarray:
-            logging.error("Could not get image {}".format(img))
-            time.sleep(0.3)
-            return None
+            if type(img) is not np.ndarray:
+                logging.error("Could not get image {}".format(img))
+                time.sleep(0.3)
+                return None
         # Preserve the original picture (this is saved for Tiff files)
-        self.raw_img = img.copy()
+            self.raw_img = img.copy()
         # Process image for live feed
-        img = self._adjust_size(img, size)
-        img = self._rotate_img(img, rotation)
-        img = self.image_conversion(img)
-        img = img_as_ubyte(img)
-        self.process_time = time.perf_counter() - st
+            img = self._adjust_size(img, size)
+            img = self._rotate_img(img, rotation)
+            img = self.image_conversion(img)
+            img = img_as_ubyte(img)
+            self.process_time = time.perf_counter() - st
         self.capture_save(img, st)
         return img
 

@@ -910,7 +910,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.live_feed_pixmap = QtWidgets.QGraphicsPixmapItem()
         self.camera_load = QtWidgets.QPushButton('Open Camera')
         self.camera_close = QtWidgets.QPushButton('Close Camera')
-        self.buffer_save = QtWidgets.QPushButton('Save Buffer Seq')
+        self.buffer_save = QtWidgets.QPushButton('Restart Update')
         self.finder_button = QtWidgets.QPushButton('Find a Cell')
 
 
@@ -948,8 +948,9 @@ class RunScreen(QtWidgets.QMainWindow):
 
     def init_plot_view(self):
         self.save_plot = QtWidgets.QPushButton('Save')
-        self.reset_plot = QtWidgets.QPushButton('Reset')
+        self.reset_plot = QtWidgets.QPushButton('Clear Data')
         self.view_plot = QtWidgets.QPushButton('Live Plot')
+        self.reset_fig = QtWidgets.QPushButton('Reset Figure')
         self.view_plot.setCheckable(True)
         label_prefix = QtWidgets.QLabel('Run Prefix:')
         self.run_prefix = QtWidgets.QLineEdit('')
@@ -964,6 +965,7 @@ class RunScreen(QtWidgets.QMainWindow):
         control_layout.addWidget(self.save_plot)
         control_layout.addWidget(self.reset_plot)
         control_layout.addWidget(self.view_plot)
+        control_layout.addWidget(self.reset_fig)
         control_layout.addWidget(label_prefix)
         control_layout.addWidget(self.run_prefix)
         control_layout.addStretch()
@@ -1066,10 +1068,9 @@ class RunScreen(QtWidgets.QMainWindow):
         self.plot_panel.canvas.update_rfu(rfu,freq)
         self.plot_panel.canvas.update_current(current, freq)
         self.plot_panel.canvas.set_style()
-        try:
-            self.plot_panel.canvas.draw()
-        except IndexError:
-            pass
+
+
+
 
 
 class DataScreen(QtWidgets.QMainWindow):
@@ -1809,14 +1810,20 @@ class PlotPanel(QtWidgets.QWidget):
 
         self.setLayout(hbox)
 
+    def reset(self):
+        pass
+
+
 
 class RunPlot(FigureCanvas):
+    fig, axes_rfu = plt.subplots(1)
     def __init__(self):
         fig = plt.figure()
         fig.set_facecolor('#F6F6F6')
         self.axes_rfu = fig.add_subplot(111)
         self.axes_current = self.axes_rfu.twinx()
         self.set_style()
+        self.fig = fig
         FigureCanvas.__init__(self, fig)
 
     def set_style(self):
@@ -1831,12 +1838,16 @@ class RunPlot(FigureCanvas):
         self.axes_rfu.clear()
         dt = np.arange(0, len(rfu) / freq, 1 / freq).tolist()
         self.axes_rfu.plot(dt, rfu, linewidth=2)
+        self.axes_rfu.relim()
+        self.axes_rfu.autoscale_view()
+
 
     def update_current(self, current, freq):
         self.axes_current.clear()
         dt = np.arange(0, len(current) / freq, 1 / freq).tolist()
         self.axes_current.plot(dt, current, linewidth=1, color="C2", alpha = 0.7)
-
+        self.axes_current.relim()
+        self.axes_current.autoscale_view()
 
 def wrap_widget(widget):
     wrapper_widget = QtWidgets.QFrame()
@@ -2981,6 +2992,18 @@ class InjectDialog(QtWidgets.QDialog):
         auto_check = QtWidgets.QCheckBox()
         manual_check = QtWidgets.QCheckBox()
 
+        # image options
+        video_check = QtWidgets.QCheckBox()
+        fluor_check = QtWidgets.QCheckBox()
+        fluor_spin = QtWidgets.QSpinBox()
+        fluor_spin.setValue(0)
+        fluor_spin.setMaximum(5)
+        exp_spin =QtWidgets.QSpinBox()
+        exp_spin.setValue(50)
+        exp_spin.setMinimum(10)
+        exp_spin.setMaximum(10000)
+
+
         auto_check.setEnabled(False)
         manual_check.setEnabled(False)
         single_cell_check.stateChanged.connect(lambda: enable_options(single_cell_check.isChecked()))
@@ -2993,10 +3016,27 @@ class InjectDialog(QtWidgets.QDialog):
         row.addWidget(manual_check)
         row.addWidget(QtWidgets.QLabel('Manual'))
         layout.addRow(row)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget((video_check))
+        row.addWidget(QtWidgets.QLabel('Video'))
+        row.addWidget(fluor_check)
+        row.addWidget(QtWidgets.QLabel('Fluor. Snap-shot'))
+        layout.addRow(row)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(fluor_spin)
+        row.addWidget(QtWidgets.QLabel('Filter'))
+        row.addWidget(exp_spin)
+        row.addWidget(QtWidgets.QLabel('Exposure'))
+        layout.addRow(row)
 
         self.form_data['SingleCell'] = single_cell_check.isChecked
         self.form_data['AutoSingleCell'] = auto_check.isChecked
         self.form_data['ManualSingleCell'] = manual_check.isChecked
+        self.form_data['Video'] = video_check.isChecked
+        self.form_data['FluorSnap'] = fluor_check.isChecked
+        self.form_data['FilterChannel'] = fluor_spin.value
+        self.form_data['Exposure'] = exp_spin.value
+
 
         self.single_cells_form.setLayout(layout)
 

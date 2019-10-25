@@ -423,7 +423,6 @@ class FocusGetter:
             time.sleep(0.5)
             cell = self.cell_check()
 
-
     def gather_plane_points(self):
         positions = [0, 120, 240]  # Theta positions to check
         # Reset the plane vectors
@@ -469,7 +468,7 @@ class FocusGetter:
     def quickcheck(self):
         self.get_plane_focus()
         time.sleep(0.4)
-        self.det.mover_find_cell(mov)
+        self.detector.mover_find_cell(self.mover)
 
 
 

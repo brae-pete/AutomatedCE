@@ -8,6 +8,8 @@ import time
 import random
 import datetime
 # Custom modules for CE
+import traceback
+
 import CESystems  # Hardware system classes
 import CEObjects  # CE-specific data structures
 import CEGraphic  # GUI classes
@@ -1005,6 +1007,7 @@ class RunScreenController:
     _stop.set()
     _stop.clear()
     _last_cell_positions = {'xy': None, 'cap': None, 'obj': None, 'well': None}
+    cell_focus_getters = {}
 
     # Screen Background Functions
     def __init__(self, screen, hardware, repository):
@@ -1052,6 +1055,7 @@ class RunScreenController:
         self.screen.save_plot.released.connect(lambda: self.save_plot())
         self.screen.reset_plot.released.connect(lambda: self.reset_plot())
         self.screen.view_plot.released.connect(lambda: self.view_plot())
+        self.screen.reset_fig.released.connect(lambda: self.reset_figure())
 
         if self.hardware.hasXYControl:
             self.screen.xy_up.released.connect(
@@ -1157,7 +1161,7 @@ class RunScreenController:
             self.screen.focus_feed.released.connect(lambda: self.focus())
             self.screen.camera_load.released.connect(lambda: self.hardware.open_image())
             self.screen.camera_close.released.connect(lambda: self.hardware.close_image())
-            self.screen.buffer_save.released.connect(lambda: self._save_sequence())
+            self.screen.buffer_save.released.connect(lambda: self.restart_update())
             self.screen.finder_button.released.connect(lambda:self._find_a_cell())
         else:
             self.screen.enable_live_feed(False)
@@ -1191,50 +1195,81 @@ class RunScreenController:
 
         self.screen.clear_output.released.connect(lambda: self.clear_output_window())
         self.screen.save_output.released.connect(lambda: self.save_output_window())
-        self.screen.feed_updated.connect(lambda: self.screen.feed_pointer.setPixmap(self._new_pixmap))
-        self.screen.xy_updated.connect(lambda: self.screen.live_feed_scene.draw_crosshairs(self._event))
+
+    def hardware_update(self, positions):
+        value = positions[0]
+        self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+        self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+
+        value = positions[1]
+        self.screen.z_value.setText("{:.3f}".format(float(value)))
+
+        value = positions[2]
+        self.screen.objective_value.setText("{:.3f}".format(float(value)))
+
+        value = positions[3]
+        self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+        time.sleep(self._update_delay)
+        # Update the thread again
+        self.update_stage_thread.start()
 
     def _start_updating_display(self):
         """Initializes all the processes for updating the live display (stage positions, live feed, etc)"""
-        threading.Thread(target=self._update_live_feed, daemon=True).start()
-        threading.Thread(target=self._update_plot, daemon=True).start()
+        #threading.Thread(target=self._update_live_feed, daemon=True).start()
+        #threading.Thread(target=self._update_plot, daemon=True).start()
+        #threading.Thread(target=self._update_stages, daemon=True).start()
 
-        if self.hardware.hasXYControl:
-            value = self.hardware.get_xy()
-            if value is not None:
-                self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
-                self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
-            else:
-                logging.error('Live updates of stage/motor positions disabled.')
-                return
+        self.update_stage_thread = UpdateHardware(self.hardware)
+        self.update_stage_thread.signal.connect(self.hardware_update)
+        self.update_stage_thread.start()
 
-        if self.hardware.hasInletControl:
-            value = self.hardware.get_z()
-            if value is not None:
-                self.screen.z_value.setText("{:.3f}".format(float(value)))
-            else:
-                logging.error('Live updates of stage/motor positions disabled.')
-                return
+        # Update the Plots
+        self.plotter = UpdatePlots(self.hardware, [self.screen.plot_panel.canvas.axes_rfu, self.screen.plot_panel.canvas.axes_current])
+        self.plotter.signal.connect(self.screen.plot_panel.canvas.draw)
 
-        if self.hardware.hasOutletControl:
-            value = self.hardware.get_outlet()
-            logging.info(value)
-            if value is not None:
-                self.screen.outlet_value.setText("{:.3f}".format(float(value)))
-            else:
-                logging.error('Live updates of stage/motor positions disabled.')
-                return
+        self.plot_timer = QtCore.QTimer()
+        self.plot_timer.timeout.connect(self._update_plot)
+        self.plot_timer.setSingleShot(False)
+        self.plot_timer.setInterval(250)
+        self.plot_timer.startTimer(250)
 
-        if self.hardware.hasObjectiveControl:
-            value = self.hardware.get_objective()
-            logging.info(value)
-            if value is not None:
-                self.screen.objective_value.setText("{:.3f}".format(float(value)))
-            else:
-                logging.error('Live updates of stage/motor positions disabled.')
-                return
 
-        threading.Thread(target=self._update_stages, daemon=True).start()
+        self._update_live_feed()
+        """        if self.hardware.hasXYControl:
+                    value = self.hardware.get_xy()
+                    if value is not None:
+                        self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+                        self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+                    else:
+                        logging.error('Live updates of stage/motor positions disabled.')
+                        return
+        
+                if self.hardware.hasInletControl:
+                    value = self.hardware.get_z()
+                    if value is not None:
+                        self.screen.z_value.setText("{:.3f}".format(float(value)))
+                    else:
+                        logging.error('Live updates of stage/motor positions disabled.')
+                        return
+        
+                if self.hardware.hasOutletControl:
+                    value = self.hardware.get_outlet()
+                    logging.info(value)
+                    if value is not None:
+                        self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+                    else:
+                        logging.error('Live updates of stage/motor positions disabled.')
+                        return
+        
+                if self.hardware.hasObjectiveControl:
+                    value = self.hardware.get_objective()
+                    logging.info(value)
+                    if value is not None:
+                        self.screen.objective_value.setText("{:.3f}".format(float(value)))
+                    else:
+                        logging.error('Live updates of stage/motor positions disabled.')
+                        return
+        """
 
     def _value_display_interact(self, selected=False):
         """Pauses or starts value update on stage positions when user clicks on or clicks off the edit box."""
@@ -1251,73 +1286,123 @@ class RunScreenController:
                 time.sleep(4 * self._update_delay)
                 continue
 
-            value = self.hardware.get_xy()
+            value = self.hardware.get_xy_poll()
             self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
             self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
             time.sleep(self._update_delay)
 
-            value = self.hardware.get_z()
+            value = self.hardware.get_z_poll()
             self.screen.z_value.setText("{:.3f}".format(float(value)))
             time.sleep(self._update_delay)
 
-            value = self.hardware.get_objective()
+            value = self.hardware.get_objective_poll()
             self.screen.objective_value.setText("{:.3f}".format(float(value)))
             time.sleep(self._update_delay)
 
-            value = self.hardware.get_outlet()
+            value = self.hardware.get_outlet_poll()
             self.screen.outlet_value.setText("{:.3f}".format(float(value)))
             time.sleep(self._update_delay)
+    def restart_update(self):
+        logging.info("Finished: {} Running: {}".format(self.update_feed_thread.isFinished(), self.update_feed_thread.isRunning()))
+        logging.info("Active: {}...Single: {}... Remaining{}".format(self.timer.isActive(), self.timer.isSingleShot(),
+                                           self.timer.remainingTime()))
+        #self.update_feed_thread.start()
+        try:
+            if not self.timer.isActive():
+                self.timer.start(100)
+        except Exception as e:
+            logging.error("{}".format(e))
+
+        try:
+            if not self.plot_timer.isActive():
+                self.plot_timer.start(100)
+        except Exception as e:
+            logging.error("{}".format(e))
+    def update_check(self):
+
+        try:
+            if self._live_feed.is_set():
+                self.update_feed_thread.selection = 'Camera'
+            else:
+                self.update_feed_thread.selection = 'Stage'
+        #    self.update_feed_thread.start()
+        except Exception as e:
+            logging.info("Update error...{}".format(e))
+        #logging.info("Updating Camera...")
 
     def _update_live_feed(self):
         """Loads either the new image for the live feed or moves the crosshairs on the insert view."""
-        while True:
-            if self._live_feed.is_set() and self.hardware.hasCameraControl and self.hardware.camera_state():
-                try:
-                    image = self.hardware.get_image()
-                except ValueError:
-                    logging.error("Value Error, could not load image")
-                    continue
+        self.update_feed_thread = UpdateLiveFeed(self.hardware)
+        self.update_feed_thread.camera_signal.connect(self.screen.feed_pointer.setPixmap)
+        self.update_feed_thread.xy_signal.connect(self.screen.live_feed_scene.draw_crosshairs)
+        self.update_feed_thread.signal.connect(self.update_check)
+        #self.update_feed_thread.start()
 
-                if image is None:
-                    continue
-                self._new_pixmap = self.screen.update_pixmap(camera=True)
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.update_feed_thread.start)
+        self.timer.setSingleShot(False)
+        self.timer.setInterval(100)
+        self.timer.startTimer(100)
 
-                self.screen.feed_updated.emit()
-                time.sleep(.01)
 
-            elif self.hardware.hasXYControl:
-                event_location = self.hardware.get_xy()
-                self._event = [(self.hardware.xy_stage_size[0] - event_location[0]*self._stage_inversion[0]) * self._um2pix,
-                               (self.hardware.xy_stage_size[1] - event_location[1] *self._stage_inversion[1]) * self._um2pix]
-
-                self.screen.xy_updated.emit()
-            else:
-                break
-
+        """        while True:
+                    if self._live_feed.is_set() and self.hardware.hasCameraControl and self.hardware.camera_state():
+                        try:
+                            image = self.hardware.get_image()
+                        except ValueError:
+                            logging.error("Value Error, could not load image")
+                            continue
+        
+                        if image is None:
+                            continue
+                        self._new_pixmap = self.screen.update_pixmap(camera=True)
+        
+                        self.screen.feed_updated.emit()
+                        time.sleep(.01)
+        
+                    elif self.hardware.hasXYControl:
+                        event_location = self.hardware.get_xy()
+                        self._event = [(self.hardware.xy_stage_size[0] - event_location[0]*self._stage_inversion[0]) * self._um2pix,
+                                       (self.hardware.xy_stage_size[1] - event_location[1] *self._stage_inversion[1]) * self._um2pix]
+        
+                        self.screen.xy_updated.emit()
+                    else:
+                        break
+        """
     def _update_plot(self):
         """Updates the plots with new data from the DAQ."""
         # self._plot_data.set()  # fixme
+        """
+        try:
+            self.plotter.plot_data = self._plot_data.is_set()
+            self.plotter.start()
+        except Exception as e:
+            logging.info("{}".format(e))
+        """
+
         if self.hardware.hasVoltageControl:
-            while True:
-                data = self.hardware.get_data()
-                with self.hardware.daq_board_control.data_lock:
-                    rfu = data['rfu'][:]
-                    kv = data['volts'][:]
-                    ua = data['current'][:]
-                freq = self.hardware.daq_board_control.downsampled_freq
+
+            data = self.hardware.get_data()
+            with self.hardware.daq_board_control.data_lock:
+                rfu = data['rfu'][:]
+                kv = data['volts'][:]
+                ua = data['current'][:]
+            freq = self.hardware.daq_board_control.downsampled_freq
 
 
-                if self._plot_data.is_set():
-                    threading.Thread(target=self.screen.update_plots, args=(rfu, ua, freq)).start()
-
-                if len(kv) > 4:
-                    try:
-                        kv = np.mean(kv[-4:-1])
-                        ua = np.mean(ua[-4:-1])
-                    except IndexError:
-                        return
-
-                time.sleep(.25)
+            if self._plot_data.is_set():
+            #    threading.Thread(target=self.screen.update_plots, args=(rfu, ua, freq)).start()
+                self.screen.update_plots(rfu,ua,freq)
+            try:
+                self.screen.plot_panel.canvas.draw()
+            except IndexError:
+                pass
+            if len(kv) > 4:
+                try:
+                    kv = np.mean(kv[-4:-1])
+                    ua = np.mean(ua[-4:-1])
+                except IndexError:
+                    return
 
     def _save_sequence(self):
         open_file_path = QtWidgets.QFileDialog.getExistingDirectory(self.screen, 'Select Folder to save to')
@@ -1344,6 +1429,9 @@ class RunScreenController:
             self._plot_data.clear()
         return
 
+    def reset_figure(self):
+        self.screen.plot_panel.reset()
+
     def _switch_feed(self, live):
         """Switches the feed between live feed from camera or insert view with live XY position."""
         if not live:
@@ -1359,7 +1447,11 @@ class RunScreenController:
             logging.info('Switching to live feed.')
             self.screen.clear_feed_scene()
             time.sleep(.1)
-            self.hardware.start_feed()
+            try:
+                self.hardware.start_feed()
+            except Exception as e:
+                logging.info("Error: {}".format(e))
+                traceback.print_last()
             self._live_feed.set()
             time.sleep(.1)
 
@@ -1899,26 +1991,29 @@ class RunScreenController:
         threading.Thread(target=self._capture_logic).start()
 
     def _capture_logic(self):
-        logging.info('Capture Data')
-        # Check if to acquire Cell Z-stacks
-        if int(self.screen.inject_cell_box.checkState()) == 2:
-            logging.info("Capture cell z_stack...")
-            cell_focus = FocusTesting.CellFocusAuxillary(self.hardware)
-            self.hardware.set_z(rel_z=-2)
-            self.hardware.z_stage_control.wait_for_move()
-            cell_focus.start_acquisition()
-            self.hardware.set_z(rel_z=2)
-            self.hardware.z_stage_control.wait_for_move()
+        try:
+            logging.info('Capture Data')
+            # Check if to acquire Cell Z-stacks
+            if int(self.screen.inject_cell_box.checkState()) == 2:
+                logging.info("Capture cell z_stack...")
+                cell_focus = FocusTesting.CellFocusAuxillary(self.hardware)
+                self.hardware.set_z(rel_z=-2)
+                self.hardware.z_stage_control.wait_for_move()
+                cell_focus.start_acquisition()
+                self.hardware.set_z(rel_z=2)
+                self.hardware.z_stage_control.wait_for_move()
 
-        # Check if to acquire capillary z-stacks
-        if int(self.screen.inject_cap_box.checkState()) == 2:
-            logging.info("Capture Capillary Stack...")
-            self.hardware.set_objective(rel_h=80)
-            self.hardware.objective_control.wait_for_move()
-            cap_focus = FocusTesting.CapillaryFocusAuxillary(self.hardware)
-            cap_focus.start_acquisition()
-            self.hardware.set_objective(rel_h=-80)
-            self.hardware.objective_control.wait_for_move()
+            # Check if to acquire capillary z-stacks
+            if int(self.screen.inject_cap_box.checkState()) == 2:
+                logging.info("Capture Capillary Stack...")
+                self.hardware.set_objective(rel_h=80)
+                self.hardware.objective_control.wait_for_move()
+                cap_focus = FocusTesting.CapillaryFocusAuxillary(self.hardware)
+                cap_focus.start_acquisition()
+                self.hardware.set_objective(rel_h=-80)
+                self.hardware.objective_control.wait_for_move()
+        except Exception as e:
+            logging.error("{}".format(e))
 
 
     def save_cap_control(self):
@@ -1936,14 +2031,17 @@ class RunScreenController:
             logging.error(e)
 
     def run(self):
+
         if not self.check_system():
             logging.error('Unable to start run.')
         repetitions = self.screen.repetition_input.value()
         flags = [self._pause_flag, self._stop_thread_flag, self._inject_flag, self._plot_data]
         self.runs = CERunLogic.RunMethod(self.hardware, self.methods, repetitions, self.methods_id,
-                                    flags, self.insert, self.screen.run_prefix.text(), self.lyse.cap_control)
+                                         flags, self.insert, self.screen.run_prefix.text(), self.lyse.cap_control,
+                                         self.cell_focus_getters)
         state = self.runs.start_run()
         return state
+
         """
         for method, method_id in zip(self.methods, self.methods_id):
 
@@ -2284,3 +2382,121 @@ class SystemScreenController:
         except:
             importlib.reload(Detection)
             importlib.reload(CERunLogic)
+
+class UpdateHardware(QtCore.QThread):
+    signal = QtCore.pyqtSignal('PyQt_PyObject')
+
+    def __init__(self, hardware):
+        QtCore.QThread.__init__(self)
+        self.hardware=hardware
+
+    def run(self):
+        try:
+            # Get updated hardware information
+            xy = self.hardware.get_xy()
+
+            z = self.hardware.get_z()
+
+            obj = self.hardware.get_objective()
+
+            outlet = self.hardware.get_outlet()
+
+            self.signal.emit([xy, z , obj, outlet])
+        except Exception as e:
+            logging.error("{}".format(e))
+class UpdatePlots(QtCore.QThread):
+    signal = QtCore.pyqtSignal('PyQt_PyObject')
+    plot_data = True
+    def __init__(self, hardware, axes):
+        QtCore.QThread.__init__(self)
+        self.hardware=hardware
+        self.axes_rfu = axes[0]
+        self.axes_current =axes[1]
+
+    def update_rfu(self, rfu, freq):
+        self.axes_rfu.clear()
+        dt = np.arange(0, len(rfu) / freq, 1 / freq).tolist()
+        self.axes_rfu.plot(dt, rfu, linewidth=2)
+        self.axes_rfu.relim()
+        self.axes_rfu.autoscale_view()
+
+
+    def update_current(self, current, freq):
+        self.axes_current.clear()
+        dt = np.arange(0, len(current) / freq, 1 / freq).tolist()
+        self.axes_current.plot(dt, current, linewidth=1, color="C2", alpha = 0.7)
+        self.axes_current.relim()
+        self.axes_current.autoscale_view()
+
+    def run(self):
+        try:
+            if self.hardware.hasVoltageControl:
+                data = self.hardware.get_data()
+                with self.hardware.daq_board_control.data_lock:
+                    rfu = data['rfu'][:]
+                    kv = data['volts'][:]
+                    ua = data['current'][:]
+                freq = self.hardware.daq_board_control.downsampled_freq
+
+                if self.plot_data:
+                    self.update_current(ua,freq)
+                    self.update_rfu(rfu,freq)
+
+                self.signal.emit(self)
+        except Exception as e:
+            logging.info("{}".format(e))
+
+class UpdateLiveFeed(QtCore.QThread):
+    camera_signal = QtCore.pyqtSignal('PyQt_PyObject')
+    xy_signal = QtCore.pyqtSignal('PyQt_PyObject')
+    signal = QtCore.pyqtSignal('PyQt_PyObject')
+    stage_inversion = [1,1]
+    um2pix = 1 / 300
+    selection = 'Stage'
+    def __init__(self, hardware):
+        # Call the superclass init
+        QtCore.QThread.__init__(self)
+        self.hardware=hardware
+        self._stage_inversion = self.hardware.xy_stage_inversion
+
+        """             self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.gather_images)
+        self.timer.setSingleShot(False)
+        self.timer.setInterval(500)"""
+
+        logging.info("Connected")
+
+    def run(self):
+        try:
+            ICON_FOLDER = CEGraphic.ICON_FOLDER
+            pix_map = QtGui.QPixmap(os.path.join(ICON_FOLDER, "black_grid_thick_lines_mirror.png"))
+
+
+            #logging.info('Selection {}'.format(self.selection))
+            try:
+
+                if self.selection == 'Camera' and self.hardware.hasCameraControl and self.hardware.camera_state():
+                    try:
+                        image = self.hardware.get_image()
+                    except ValueError:
+                        logging.error("Value Error, could not load image")
+                    pix_map = QtGui.QPixmap('recentImg.png')
+
+                elif self.selection == 'Stage' and self.hardware.hasXYControl:
+                    time.sleep(0.5)
+                    event_location = self.hardware.get_xy()
+                    event = [
+                        (self.hardware.xy_stage_size[0] - event_location[0] * self.stage_inversion[0]) * self.um2pix,
+                        (self.hardware.xy_stage_size[1] - event_location[1] * self.stage_inversion[1]) * self.um2pix]
+                    self.xy_signal.emit(event)
+
+                else:
+                    time.sleep(0.5)
+                self.camera_signal.emit(pix_map)
+                self.signal.emit(self)
+            except Exception as e:
+                logging.error("{}".format(e))
+                self.signal.emit(self)
+
+        except Exception as e:
+            logging.info("{}".format(e))

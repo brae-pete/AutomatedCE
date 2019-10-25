@@ -141,7 +141,8 @@ class ZStageControl:
         self.stage.go_home()
 
     def wait_for_move(self):
-        self.stage.wait_for_move()
+        with self.lock:
+            self.stage.wait_for_move()
 
 
 class OpticsFocusZStage:
@@ -413,9 +414,9 @@ class PowerStep:
         else:
             logging.info("{} set z".format(set_z))
 
-
-        go_to = self.inversion*(set_z-self.offset)
-        self.arduino.set_outlet_z(go_to)
+        with self.lock:
+            go_to = self.inversion*(set_z-self.offset)
+            self.arduino.set_outlet_z(go_to)
         return True
 
     def set_rel_z(self, set_z):
@@ -430,8 +431,8 @@ class PowerStep:
     def set_speed(self, steps_per_sec):
         if self.home:
             return
-
-        self.arduino.set_outlet_speed(steps_per_sec)
+        with self.lock:
+            self.arduino.set_outlet_speed(steps_per_sec)
         return True
     def set_accel(self, steps_per_sec2):
         if self.home:
@@ -444,6 +445,7 @@ class PowerStep:
 
         if self.home:
             return True
+
         self.arduino.stop_objective_z()
         return True
 

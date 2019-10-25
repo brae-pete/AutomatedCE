@@ -15,6 +15,7 @@ LYSIS_ADJUST = 0  # how far up or down to move the lysis laser
 # For testing:
 TEST_METHOD = r"C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\Methods\Testing\SimpleAutoTest.met"
 
+
 class RunMethod:
     """
     Logic behind running an automated CE Method.
@@ -27,7 +28,7 @@ class RunMethod:
     _stop_thread_flag = threading.Event()
     _inject_flag = threading.Event()
     _plot_data = threading.Event()
-    _last_cell_positions = {'xy':None,'cap':None,'obj':None}  # xy, cap, obj are the keys
+    _last_cell_positions = {'xy': None, 'cap': None, 'obj': None}  # xy, cap, obj are the keys
     step = {}  # Method dictionary
     save_dir = ""  # Directory where the runs will be saved
     step_id = 0  # which step we currently are running
@@ -39,7 +40,7 @@ class RunMethod:
     injection_wait = 6  # How long to wait after an injection for repeatable spontaneous fluid displacement
 
     def __init__(self, hardware, methods, repetitions, methods_id,
-                 flags, insert, folder, cap_control):
+                 flags, insert, folder, cap_control, cellfinders):
         """
         Logic to run a CE run
 
@@ -69,6 +70,7 @@ class RunMethod:
         self.insert = insert
         self.folder = folder
         self.cap_control = cap_control
+        self.cell_finders = cellfinders
 
     def start_run(self):
         for self.method, self.method_id in zip(self.methods, self.methods_id):
@@ -217,7 +219,7 @@ class RunMethod:
 
         return True
 
-    def cell_move(self, semi = True):
+    def cell_move(self, semi=True):
         if self._stop_thread_flag.is_set():
             return
         # If wells are the same move back one.
@@ -229,8 +231,8 @@ class RunMethod:
 
             cap = self._last_cell_positions['cap']
             if cap is not None:
-                self.hardware.set_z(cap)
-
+                #self.hardware.set_z(cap)
+                pass
             obj = self._last_cell_positions['obj']
             if obj is not None and semi:
                 self.move_objective(obj)
@@ -267,6 +269,7 @@ class RunMethod:
                     return state
                 fc.add_focus_point()
             fc.find_a_plane()
+            self.current_fc = fc
 
         else:
             _, fc, _ = self.cell_finders[self.step_id]
@@ -274,17 +277,65 @@ class RunMethod:
 
         logging.info("Finding a cell, press pause to manually find a cell")
 
-        self.hardware.set_objective(h = fc.last_z)
+        self.hardware.set_objective(h=fc.last_z)
 
         logging.info("Moving Objective into Focus")
-        while np.abs(self.hardware.get_objective() - fc.last_z ) > 5:
+        while np.abs(self.hardware.get_objective() - fc.last_z) > 5:
             time.sleep(0.5)
         logging.info("Pausing Run... Allow the program to find a cell.\n "
                      "When a cell is found focus the cell manually \n"
                      "Press Start when finished \n ")
+        self._pause_flag.set()
         # Move the objective into position
-        fc.quickcheck(self._pause_flag)
+        fc.quickcheck()
         state = self.check_flags()
+        # Take a Snapshot
+        if not self.step['Video']:
+            logging.info("Taking Brightfield image...")
+            # Take a Brightfield Picture
+            savepath= self.get_save_path(prefix='BF',suffix='.png')
+            self.hardware.save_raw_image(savepath)
+        if self.step['FluorSnap']:
+            logging.info("Taking Fluorescent image...")
+            # Take a Fluorescence Picture
+            # Stop Live Feed
+            self.hardware.stop_feed()
+            # Adjust Exposure
+            old_exp = self.hardware.get_exposure()
+            exp = self.step['Exposure']
+            self.hardware.set_exposure(exp)
+            # Adjust Filter
+            old_chnl = self.hardware.filter_get()
+            chnl = self.step['FilterChannel']
+            self.hardware.filter_set(chnl)
+            time.sleep(1)
+            # Turn off the LED
+            old_leds = self.hardware.led_control.channel_states.copy()
+            for led in old_leds:
+                if old_leds[led]:
+                    self.hardware.turn_off_led(led)
+
+            # Adjust Shutter
+            self.hardware.shutter_open()
+            time.sleep(0.2)
+            # Snap
+            filepath = self.get_save_path(prefix='FL', suffix='.tiff')
+            time.sleep((exp / 1000) + 1.5)
+            self.hardware.snap_image()
+
+            self.hardware.save_raw_image(filepath)
+            # Close Shutter
+            self.hardware.shutter_close()
+            # Start LED
+            for led in old_leds:
+                if old_leds[led]:
+                    self.hardware.turn_on_led(led)
+            # Adjust Filter
+            self.hardware.filter_set(old_chnl)
+            # Adjust Exposure
+            self.hardware.set_exposure(100)
+            # Restart Live Feed
+            self.hardware.start_feed()
 
         # Lower the Capillary
         get_focus = self.cap_control.move_cap_above_cell()
@@ -305,8 +356,9 @@ class RunMethod:
         return True
 
     def inject(self):
-        st=time.time()
-        logging.info("Starting Injection {}".format(time.time()-st))
+
+        st = time.time()
+        logging.info("Starting Injection {}".format(time.time() - st))
         if self._stop_thread_flag.is_set():
             return
         pressure_state = False
@@ -321,49 +373,82 @@ class RunMethod:
             return False
 
         duration = float(self.step['ValuesDurationEdit'])
-        lyse = False
-        if self.step['SingleCell']:
-            if self.step['AutoSingleCell']:
-                logging.info("Automated single cell....")
-                lyse = self.auto_cell()
+        # repeat the following until the user says a cell is loaded
+        loading_cell = True
+        while loading_cell:
+            lyse = False
+            if self.step['SingleCell']:
+                if self.step['AutoSingleCell']:
+                    logging.info("Automated single cell....")
+                    lyse = self.auto_cell()
+                else:
+                    self.semi_auto_cell()
+                    logging.info('Run is paused. Locate and lyse cell.')
+                    self._pause_flag.set()
+                    state_n = self.check_flags()
+                    if not state_n:
+                        return False
             else:
-                self.semi_auto_cell()
-                logging.info('Run is paused. Locate and lyse cell.')
-                self._pause_flag.set()
-                state_n = self.check_flags()
-                if not state_n:
-                    return False
+                loading_cell = False
+            state_n = self.check_flags()
+            if not state_n:
+                return False
+            # Open the outlet to outside air or apply a pressure
+            if pressure_state:
+                self.hardware.pressure_rinse_start()
+            else:
+                self.hardware.pressure_rinse_stop()
+            if voltage_level:
+                self.hardware.set_voltage(voltage_level)
+            self.wait_sleep(0.5)
 
-        # Open the outlet to outside air or apply a pressure
-        if pressure_state:
-            self.hardware.pressure_rinse_start()
-        else:
+            # Fire the laser half a second after starting the load velocity
+            if lyse:
+                self.hardware.laser_fire()
+
+            state = self.wait_sleep(duration)
+            if not state:
+                return state
+
+            self.hardware.set_voltage(0)
+            if self.step['SingleCell']:
+                # Move the capillary up to see if it was successful
+                self.hardware.set_z(z=1)
+                logging.info("If a cell did not lyse, press Pause within 5 seconds... ")
+                state = self.wait_sleep(5)
+                if not state:
+                    return state
+                if self._pause_flag.is_set():
+                    loading_cell = True
+                else:
+                    loading_cell = False
+                    self.hardware.set_objective(h=50)
+                    self.hardware.pressure_rinse_stop()
+                self._pause_flag.clear()
+            # Move then objective down
+
             self.hardware.pressure_rinse_stop()
-        if voltage_level:
-            self.hardware.set_voltage(voltage_level)
-        time.sleep(0.5)
-
-        # Fire the laser half a second after starting the load velocity
-        if lyse:
-            self.hardware.laser_fire()
-        time.sleep(duration)
-        self.hardware.set_voltage(0)
-
-        # Move the capillary up to see if it was successful
-        self.hardware.set_z(z=1)
-        time.sleep(3)
-
-        # Move then objective down
-        self.hardware.set_objective(h=50)
-        self.hardware.pressure_rinse_stop()
-
-        # Record buffer of injection after lysis.
-        if self.step['SingleCell']:
-            file_name = "{}_{}_step{}_rep{}".format(self.folder, self.method_id, self.step_id, self.rep)
-            save_path = os.path.join(self.save_dir, file_name)
-            threading.Thread(target =  self.hardware.save_buffer, args = (save_path, 'cell_lysis.avi')).start()
-        self.hardware.objective_control.wait_for_move()
+            # Take a picture if we are in single cell mode
+            if self.step['SingleCell']:
+                # Record buffer of injection after lysis.
+                if self.step['Video']:
+                    save_path = self.get_save_path()
+                    threading.Thread(target=self.hardware.save_buffer, args=(save_path, 'cell_lysis.avi')).start()
+                else:
+                    logging.info("Taking Brightfield image...")
+                    # Take a Brightfield Picture
+                    savepath = self.get_save_path(prefix='Post_BF', suffix='.png')
+                    self.hardware.save_raw_image(savepath)
+            self.hardware.objective_control.wait_for_move()
+            state_n = self.check_flags()
+            if not state_n:
+                return False
         return True
+
+    def get_save_path(self, prefix='',suffix=''):
+        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder,prefix, self.method_id, self.step_id, self.rep,suffix)
+        return os.path.join(self.save_dir, file_name)
+
 
     def create_run_folder(self):
         cwd = os.getcwd()
@@ -448,16 +533,17 @@ class RunMethod:
 
 
 def test_run(hardware):
-    fin = open(TEST_METHOD,'rb')
+    fin = open(TEST_METHOD, 'rb')
     data = pickle.load(fin)
     insert = data.insert
     cap_control = Lysis.CapillaryControl(hardware)
     flags = [threading.Event() for i in range(4)]
-    rm = RunMethod(hardware,[data],3,[0],flags,insert,'testing',cap_control)
+    rm = RunMethod(hardware, [data], 3, [0], flags, insert, 'testing', cap_control)
     return rm
 
+
 def start_run(rm):
-    threading.Thread(target = rm.start_run).start()
+    threading.Thread(target=rm.start_run).start()
 
 
 if __name__ == "__main__":
@@ -467,4 +553,3 @@ if __name__ == "__main__":
     hardware.image_control.live_view()
     logging.basicConfig()
     logging.getLogger().setLevel(logging.INFO)
-

@@ -5,6 +5,8 @@ import time
 import ctypes
 
 # Custom Hardware Modules  fixme do a dynamic import so only those modules necessary are imported.
+import traceback
+
 from hardware import DAQControl
 from hardware import ImageControl
 from hardware import OutletControl
@@ -14,6 +16,7 @@ from hardware import ObjectiveControl
 from hardware import LaserControl
 from hardware import PressureControl
 from hardware import LightControl
+from hardware import ScopeControl
 from hardware import MicroControlClient
 
 # Network Module
@@ -288,6 +291,27 @@ class BaseSystem:
     def turn_off_dance(self):
         """ Turns off the flashing RGB """
         logging.error("LED Dance is not supported in hardware class")
+
+    def shutter_open(self):
+        """ Opens the shutter"""
+        logging.error(" Shutter Open is not supported in hardware class")
+
+    def shutter_close(self):
+        """ Closes the shutter"""
+        logging.error(" Shutter Close is not supported in hardware class")
+
+    def shutter_get(self):
+        """ Gets shutter state """
+        logging.error(" Shutter Get is not supported in hardware class ")
+
+    def filter_set(self, channel):
+        """ Sets the filter cube channel"""
+        logging.error(" Filter Set is not supported in hardware class")
+
+    def filter_get(self):
+        """ Returns the current filter channel"""
+        logging.error(" Filter Get is not supported in hardware class")
+
 
 
 class BarracudaSystem(BaseSystem):
@@ -744,9 +768,8 @@ class NikonEclipseTi(BaseSystem):
 
     _z_stage_lock = threading.RLock()
     _outlet_lock = threading.RLock()
-    _pressure_lock = threading.RLock()
     _scope_lock = threading.Lock()
-    _cam_lock = threading.Lock()
+    _cam_lock = threading.RLock()
     _led_lock = _outlet_lock
 
     xy_stage_inversion = [1, -1]
@@ -766,6 +789,8 @@ class NikonEclipseTi(BaseSystem):
         self.hasPressureControl = True
         self.hasXYControl = True
         self.hasLEDControl=True
+        self.hasShutterControl = True
+        self.hasFilterControl = True
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -787,7 +812,11 @@ class NikonEclipseTi(BaseSystem):
         #Nikon Scope shares a MMC
         self.objective_control = ObjectiveControl.MicroControl(port = 7812, lock = self._scope_lock) # Use Presets
         self.xy_stage_control = XYControl.MicroControl(mmc=self.objective_control.mmc, lock = self._scope_lock)
-
+        self.filter_control = ScopeControl.FilterMicroControl(mmc=self.objective_control.mmc,
+                                                              lock=self._scope_lock)
+        # Shutter is on its own MMC
+        self.shutter_control = ScopeControl.ShutterMicroControl(port=7811,
+                                                                lock=self._scope_lock)
         # Set up and start DAQ
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
@@ -797,7 +826,7 @@ class NikonEclipseTi(BaseSystem):
 
         #Pressure Runs on Outlet ARduino
         self.led_control = LightControl.CapillaryLED(arduino = self.outlet_control.arduino, lock = self._led_lock)
-        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
+        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._outlet_lock,
                                                                 arduino=self.outlet_control.arduino, home=HOME)
 
         pass
@@ -811,6 +840,7 @@ class NikonEclipseTi(BaseSystem):
     def close_system(self):
         try:
             self.close_image()
+            self.image_control._close_client()
         except:
             logging.warning("Did not shut down Z")
 
@@ -818,6 +848,10 @@ class NikonEclipseTi(BaseSystem):
             self.close_objective()
         except:
             logging.warning("Did not shut down Z")
+        try:
+            self.shutdown_shutter()
+        except:
+            logging.warning("Did not close shutter")
         try:
             self.close_outlet()
         except:
@@ -837,10 +871,10 @@ class NikonEclipseTi(BaseSystem):
             logging.warning("Did not close DAQ tasks")
         return True
 
-
-
     def record_image(self, filename):
-        self.image_control.record_recent_image(filename)
+        img = self.get_image()
+        self.image_control.save_image(img,filename)
+        return
 
     def get_image(self):
 
@@ -853,17 +887,39 @@ class NikonEclipseTi(BaseSystem):
 
     def close_image(self):
         self.image_control.close()
-        self.image_control._close_client()
+        #self.image_control._close_client()
         return True
 
     def open_image(self):
         self.image_control.open()
         return True
 
+    def snap_image(self,filename=None):
+        self.image_control.get_single_image()
+        if filename is not None:
+            self.image_control.save_raw_image(filename)
+
+    def save_raw_image(self, filename):
+        self.image_control.save_raw_image(filename)
+
+    def _close_client(self):
+        self.image_control._close_client()
+
     def start_feed(self):
         if self.camera_state():
-            self.image_control.start_video_feed()
+            try:
+                self.image_control.start_video_feed()
+            except Exception as e:
+                logging.info("{}".format(e))
+                traceback.print_last()
         return True
+
+    def set_exposure(self,exp):
+        self.image_control.set_exposure(exp)
+        return
+
+    def get_exposure(self):
+        return self.image_control.get_exposure()
 
     def stop_feed(self):
         self.image_control.stop_video_feed()
@@ -886,6 +942,9 @@ class NikonEclipseTi(BaseSystem):
 
     def set_xy(self, xy=None, rel_xy=None):
         """Move the XY Stage"""
+        if type(xy[0]) is not float:
+            logging.warning(" XY is not a valid position {}".format(xy))
+            return False
         if xy:
             self.xy_stage_control.set_xy(xy)
         elif rel_xy:
@@ -1113,6 +1172,32 @@ class NikonEclipseTi(BaseSystem):
         """Removes immediate functionality of the laser."""
         self.laser_stop()
 
+    def shutter_open(self):
+        """ Opens the shutter"""
+        self.shutter_control.open_shutter()
+
+    def shutter_close(self):
+        """ Closes the shutter"""
+        self.shutter_control.close_shutter()
+
+    def shutter_get(self):
+        """ Gets shutter state """
+        return self.shutter_control.get_shutter()
+
+    def shutdown_shutter(self):
+        """ Shutsdown the Shutter client and mmc"""
+        self.shutter_control.close()
+        self.shutter_control._close_client()
+
+
+    def filter_set(self, channel):
+        """ Sets the filter cube channel"""
+        self.filter_control.set_state(channel)
+
+    def filter_get(self):
+        """ Returns the current filter channel"""
+        return self.filter_control.get_state()
+
 
 class NikonTE3000(BaseSystem):
     system_id = 'NikonTE3000'
@@ -1252,12 +1337,13 @@ class NikonTE3000(BaseSystem):
         self.image_control.record_recent_image(filename)
 
     def get_image(self):
+        with self._camera_lock:
+            image = self.image_control.get_recent_image(size=self.image_size)
 
-        image = self.image_control.get_recent_image()
-        if image is None:
-            return None
-        if not HOME:
-            self.image_control.save_image(image, "recentImg.png")
+            if image is None:
+                return None
+            if not HOME:
+                self.image_control.save_image(image, "recentImg.png")
         return image
 
     def close_image(self):
@@ -1803,3 +1889,11 @@ class OstrichSystem(BaseSystem):
     def pressure_valve_close(self):
         """Closes pressure valve."""
         pass
+
+def test():
+    hardware = NikonEclipseTi()
+    hardware.start_system()
+    return hardware
+
+if __name__=="__main__":
+    hardware = test()
