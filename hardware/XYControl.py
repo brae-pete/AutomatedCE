@@ -238,8 +238,8 @@ class PriorControl(XYControl):
     y_inversion = 1
     ser = serial.Serial()  # Serial port
 
-    def __init__(self, port="COM5", lock=threading.Lock()):
-        self.ser.port = port
+    def __init__(self, com="COM5", lock=threading.Lock()):
+        self.ser.port = com
         self.lock = lock
         self.open()
 

@@ -5,8 +5,8 @@ import pickle
 import logging
 
 #Thhis should be the path to the python.exe file in the CEpy27 environment set up by conda.
-PYTHON2_PATH = r"C:\Users\NikonEclipseTi\Miniconda3\envs\CEpy27\python.exe"
-SERVER_FILE = r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\hardware\MicroControlServer.py'
+PYTHON2_PATH = r"C:\Users\NikonTE3000\Miniconda3\envs\CEpy27\python.exe"
+SERVER_FILE = r"C:\Users\NikonTE3000\Documents\Barracuda\BarracudaQt\hardware\MicroControlServer.py"
 class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object

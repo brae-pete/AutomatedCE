@@ -235,8 +235,6 @@ class MicroControl:
 
 def main(args):
     logging.warning("Python 2 Subprocess started...")
-    with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt','a') as fout:
-        fout.write("Python 2 started {}\n".format(args))
 
     if len(args)>1:
         logging.warning("Starting Python 2 Server at port {}".format(args[1]))
@@ -247,5 +245,3 @@ def main(args):
     sock.start_server()
 
 main(sys.argv)
-with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt', 'a') as fout:
-    fout.write("Python 2 closed {}\n".format(sys.argv))

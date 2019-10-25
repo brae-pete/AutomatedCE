@@ -1118,7 +1118,7 @@ class NikonTE3000(BaseSystem):
     system_id = 'NikonTE3000'
     _z_stage_com = "COM4"
     _outlet_com = "COM7"
-    _objective_com = "COM8"
+    _objective_com = "COM3"
     _laser_com = "COM6"
     _pressure_com = "COM7"
     _daq_dev = "/Dev1/"
@@ -1132,7 +1132,7 @@ class NikonTE3000(BaseSystem):
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
     _pressure_lock = threading.Lock()
-    _camera_lock = threading.RLock()
+    _cam_lock = threading.RLock()
     _laser_lock = threading.Lock()
     _laser_poll_flag = threading.Event()
     _led_lock = _outlet_lock
@@ -1149,7 +1149,7 @@ class NikonTE3000(BaseSystem):
     _find_network = CENetworks.BarracudaCellDetector()
 
     def __init__(self):
-        super(BarracudaSystem, self).__init__()
+        super(NikonTE3000, self).__init__()
         self.laser_max_time = 600
 
         self.hasCameraControl = True
@@ -1197,12 +1197,12 @@ class NikonTE3000(BaseSystem):
         #zstage.join()
         #outlet.join()
         objective.join()
-        self.image_control = ImageControl.PVCamImageControl(lock = self._camera_lock)
-        self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock)
+        self.image_control = ImageControl.MicroControl(port = 3121, lock = self._cam_lock)
+        self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock, com = 'COM4')
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
                                                      voltage_control=self._daq_voltage_control)
-        self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
+        #self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
 
         #self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
         self._start_daq()
@@ -1219,7 +1219,7 @@ class NikonTE3000(BaseSystem):
         self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
 
     def _start_objective(self):
-        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock,
+        self.objective_control = ObjectiveControl.ArduinoControl(com=self._objective_com, lock=self._objective_lock,
                                                                    home=HOME)
 
     def close_system(self):
