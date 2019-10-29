@@ -313,6 +313,447 @@ class BaseSystem:
         logging.error(" Filter Get is not supported in hardware class")
 
 
+
+class BarracudaSystem(BaseSystem):
+    system_id = 'BARRACUDA'
+    _z_stage_com = "COM4"
+    _outlet_com = "COM7"
+    _objective_com = "COM8"
+    _laser_com = "COM6"
+    _pressure_com = "COM7"
+    _daq_dev = "/Dev1/"
+    _daq_current_readout = "ai2"
+    _daq_voltage_readout = "ai1"
+    _daq_voltage_control = 'ao1'
+    _daq_rfu = "ai3"
+
+    _z_stage_lock = threading.RLock() # Same thread can access the lock at multiple points, but not multiple threads
+    _outlet_lock = threading.RLock()
+    _objective_lock = threading.Lock()
+    _xy_stage_lock = threading.Lock()
+    _pressure_lock = threading.Lock()
+    _camera_lock = threading.RLock()
+    _laser_lock = threading.Lock()
+    _laser_poll_flag = threading.Event()
+    _led_lock = _outlet_lock
+    _laser_rem_time = 0
+    laser_start_time = time.time()
+
+    image_size = 0.5
+    objective_focus = 0
+    xy_stage_size = [112792, 64340]  # Rough size in mm
+    xy_stage_offset = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_inversion = [-1, -1]
+
+    _focus_network = CENetworks.BarracudaFocusClassifier()
+    _find_network = CENetworks.BarracudaCellDetector()
+
+    def __init__(self):
+        super(BarracudaSystem, self).__init__()
+        self.laser_max_time = 600
+
+        self.hasCameraControl = True
+        self.hasInletControl = True
+        self.hasLaserControl = True
+        self.hasObjectiveControl = True
+        self.hasOutletControl = True
+        self.hasVoltageControl = True
+        self.hasPressureControl = True
+        self.hasXYControl = True
+        self.hasLEDControl=True
+
+    def _start_daq(self):
+        self.daq_board_control.max_time = 600000
+        self.daq_board_control.start_read_task()
+
+    def _poll_laser(self):
+        while True:
+            if self._laser_poll_flag.is_set():
+                self._laser_rem_time = self.laser_max_time - (time.time() - self.laser_start_time)
+                if self._laser_rem_time > 0:
+                    self.laser_control.poll_status()
+                    time.sleep(1)
+                else:
+                    self._laser_poll_flag.clear()
+            else:
+                logging.info('{:.0f}s have passed. turning off laser.'.format(self.laser_max_time))
+                self.laser_close()
+                self._laser_rem_time = 0
+                return True
+
+    def calibrate_system(self, permissions_gui):
+        """Calibrates the system."""
+        pass
+
+    def start_system(self):
+        # Initialize all the motors independently
+        zstage = threading.Thread(target=self._start_zstage)
+        zstage.start()
+        outlet=threading.Thread(target=self._start_outlet)
+        outlet.start()
+        objective = threading.Thread(target=self._start_objective)
+        objective.start()
+        # Wait for motors to finish homing
+        zstage.join()
+        outlet.join()
+        objective.join()
+        self.image_control = ImageControl.PVCamImageControl(lock = self._camera_lock)
+        self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock)
+        self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
+                                                     current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
+                                                     voltage_control=self._daq_voltage_control)
+        self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
+
+        self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
+        self._start_daq()
+
+        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
+                                                                arduino=self.outlet_control.arduino, home=HOME)
+
+        pass
+
+    def _start_outlet(self):
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+
+    def _start_zstage(self):
+        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+
+    def _start_objective(self):
+        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock,
+                                                                   home=HOME)
+
+    def close_system(self):
+        self.close_image()
+        self.close_objective()
+        self.close_outlet()
+        self.close_voltage()
+        self.close_xy()
+        self.close_z()
+        return True
+
+    def prepare_networks(self):
+        self._focus_network.prepare_model()
+        self._find_network.prepare_model()
+
+    def get_focus(self, image=None):
+        return self._focus_network.get_focus(image)
+
+    def get_cells(self, image=None):
+        return self._find_network.get_cells(image)
+
+    def get_network_status(self):
+        return self._focus_network.loaded and self._find_network.loaded
+
+    def record_image(self, filename):
+        with self._camera_lock:
+            self.image_control.record_recent_image(filename)
+
+    def get_image(self):
+        with self._camera_lock:
+            image = self.image_control.get_recent_image(size=self.image_size)
+
+            if image is None:
+                return None
+            if not HOME:
+
+                self.image_control.save_image(image, "recentImg.png")
+
+        return image
+
+    def close_image(self):
+        with self.image_control.lock:
+            self.image_control.close()
+        return True
+
+    def open_image(self):
+        self.image_control.open()
+        return True
+
+    def start_feed(self):
+        if self.camera_state():
+            self.image_control.start_video_feed()
+        return True
+
+    def stop_feed(self):
+        self.image_control.stop_video_feed()
+        return True
+
+    def save_buffer(self, folder, name, fps=5):
+        """
+        Saves the camera buffer to the folder as .avi file. Also copies sequence of images as reference.
+        :param folder: folder to store data
+        :param name: video file to save to, will overwrite existing files
+        :param fps: frames per second to store the video at, defaults to 5 fps irregardless of camera frame rate
+        :return: True
+        """
+        self.image_control.save_capture_sequence(folder, name, fps)
+        return True
+
+    def camera_state(self):
+        """ Checks if camera resources are available"""
+        return self.image_control.camera_state()
+
+    def close_xy(self):
+        self.xy_stage_control.close()
+        return True
+
+    def set_xy(self, xy=None, rel_xy=None):
+        """Move the XY Stage"""
+        if xy:
+            self.xy_stage_control.set_xy(xy)
+        elif rel_xy:
+            self.xy_stage_control.set_rel_xy(rel_xy)
+
+        return True
+
+    def get_xy(self):
+        return self.xy_stage_control.read_xy()
+
+    def stop_xy(self):
+        self.xy_stage_control.stop()
+        return True
+
+    def set_xy_home(self):
+        """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
+        self.xy_stage_control.set_origin()
+        return True
+
+    def home_xy(self):
+        """Goes to current position marked as home. Return False if device has no 'home' capability."""
+        self.xy_stage_control.origin()
+        return True
+
+    def close_z(self):
+        self.z_stage_control.close()
+        return True
+
+    def set_z(self, z=None, rel_z=None):
+        if z:
+            self.z_stage_control.set_z(z)
+            return True
+
+        elif rel_z:
+            self.z_stage_control.set_rel_z(rel_z)
+            return True
+
+        return False
+
+    def get_z(self):
+        return self.z_stage_control.read_z()
+
+    def stop_z(self):
+        self.z_stage_control.stop()
+        return True
+
+    def set_z_home(self):
+        """Sets the current position of the Z stage as home. Return False if device has no 'home' capability."""
+
+        return False
+
+    def wait_z(self):
+        self.z_stage_control.wait_for_move()
+
+    def home_z(self):
+        """Goes to current position marked as home. Return False if device has no 'home' capability."""
+        self.z_stage_control.go_home()
+        return True
+
+    def close_outlet(self):
+        self.outlet_control.close()
+        return True
+
+    def set_outlet(self, h=None, rel_h=None):
+
+        if h:
+            self.outlet_control.set_z(h)
+            return True
+
+        elif rel_h:
+            self.outlet_control.set_rel_z(rel_h)
+            return True
+
+        return False
+
+    def get_outlet(self):
+        return self.outlet_control.read_z()
+
+    def stop_outlet(self):
+        self.outlet_control.stop()
+        return True
+
+    def set_outlet_home(self):
+        """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
+        return False  # fixme, add a history like objectivehistory.p?
+
+    def home_outlet(self):
+        """Goes to the current position marked as home. Return False if device has no 'home' capability."""
+        return False
+
+    def close_objective(self):
+        self.objective_control.close()
+        return True
+
+    def set_objective(self, h=None, rel_h=None):
+        if h:
+            self.objective_control.set_z(h)
+            return True
+
+        elif rel_h:
+            self.objective_control.set_rel_z(rel_h)
+            return True
+
+        return False
+
+    def get_objective(self):
+        return self.objective_control.read_z()
+
+    def stop_objective(self):
+        self.objective_control.stop()
+        return True
+
+    def set_objective_home(self):
+        """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
+        self.objective_control.set_origin()
+        return True
+
+    def home_objective(self):
+        """Goes to the current position marked as home. Return False if device has no 'home' capability."""
+        self.objective_control.go_home()
+        return True
+
+    def close_voltage(self):
+        self.daq_board_control.change_voltage(0)
+
+    def set_voltage(self, v=None):
+        self._start_daq()
+        self.daq_board_control.change_voltage(v)
+        return True
+
+    def save_data(self, filepath):
+        try:
+            self.daq_board_control.save_data(filepath)
+        except FileNotFoundError:
+            logging.info('File not selected')
+
+        return True
+
+    def get_voltage(self):
+        return self.daq_board_control.voltage
+
+    def get_voltage_data(self):
+        return self.daq_board_control.data['ai1']
+
+    def get_current_data(self):
+        return self.daq_board_control.data['ai2']
+
+    def get_rfu_data(self):
+        return self.daq_board_control.data['ai3']
+
+    def get_data(self):
+        with self.daq_board_control.data_lock:
+            rfu = self.daq_board_control.data['avg']
+            volts = self.daq_board_control.data[self._daq_voltage_readout]
+            current = self.daq_board_control.data[self._daq_current_readout]
+        return {'rfu':rfu, 'volts':volts, 'current':current}
+
+    def stop_voltage(self):
+        self.daq_board_control.change_voltage(0)
+
+
+    def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
+        if pfn:
+            self.laser_control.set_pfn('{:03d}'.format(int(pfn)))
+
+        if att:
+            self.laser_control.set_attenuation('{:03d}'.format(int(att)))
+
+        if energy:
+            logging.info('Cannot set energy of laser currently.')
+
+        if mode:
+            self.laser_control.set_mode('0')
+            self.laser_control.set_rep_rate('010')
+
+        if burst:
+            self.laser_control.set_burst('{:04d}'.format(int(burst)))
+
+        return True
+
+    def laser_standby(self):
+        executed = self.laser_control.start()
+        if executed:
+            self._laser_poll_flag.set()
+
+            self.laser_start_time = time.time()
+            threading.Thread(target=self._poll_laser, daemon=True).start()
+            logging.info('Laser on standby for {}s'.format(self.laser_max_time))
+
+            return True
+
+    def laser_fire(self):
+        self.laser_control.fire()
+        return True
+
+    def laser_stop(self):
+        self.laser_control.stop()
+        return True
+
+    def laser_close(self):
+        self.laser_control.off()
+        return True
+
+    def laser_check(self):
+        self.laser_control.check_status()
+        self.laser_control.check_parameters()
+        return True
+
+    def restart_laser_run_time(self):
+        """ Restarts the clock for the laser run time or restarts the laser"""
+
+        if self._laser_poll_flag.is_set():
+            self.laser_start_time = time.time()
+            return True
+        else:
+            self.laser_standby()
+            return False
+
+
+
+
+    def pressure_close(self):
+        self.pressure_control.close()
+        return True
+
+    def pressure_rinse_start(self):
+        self.pressure_control.apply_rinse_pressure()
+        return True
+
+    def pressure_rinse_stop(self):
+        self.pressure_control.stop_rinse_pressure()
+        return True
+
+    def pressure_valve_open(self):
+        self.pressure_control.open_valve()
+        return True
+
+    def pressure_valve_close(self):
+        self.pressure_control.close_valve()
+        return True
+
+    def turn_on_led(self, channel='R'):
+        self.led_control.start_led(channel)
+
+    def turn_off_led(self, channel='R'):
+        self.led_control.stop_led(channel)
+
+    def turn_on_dance(self):
+        threading.Thread(target = self.led_control.dance_party).start()
+
+    def turn_off_dance(self):
+        self.led_control.dance_stop.set()
+
+
+
 class NikonEclipseTi(BaseSystem):
     system_id = 'ECLIPSETI'
     _z_stage_com = 'COM3'
@@ -765,11 +1206,11 @@ class NikonEclipseTi(BaseSystem):
         return self.filter_control.get_state()
 
 
-class BarracudaSystem(BaseSystem):
-    system_id = 'BARRACUDA'
+class NikonTE3000(BaseSystem):
+    system_id = 'NikonTE3000'
     _z_stage_com = "COM4"
     _outlet_com = "COM7"
-    _objective_com = "COM8"
+    _objective_com = "COM3"
     _laser_com = "COM6"
     _pressure_com = "COM7"
     _daq_dev = "/Dev1/"
@@ -783,7 +1224,7 @@ class BarracudaSystem(BaseSystem):
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
     _pressure_lock = threading.Lock()
-    _camera_lock = threading.RLock()
+    _cam_lock = threading.RLock()
     _laser_lock = threading.Lock()
     _laser_poll_flag = threading.Event()
     _led_lock = _outlet_lock
@@ -800,18 +1241,18 @@ class BarracudaSystem(BaseSystem):
     _find_network = CENetworks.BarracudaCellDetector()
 
     def __init__(self):
-        super(BarracudaSystem, self).__init__()
+        super(NikonTE3000, self).__init__()
         self.laser_max_time = 600
 
         self.hasCameraControl = True
-        self.hasInletControl = True
+        self.hasInletControl = False
         self.hasLaserControl = True
         self.hasObjectiveControl = True
-        self.hasOutletControl = True
+        self.hasOutletControl = False
         self.hasVoltageControl = True
-        self.hasPressureControl = True
+        self.hasPressureControl = False
         self.hasXYControl = True
-        self.hasLEDControl=True
+        self.hasLEDControl=False
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -838,28 +1279,28 @@ class BarracudaSystem(BaseSystem):
 
     def start_system(self):
         # Initialize all the motors independently
-        zstage = threading.Thread(target=self._start_zstage)
-        zstage.start()
-        outlet=threading.Thread(target=self._start_outlet)
-        outlet.start()
+        #zstage = threading.Thread(target=self._start_zstage)
+        #zstage.start()
+        #outlet=threading.Thread(target=self._start_outlet)
+        #outlet.start()
         objective = threading.Thread(target=self._start_objective)
         objective.start()
         # Wait for motors to finish homing
-        zstage.join()
-        outlet.join()
+        #zstage.join()
+        #outlet.join()
         objective.join()
-        self.image_control = ImageControl.PVCamImageControl(lock = self._camera_lock)
-        self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock)
+        self.image_control = ImageControl.MicroControl(port = 3121, lock = self._cam_lock)
+        self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock, com = 'COM4')
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
                                                      voltage_control=self._daq_voltage_control)
-        self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
+        #self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
 
-        self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
+        #self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
         self._start_daq()
 
-        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
-                                                                arduino=self.outlet_control.arduino, home=HOME)
+        #self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
+        #                                                       arduino=self.outlet_control.arduino, home=HOME)
 
         pass
 
@@ -870,7 +1311,7 @@ class BarracudaSystem(BaseSystem):
         self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
 
     def _start_objective(self):
-        self.objective_control = ObjectiveControl.ObjectiveControl(com=self._objective_com, lock=self._objective_lock,
+        self.objective_control = ObjectiveControl.ArduinoControl(com=self._objective_com, lock=self._objective_lock,
                                                                    home=HOME)
 
     def close_system(self):
@@ -899,6 +1340,9 @@ class BarracudaSystem(BaseSystem):
         with self._camera_lock:
             self.image_control.record_recent_image(filename)
 
+    def record_image(self, filename):
+        self.image_control.record_recent_image(filename)
+
     def get_image(self):
         with self._camera_lock:
             image = self.image_control.get_recent_image(size=self.image_size)
@@ -906,14 +1350,12 @@ class BarracudaSystem(BaseSystem):
             if image is None:
                 return None
             if not HOME:
-
                 self.image_control.save_image(image, "recentImg.png")
-
         return image
 
     def close_image(self):
-        with self.image_control.lock:
-            self.image_control.close()
+        self.image_control.close()
+        self.image_control._close_client()
         return True
 
     def open_image(self):

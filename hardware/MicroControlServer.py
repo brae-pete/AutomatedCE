@@ -14,9 +14,9 @@ import pickle
 from multiprocessing.connection import Listener
 import logging
 
-
+USER = 'NIKONTE3000'
 def log_output(msg, port, mode = 'a'):
-    with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log-{}.txt'.format(port), mode) as fout:
+    with open(r'C:\Users\{}\Documents\Barracuda\BarracudaQt\py2_log-{}.txt'.format(USER,port), mode) as fout:
         fout.write("{}-{}\n".format(datetime.datetime.now().strftime('%m/%d/%y %H:%M:%S'), msg))
 
 
@@ -68,7 +68,6 @@ class MicroServer:
         except Exception as e:
             log_output(e,self.address[1])
         self.listener.close()
-
 
 # Core Micromanager Class
 class MicroControl:

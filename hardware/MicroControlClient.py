@@ -7,8 +7,9 @@ import time
 
 #Thhis should be the path to the python.exe file in the CEpy27 environment set up by conda.
 WAIT_TIME = 0.075 # Time in seconds to wait between server calls.
-PYTHON2_PATH = r"C:\Users\NikonEclipseTi\Miniconda3\envs\CEpy27\python.exe"
-SERVER_FILE = r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\hardware\MicroControlServer.py'
+USER = "NikonTE3000"
+PYTHON2_PATH = r"C:\Users\{}\Miniconda3\envs\CEpy27\python.exe".format(USER)
+SERVER_FILE = r'C:\Users\{}\Documents\Barracuda\BarracudaQt\hardware\MicroControlServer.py'.format(USER)
 class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object

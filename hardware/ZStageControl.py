@@ -11,6 +11,31 @@ try:
 except ModuleNotFoundError:
     import ArduinoBase
 
+
+try:
+    import clr
+    import time
+    from System import String
+    from System import Decimal
+    from System.Collections import *
+
+    # Constants
+    sys.path.append(r'C:\Program Files\Thorlabs\Kinesis')
+
+    # Add the .net reference and import so python can see it
+    clr.AddReference("Thorlabs.MotionControl.Controls")
+    import Thorlabs.MotionControl.Controls
+
+    clr.AddReference("Thorlabs.MotionControl.DeviceManagerCLI")
+    clr.AddReference("Thorlabs.MotionControl.GenericMotorCLI")
+    clr.AddReference("Thorlabs.MotionControl.IntegratedStepperMotorsCLI")
+    from Thorlabs.MotionControl.DeviceManagerCLI import *
+    from Thorlabs.MotionControl.GenericMotorCLI import *
+    from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import *
+
+except Exception as e:
+    logging.warning("Could not load thorlabs")
+
 class ZStageControl:
     """Class to control Z-stage for capillary/optical train
     If switching controllers modify the function calls here
@@ -294,6 +319,169 @@ class NikonZStage:
             with self.lock:
                 self.mmc.stop(self.stage_id)
 
+class ThorLabs:
+    """ Class for controlling a ThorLabs Labjack usingn the Kinesis Library
+    You will need to adjust the Kinesis file reference if you installed it outside of the default location
+
+    This uses .NET programming, we load in DLL's using pythonnet package (clr and data types)
+    There are more options available to use beyond what has been set here, and you can check the Kinesis documentation
+    and examples to see how.
+    """
+    min_z = 0
+    max_z = 50
+    offset = 0
+    def __init__(self, lock=threading.RLock() , serial =  '49117634'):
+        self.lock = lock
+        self.inversion = 1
+        self.com = "COM3"
+        self.pos = 0
+        self.serial = serial
+        self.lock = lock
+        self.first_read = True
+        self.open()
+
+
+    @staticmethod
+    def initialize_device(serial):
+        """ Loads the thorlabs lab jack
+        Requires to first build a list of devices,
+        then create a device using the Labjack serial numbe
+        In general, this order cannot be changed
+        """
+        device_list_result = DeviceManagerCLI.BuildDeviceList()
+        device = Thorlabs.MotionControl.IntegratedStepperMotorsCLI.LabJack.CreateLabJack(serial)
+        device.Connect(serial)
+        device.WaitForSettingsInitialized(5000)
+        #motorSettings = device.GetMotorConfiguration()
+        # print(motorSettings)
+        deviceInfo = device.GetDeviceInfo()
+        logging.info(deviceInfo.Name, '  ', deviceInfo.SerialNumber)
+        return device
+
+    def open(self):
+        """User initializes whatever resources are required
+         (open ports, create MMC + load config, etc...)
+         """
+
+        self.device = self.initialize_device(self.serial)
+        time.sleep(1)
+        self.device.LoadMotorConfiguration(self.serial)
+        self.settings = self.device.MotorDeviceSettings
+        self.device.EnableDevice()
+        self.device.StartPolling(250)
+
+        #Set the speed to 5 mm/s
+        vel_prms = self.device.GetVelocityParams()
+        vel_prms.set_MaxVelocity(Decimal(5))
+        self.device.SetVelocityParams(vel_prms)
+
+
+
+    def get_z(self, *args):
+        """ returns float of current position
+        User requests to get current position of stage, returned in mm
+        """
+        # Lock the resources we are going to use
+        pos = float(str(self.device.DevicePosition))
+        self.pos = pos + self.offset
+        return self.pos
+
+    def save_history(self):
+        with open("StageHistory.p", "wb") as fout:
+            data = {'pos': self.pos, 'offset': self.offset}
+            pickle.dump(data, fout)
+
+    def load_history(self):
+        try:
+            self.dos2unix("StageHistory.p", "StageHistory.p")
+            with open("StageHistory.p", "rb") as fin:
+                logging.info(fin)
+                data = pickle.load(fin)
+                logging.info(data)
+                # adjust for the new offset, and add the old offset that  may be present
+                self.offset = (data['pos'] - self.pos) + self.offset
+                self.pos = data['pos']
+        except IOError:
+            logging.warning("No Stage History found")
+
+    def go_home(self):
+        """ Moves up or down until the stage hits the mechanical stop that specifices the 25 mm mark
+         """
+        threading.Thread(target = self.device.Home, args = (60000,)).start()
+        #self.device.Home(60000)
+
+    def set_z(self, set_z):
+        """ set_z (absolute position in mm)
+        returns False if unable to set_z, True if command went through
+        """
+        if not self.min_z < set_z < self.max_z:
+            logging.warning("Z Stage cannot move this far {}".format(set_z))
+            return
+        else:
+            logging.info("{} set z".format(set_z))
+        if self.home_check():
+            go_to = self.inversion * (set_z - self.offset)
+            threading.Thread(target = self.device.MoveTo,args=(Decimal(go_to),60000,)).start()
+
+            #self.device.MoveTo(Decimal(go_to),60000)
+        return True
+
+    def home_check(self):
+        home = self.device.NeedsHoming
+        if home:
+            logging.warning("Please Home Z Stage")
+            return False
+        return True
+
+    def set_rel_z(self, set_z):
+        pos = self.get_z()
+        go_to =  pos + set_z
+        self.set_z(go_to)
+        return True
+
+    def stop_z(self):
+        """ Stops the objective motor where it is at. """
+        self.jack.StopImmediate()
+        return True
+
+    def stop(self):
+        """Stop the Z-stage from moving"""
+        self.stop_z()
+
+    def reset(self):
+        """Resets the resources for the stage"""
+        self.close()
+        self.open()
+
+    def close(self):
+        """Closes the resources for the stage"""
+        self.device.Disconnect()
+
+    @staticmethod
+    def dos2unix(in_file, out_file):
+        outsize = 0
+        with open(in_file, 'rb') as infile:
+            content = infile.read()
+            print(content)
+        with open(out_file, 'wb') as output:
+            for line in content.splitlines():
+                outsize += len(line) + 1
+                output.write(line + '\n'.encode())
+        print("Done. Saved %s bytes." % (len(content) - outsize))
+
+    def wait_for_move(self, clearance=0.0):
+        """
+        returns the final position of the motor after it has stopped moving.
+
+        :return: current_pos, float in mm of where the stage is at
+        """
+        status = self.device.get_Status()
+
+        while status.get_IsInMotion():
+            time.sleep(0.1)
+            status = self.device.get_Status()
+
+        return self.get_z()
 
 
 class PowerStep:
@@ -489,7 +677,7 @@ def threading_test():
 
 if __name__ == "__main__":
     import time
-    s = ZStageControl()
+    s = ThorLabs()
 
 
 

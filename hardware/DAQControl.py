@@ -44,7 +44,7 @@ class DAQBoard:
 
 
 
-    def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None):
+    def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None, laser_fire = False):
         self.dev = dev
         self.voltage_control = voltage_control
         self.voltage_readout = voltage_read
@@ -54,8 +54,9 @@ class DAQBoard:
         self.filter_setup()
 
         # Set up laser (Could move to new class perhaps)
-        self.laser_task = nidaqmx.Task()
-        self.start_laser_task()
+        if laser_fire:
+            self.laser_task = nidaqmx.Task()
+            self.start_laser_task()
 
         if stop is None:
 

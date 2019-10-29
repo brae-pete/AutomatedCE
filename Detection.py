@@ -475,7 +475,7 @@ class FocusGetter:
 if __name__ == "__main__":
     import CESystems
 
-    hardware = CESystems.NikonEclipseTi()
+    hardware = CESystems.NikonTE3000()
     hardware.start_system()
     hardware.image_control.live_view()
     det = CellDetector(hardware)
