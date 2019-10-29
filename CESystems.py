@@ -454,6 +454,7 @@ class NikonEclipseTi(BaseSystem):
         return True
 
     def snap_image(self,filename=None):
+
         self.image_control.get_single_image()
         if filename is not None:
             self.image_control.save_raw_image(filename)

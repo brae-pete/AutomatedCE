@@ -293,7 +293,7 @@ class RunMethod:
         if not self.step['Video']:
             logging.info("Taking Brightfield image...")
             # Take a Brightfield Picture
-            savepath= self.get_save_path(prefix='BF',suffix='.png')
+            savepath= self.get_save_path(prefix='BF',suffix='.tiff')
             self.hardware.save_raw_image(savepath)
         if self.step['FluorSnap']:
             logging.info("Taking Fluorescent image...")
@@ -444,7 +444,7 @@ class RunMethod:
                 else:
                     logging.info("Taking Brightfield image...")
                     # Take a Brightfield Picture
-                    savepath = self.get_save_path(prefix='Post_BF', suffix='.png')
+                    savepath = self.get_save_path(prefix='Post_BF', suffix='.tiff')
                     self.hardware.save_raw_image(savepath)
             self.hardware.objective_control.wait_for_move()
             state_n = self.check_flags()

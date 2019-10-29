@@ -73,7 +73,7 @@ class ImageControl:
     like the coolnap hq2
      """
 
-    contrast_exposure = [0, 98]  # Low and high percintiles for contrast exposure
+    contrast_exposure = [0.5, 99]  # Low and high percintiles for contrast exposure
     rotate = 90
     _frame_num = 0
     _capture_ref = []
@@ -285,7 +285,7 @@ class PVCamImageControl(ImageControl):
      """
     cam = None  # PV camera object
     exposure = 50  # ms exposure time
-    contrast_exposure = [0, 98]  # Low and high percintiles for contrast exposure
+    contrast_exposure = [0.5, 99]  # Low and high percintiles for contrast exposure
     rotate = 90
     img = None  # Copy of the raw image before processing
     process_time = 0  # time it takes to process a single image for live feed
@@ -340,6 +340,7 @@ class PVCamImageControl(ImageControl):
 
     def get_single_image(self):
         """Snaps single image, returns image, for when live feed is not runniing"""
+
         with self.lock:
             image = self.cam.get_frame(self.exposure)
             self.raw_img = image

@@ -7,6 +7,7 @@ import CESystems
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import Detection
 from matplotlib import animation
 
 
@@ -37,9 +38,11 @@ class ZStackData:
         self._load_temp()
 
     def start_acquisition(self, slide_movement=False, well_num=1):
+        #self.apparatus.image_control.stop_video_feed()
         new_data = self._record_data(slide_movement)
         self._move_focus(new_data)
         self._save_temp()
+        #self.apparatus.image_control.start_video_feed()
         return
 
     def _record_data(self, slide_movment, well_num=1):
@@ -78,16 +81,19 @@ class ZStackData:
         """ Moves the objective up and down from the focus position."""
         start_pos = new_data[2]
         save_dir = new_data[4]
+        logging.info("Saving to {}".format(save_dir))
         # Move objective up
         self._loop_acquisition(start_pos, save_dir, 1)
+        self._move_hardware(start_pos)
+        time.sleep(1.5)
         # Move objective down
         self._loop_acquisition(start_pos, save_dir, -1)
 
     def _move_hardware(self, position):
         """ Moves the objective to the absolute position specified by position"""
         self.apparatus.set_objective(position)
-        self.apparatus.objective_control.wait_for_move()
-
+        #self.apparatus.objective_control.wait_for_move()
+        time.sleep(0.25)
     def _loop_acquisition(self, start_pos, save_dir, direction=1):
         """
         Moves the objective up and down from the focal plane. Acquires images according to the funciton
@@ -101,9 +107,10 @@ class ZStackData:
         move_x = 0
         while 100 > move_x > -100:
             self._move_hardware(move_x + start_pos)
-            time.sleep(0.3)
-            filename = save_dir + "\\z_stack_{:+04.0f}.png".format(move_x)
-            self.apparatus.image_control.record_recent_image(filename)
+            time.sleep(0.25)
+            self.apparatus.get_image()
+            filename = save_dir + "\\z_stack_{:+04.0f}.tiff".format(move_x)
+            self.apparatus.save_raw_image(filename)
             move_x += direction * self._move_function(np.abs(move_x))
         self._move_hardware(start_pos)
         return
@@ -116,7 +123,17 @@ class ZStackData:
         :return y: distance to move
         """
 
-        y = 0.002 * (x ** 2.1) + 0.1 * x + 2
+        """y = 0.002 * (x ** 2.1) + 0.1 * x + 2"""
+
+        if x < 10:
+            y = 1
+        elif x <25:
+            y = 3
+        elif x < 50:
+            y = 5
+        elif x < 100:
+            y= 10
+
         return y
 
     def _save_temp(self):
@@ -138,17 +155,6 @@ class ZStackData:
         return df
 
 
-def init():
-    pass
-
-
-def animate(i):
-    frame = hd.get_image()
-    try:
-        im.set_data(frame)
-    except TypeError:
-        logging.warning("Could not load image")
-    return im
 
 class CapillaryFocusAuxillary(ZStackData):
     """
@@ -210,29 +216,18 @@ class CellFocusAuxillary(ZStackData):
     file_prefix = "Cell"
 
 
+def get_images(fc, im):
 
-def init():
-    pass
-
-
-def animate(i):
-    frame = hd.get_image()
-    try:
-        im.set_data(frame)
-    except TypeError:
-        logging.warning("Could not load image")
-    return im
-
+    while True:
+        fc.quickcheck()
+        time.sleep(1.5)
+        im.start_acquisition()
 
 if __name__ == "__main__":
-    hd = CESystems.BarracudaSystem()
-    hd.start_system()
-    hd.start_feed()
-    time.sleep(2)
-    hd.home_z()
-    hd.home_objective()
-    frame = hd.get_image()
+    CENTER = [3730, -1957]
 
-    fig = plt.figure()
-    im = plt.imshow(frame, cmap='gist_gray')
-    anim = animation.FuncAnimation(fig, animate, init_func=init, interval=50)
+    hd = CESystems.NikonEclipseTi()
+    hd.start_system()
+    det = Detection.CellDetector(hd)
+    mov = Detection.Mover(CENTER)
+    fc = Detection.FocusGetter(det, mov)
