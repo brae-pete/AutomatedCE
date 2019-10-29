@@ -501,9 +501,15 @@ class NikonEclipseTi(BaseSystem):
 
     def set_xy(self, xy=None, rel_xy=None):
         """Move the XY Stage"""
-        if type(xy[0]) is not float:
-            logging.warning(" XY is not a valid position {}".format(xy))
-            return False
+        if xy is not None:
+            if type(xy[0]) is not float:
+                logging.warning(" XY is not a valid position {}".format(xy))
+                return False
+
+        elif rel_xy is not None:
+            if type(rel_xy[0]) is not float or type(rel_xy[0]) is not int:
+                logging.warning("XY is not valid position".format(rel_xy))
+
         if xy:
             self.xy_stage_control.set_xy(xy)
         elif rel_xy:

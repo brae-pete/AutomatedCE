@@ -619,6 +619,7 @@ class RunScreen(QtWidgets.QMainWindow):
         self.z_down = QtWidgets.QToolButton()
         self.z_down.setArrowType(QtCore.Qt.DownArrow)
         self.z_value = ValueDisplay()
+
         self.z_stop = QtWidgets.QPushButton('Stop')
         self.z_step_size = QtWidgets.QDoubleSpinBox()
         self.z_set_home = QtWidgets.QPushButton('Set Home')

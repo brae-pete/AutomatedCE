@@ -1197,18 +1197,22 @@ class RunScreenController:
         self.screen.save_output.released.connect(lambda: self.save_output_window())
 
     def hardware_update(self, positions):
-        value = positions[0]
-        self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
-        self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+        if not self.screen.xy_x_value.hasFocus() and not self.screen.xy_y_value.hasFocus():
+            value = positions[0]
+            self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+            self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
 
-        value = positions[1]
-        self.screen.z_value.setText("{:.3f}".format(float(value)))
+        if not self.screen.z_value.hasFocus():
+            value = positions[1]
+            self.screen.z_value.setText("{:.3f}".format(float(value)))
 
-        value = positions[2]
-        self.screen.objective_value.setText("{:.3f}".format(float(value)))
+        if not self.screen.objective_value.hasFocus():
+            value = positions[2]
+            self.screen.objective_value.setText("{:.3f}".format(float(value)))
 
-        value = positions[3]
-        self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+        if not self.screen.outlet_value.hasFocus():
+            value = positions[3]
+            self.screen.outlet_value.setText("{:.3f}".format(float(value)))
         time.sleep(self._update_delay)
         # Update the thread again
         self.update_stage_thread.start()
@@ -1302,9 +1306,16 @@ class RunScreenController:
             value = self.hardware.get_outlet_poll()
             self.screen.outlet_value.setText("{:.3f}".format(float(value)))
             time.sleep(self._update_delay)
+
     def restart_update(self):
+        """ This is what starts the DAQ and Camera updates. Currently the user has to press the restart update button
+         to start the update process.
+         """
+        # Show the status of the update_feed Thread
         logging.info("Finished: {} Running: {}".format(self.update_feed_thread.isFinished(), self.update_feed_thread.isRunning()))
-        logging.info("Active: {}...Single: {}... Remaining{}".format(self.timer.isActive(), self.timer.isSingleShot(),
+
+        # Restart Timer if not Running, Display Status for user
+        logging.info(" Camera: Active: {}...Single: {}... Remaining{}".format(self.timer.isActive(), self.timer.isSingleShot(),
                                            self.timer.remainingTime()))
         #self.update_feed_thread.start()
         try:
@@ -1313,6 +1324,10 @@ class RunScreenController:
         except Exception as e:
             logging.error("{}".format(e))
 
+        # Restart the DAQ Timer if not Running, Display status for user
+        logging.info(
+            " DAQ: Active: {}...Single: {}... Remaining{}".format(self.plot_timer.isActive(), self.plot_timer.isSingleShot(),
+                                                                     self.plot_timer.remainingTime()))
         try:
             if not self.plot_timer.isActive():
                 self.plot_timer.start(100)
@@ -2017,10 +2032,41 @@ class RunScreenController:
 
 
     def save_cap_control(self):
+        """ Saves the plane points and capillary focus points"""
+        try:
+            cell_info={}
+            if len(self.cell_focus_getters)>0:
 
-        pass
+                for i in self.cell_focus_getters:
+                    fg = self.cell_focus_getters[i]
+                    plane_vectors = fg._plane_vectors
+                    plane_coeff = fg._plane_coefficients
+                    center = fg.mover.center
+                    cell_info[i]=[plane_vectors, plane_coeff, center]
+                cap_pos = self.lyse.cap_control.last_cap_height
+                cell_pos = self.lyse.cap_control.last_obj_height
+                data = [cell_info, cap_pos, cell_pos]
+                pickle.dump(data,open('cellfinding.p','wb'))
+
+        except Exception as e:
+            logging.error("{}".format(e))
+
+
     def load_cap_control(self):
-        pass
+        data = pickle.load(open('cellfinding.p','rb'))
+        cell_info = data[0]
+        det = Detection.CellDetector(self.hardware, 0.4329, (235,384))
+
+        for i in cell_info:
+            info = cell_info[i]
+            mov = Detection.Mover(center=info[2])
+            fg = Detection.FocusGetter(det, mov, (235,384))
+            fg._plane_vectors=info[0]
+            fg._plane_coefficients=info[1]
+            self.cell_focus_getters[i]=fg
+
+        self.lyse.cap_control.last_cap_height = data[1]
+        self.lyse.cap_control.last_obj_height = data[2]
 
 
     def _find_a_cell(self):

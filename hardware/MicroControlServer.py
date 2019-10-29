@@ -56,6 +56,7 @@ class MicroServer:
                             # Send the command to the MicroControl class
                             response = self.micro.parse_command(cmd.replace('\n', ''))
                             # Serialize the response using pickle ( This allows us to send it across a port
+                            log_output(response, self.address[1])
                             response = pickle.dumps(response, 2)
                             conn.send_bytes(response)
             except Exception as e:
