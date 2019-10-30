@@ -807,7 +807,7 @@ class NikonEclipseTi(BaseSystem):
         outlet.join()
 
         # Image Control uses separate MMC
-        self.image_control = ImageControl.MicroControl(port = 3121, lock = self._cam_lock)
+        self.image_control = ImageControl.MicroControl(port = 7813, lock = self._cam_lock)
 
         #Nikon Scope shares a MMC
         self.objective_control = ObjectiveControl.MicroControl(port = 7812, lock = self._scope_lock) # Use Presets
@@ -896,9 +896,10 @@ class NikonEclipseTi(BaseSystem):
 
     def snap_image(self,filename=None):
 
-        self.image_control.get_single_image()
+        img = self.image_control.get_single_image()
         if filename is not None:
             self.image_control.save_raw_image(filename)
+        self.image_control.save_image(img, "recentImg.png")
 
     def save_raw_image(self, filename):
         self.image_control.save_raw_image(filename)

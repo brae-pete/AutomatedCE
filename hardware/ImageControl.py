@@ -156,6 +156,14 @@ class ImageControl:
         img_rescale = exposure.rescale_intensity(img, in_range=(low, p98))
         return img_rescale
 
+    def modify_img(self,img,  size, rotation):
+        # Process image for live feed
+        img = self._adjust_size(img, size)
+        img = self._rotate_img(img, rotation)
+        img = self.image_conversion(img)
+        img = img_as_ubyte(img)
+        return img
+
     @staticmethod
     def save_image(img, filename):
         """ Saves PIL image with filename"""
@@ -359,6 +367,7 @@ class PVCamImageControl(ImageControl):
             self.cam.start_live(self.exposure)
             self.live_running.set()
 
+
     def get_recent_image(self, size=0.5, rotation=0):
         """Returns most recent image from the camera"""
 
@@ -366,7 +375,7 @@ class PVCamImageControl(ImageControl):
         st = time.perf_counter()  # Record when the picture was acquired
 
         # keep a copy of the original for debugging ( you could remove this )
-        self.img = img.copy()
+        self.raw_img = img.copy()
         # adjust size, rotation, brightness and contrast
         img = self._adjust_size(img, size)
         img = self._rotate_img(img, rotation)
@@ -451,6 +460,7 @@ class MicroControl(ImageControl):
     def get_single_image(self):
         """Snaps single image, returns image"""
         with self.lock:
+            st = time.perf_counter()
             state = self._snap_image()
             if not state:
                 return self.raw_img
@@ -461,8 +471,8 @@ class MicroControl(ImageControl):
                 return img
             # todo add image processing
             self.raw_img = img.copy()
-        img = self._adjust_size(img, self.size)
-        img = self.image_conversion(img)
+        img = self.modify_img(img,0.5,270)
+        self.capture_save(img, st)
         return img
 
     def set_exposure(self, exp=10):

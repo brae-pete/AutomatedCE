@@ -1193,6 +1193,8 @@ class RunScreenController:
         self.screen.inject_burst_lyse.released.connect(lambda: self.load_cap_control())
         self.screen.save_cap.released.connect(lambda: self.save_cap_control())
 
+        self.screen.fluor_acq.released.connect(lambda: self.fluor_snap())
+
         self.screen.clear_output.released.connect(lambda: self.clear_output_window())
         self.screen.save_output.released.connect(lambda: self.save_output_window())
 
@@ -1358,6 +1360,7 @@ class RunScreenController:
         self.timer.setSingleShot(False)
         self.timer.setInterval(100)
         self.timer.startTimer(100)
+
 
 
         """        while True:
@@ -1599,6 +1602,9 @@ class RunScreenController:
         """Stops and closes all hardware devices. Exits program."""
         self._stop_thread_flag.set()
         self._stop.set()
+        self.timer.stop()
+        self.plot_timer.stop()
+        time.sleep(0.5)
 
         if self.hardware.hasLaserControl:
             logging.warning('Stopping Laser')
@@ -2067,6 +2073,47 @@ class RunScreenController:
 
         self.lyse.cap_control.last_cap_height = data[1]
         self.lyse.cap_control.last_obj_height = data[2]
+
+    def fluor_snap(self):
+
+        self.timer.stop()
+        exposure = self.screen.expos_spin.value()
+        filter = self.screen.filter_spin.value()
+        self.hardware.stop_feed()
+        # Adjust Exposure
+        old_exp = self.hardware.get_exposure()
+        self.hardware.set_exposure(exposure)
+        # Adjust Filter
+        old_chnl = self.hardware.filter_get()
+        self.hardware.filter_set(filter)
+        time.sleep(1)
+        # Turn off the LED
+        old_leds = self.hardware.led_control.channel_states.copy()
+        for led in old_leds:
+            if old_leds[led]:
+                self.hardware.turn_off_led(led)
+        # Adjust Shutter
+        self.hardware.shutter_open()
+        # Snap
+        time.sleep((exposure / 1000) + 0.5)
+        # st = time.time()
+        img = self.hardware.snap_image()
+        self.hardware.save_raw_image('recentFlImg.tiff')
+
+        self.hardware.shutter_close()
+        # Start LED
+        for led in old_leds:
+            if old_leds[led]:
+                self.hardware.turn_on_led(led)
+        # Adjust Filter
+        self.hardware.filter_set(old_chnl)
+        # Adjust Exposure
+        self.hardware.set_exposure(old_exp)
+        time.sleep(0.3)
+        pix_map = QtGui.QPixmap('recentImg.png')
+        self.screen.feed_pointer.setPixmap(pix_map)
+
+
 
 
     def _find_a_cell(self):
