@@ -820,7 +820,7 @@ class NikonEclipseTi(BaseSystem):
         # Set up and start DAQ
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
-                                                     voltage_control=self._daq_voltage_control)
+                                                     voltage_control=self._daq_voltage_control, laser_fire=True )
         # No Laser Control Will  need to be on DAQ
         self._start_daq()
 
