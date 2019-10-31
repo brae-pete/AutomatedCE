@@ -296,7 +296,7 @@ class MicroControl:
 def main(args):
     logging.warning("Python 2 Subprocess started...")
 
-    with open(r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\py2_log.txt', 'a') as fout:
+    with open(r'C:\Users\{}\Documents\Barracuda\BarracudaQt\py2_log.txt'.format(USER), 'a') as fout:
         fout.write("Python 2 started {}\n".format(args))
 
     if len(args) > 1:

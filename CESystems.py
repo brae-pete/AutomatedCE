@@ -312,7 +312,39 @@ class BaseSystem:
         """ Returns the current filter channel"""
         logging.error(" Filter Get is not supported in hardware class")
 
+    def close_system(self):
+        """ Closese all the associated objects"""
+        try:
+            self.close_image()
+        except:
+            logging.warning("Did not shut down Z")
 
+        try:
+            self.close_objective()
+        except:
+            logging.warning("Did not shut down Z")
+        try:
+            self.shutdown_shutter()
+        except:
+            logging.warning("Did not close shutter")
+        try:
+            self.close_outlet()
+        except:
+            logging.warning("Did not shut down Z")
+        try:
+            self.close_voltage()
+        except:
+            logging.warning("Did not shut down Z")
+        try:
+            self.close_z()
+        except:
+            logging.warning("Did not shut down Z")
+
+        try:
+            self.close_daq()
+        except:
+            logging.warning("Did not close DAQ tasks")
+        return True
 
 class BarracudaSystem(BaseSystem):
     system_id = 'BARRACUDA'
@@ -1213,7 +1245,7 @@ class NikonTE3000(BaseSystem):
     _objective_com = "COM3"
     _laser_com = "COM6"
     _pressure_com = "COM7"
-    _daq_dev = "/Dev1/"
+    _daq_dev = "/Dev2/"
     _daq_current_readout = "ai2"
     _daq_voltage_readout = "ai1"
     _daq_voltage_control = 'ao1'
@@ -1245,7 +1277,7 @@ class NikonTE3000(BaseSystem):
         self.laser_max_time = 600
 
         self.hasCameraControl = True
-        self.hasInletControl = False
+        self.hasInletControl = True
         self.hasLaserControl = True
         self.hasObjectiveControl = True
         self.hasOutletControl = False
@@ -1279,8 +1311,7 @@ class NikonTE3000(BaseSystem):
 
     def start_system(self):
         # Initialize all the motors independently
-        #zstage = threading.Thread(target=self._start_zstage)
-        #zstage.start()
+        zstage_thread = threading.Thread(target=self._start_zstage).start()
         #outlet=threading.Thread(target=self._start_outlet)
         #outlet.start()
         objective = threading.Thread(target=self._start_objective)
@@ -1308,7 +1339,7 @@ class NikonTE3000(BaseSystem):
         self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
 
     def _start_zstage(self):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        self.z_stage_control = ZStageControl.ThorLabs(lock=self._z_stage_lock)
 
     def _start_objective(self):
         self.objective_control = ObjectiveControl.ArduinoControl(com=self._objective_com, lock=self._objective_lock,
@@ -1432,7 +1463,7 @@ class NikonTE3000(BaseSystem):
         return False
 
     def get_z(self):
-        return self.z_stage_control.read_z()
+        return self.z_stage_control.get_z()
 
     def stop_z(self):
         self.z_stage_control.stop()
@@ -1898,7 +1929,7 @@ class OstrichSystem(BaseSystem):
         pass
 
 def test():
-    hardware = NikonEclipseTi()
+    hardware = NikonTE3000()
     hardware.start_system()
     return hardware
 
