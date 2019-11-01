@@ -1241,10 +1241,10 @@ class NikonEclipseTi(BaseSystem):
 class NikonTE3000(BaseSystem):
     system_id = 'NikonTE3000'
     _z_stage_com = "COM4"
-    _outlet_com = "COM7"
+    _outlet_com = "COM5"
     _objective_com = "COM3"
     _laser_com = "COM6"
-    _pressure_com = "COM7"
+    _pressure_com = "COM5"
     _daq_dev = "/Dev2/"
     _daq_current_readout = "ai2"
     _daq_voltage_readout = "ai1"
@@ -1255,7 +1255,7 @@ class NikonTE3000(BaseSystem):
     _outlet_lock = threading.RLock()
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
-    _pressure_lock = threading.Lock()
+    _pressure_lock = _outlet_lock
     _cam_lock = threading.RLock()
     _laser_lock = threading.Lock()
     _laser_poll_flag = threading.Event()
@@ -1280,11 +1280,11 @@ class NikonTE3000(BaseSystem):
         self.hasInletControl = True
         self.hasLaserControl = True
         self.hasObjectiveControl = True
-        self.hasOutletControl = False
+        self.hasOutletControl = True
         self.hasVoltageControl = True
-        self.hasPressureControl = False
+        self.hasPressureControl = True
         self.hasXYControl = True
-        self.hasLEDControl=False
+        self.hasLEDControl=True
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -1312,13 +1312,13 @@ class NikonTE3000(BaseSystem):
     def start_system(self):
         # Initialize all the motors independently
         zstage_thread = threading.Thread(target=self._start_zstage).start()
-        #outlet=threading.Thread(target=self._start_outlet)
-        #outlet.start()
+        outlet=threading.Thread(target=self._start_outlet)
+        outlet.start()
         objective = threading.Thread(target=self._start_objective)
         objective.start()
         # Wait for motors to finish homing
         #zstage.join()
-        #outlet.join()
+        outlet.join()
         objective.join()
         self.image_control = ImageControl.MicroControl(port = 3121, lock = self._cam_lock)
         self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock, com = 'COM4')
@@ -1327,16 +1327,17 @@ class NikonTE3000(BaseSystem):
                                                      voltage_control=self._daq_voltage_control)
         #self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
 
-        #self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
+        self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
         self._start_daq()
 
-        #self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
-        #                                                       arduino=self.outlet_control.arduino, home=HOME)
+        self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
+                                                                arduino=self.outlet_control.arduino, home=HOME)
 
-        pass
+
 
     def _start_outlet(self):
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME,invt=1)
+
 
     def _start_zstage(self):
         self.z_stage_control = ZStageControl.ThorLabs(lock=self._z_stage_lock)

@@ -13,7 +13,7 @@ class OutletControl:
     """
     invert = -1
     default_pos = -4
-    def __init__(self, com="COM7", arduino=-1, lock=-1, home=True):
+    def __init__(self, com="COM7", arduino=-1, lock=-1, home=True, invt=-1):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -24,6 +24,7 @@ class OutletControl:
         self.pos = 0
         self.have_arduino = True
         self.arduino = arduino
+        self.invert = invt
 
         if arduino == -1:
             self.check = False
@@ -111,10 +112,13 @@ class OutletControl:
             if self.home:
                 self.pos=0
                 return
-
-            self.arduino.go_home()
+            if self.invert == -1:
+                invt = True
+            else:
+                invt = False
+            self.arduino.go_home(invt)
             self.wait_for_move()
-            self.arduino.go_home()
+            self.arduino.go_home(invt)
             self.pos = self.wait_for_move()
             self.offset = 0
             self.set_z(self.default_pos)

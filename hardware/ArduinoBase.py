@@ -124,10 +124,14 @@ class ArduinoBase:
             return
         self.serial.write("M0H\n".encode())
 
-    def go_home(self):
+    def go_home(self, invt):
         if self.home:
             return
-        self.serial.write("M0G\n".encode())
+        if invt:
+            invt=0
+        else:
+            invt = 1
+        self.serial.write("M0G{}{}\n".format(invt,invt).encode())
 
 
     def go_home_objective(self):
