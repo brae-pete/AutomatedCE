@@ -66,7 +66,7 @@ class CellDetector:
     excluded_minimum = 100  # distance from previous laser lysis spot
     move_distance = 250
     img_shape = [250, 250]  # This will change to whatever the image shape is
-    blob_exclusion_image = r"C:\Users\NikonEclipseTi\Documents\Barracuda\EasyAccess\Background.png"  # Path to empty image (no cells, just the dust and noise on the lens)
+    blob_exclusion_image = r"C:\Users\NikonTE3000\Documents\Barracuda\BarracudaQt\recentImg.png" # Path to empty image (no cells, just the dust and noise on the lens)
     max_diameter = 200  # Maximum radius in ums, anything larger will be excluded.
     debug = True
     thresh = 0.1

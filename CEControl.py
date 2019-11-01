@@ -45,7 +45,7 @@ class ProgramController:
     def __init__(self):
         # Initialize system model, system hardware and the GUI
         self.repository = CEObjects.CERepository()
-        self.hardware = CESystems.NikonEclipseTi()
+        self.hardware = CESystems.NikonTE3000()
         self.hardware.start_system()
 
         app = QtWidgets.QApplication(sys.argv)
