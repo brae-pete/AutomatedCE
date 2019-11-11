@@ -2474,10 +2474,10 @@ class SeparateDialog(QtWidgets.QDialog):
         row = QtWidgets.QHBoxLayout()
         wid = QtWidgets.QRadioButton()
         self.form_data['SeparationTypeVacuumRadio'] = wid.isChecked
-        wid.setEnabled(False)
+        wid.setEnabled(True)
         row.addWidget(wid)
         wid = QtWidgets.QLabel('Vacuum')
-        wid.setEnabled(False)
+        wid.setEnabled(True)
         row.addWidget(wid)
         row.setAlignment(QtCore.Qt.AlignLeft)
         layout.addRow(row)

@@ -164,6 +164,7 @@ class RunMethod:
             return
         voltage_level = None
         pressure_state = None
+        vacuum_state = False
 
         if self.step['SeparationTypeVoltageRadio']:
             voltage_level = float(self.step['ValuesVoltageEdit'])
@@ -178,14 +179,12 @@ class RunMethod:
         if self.step['SeparationTypePressureRadio']:
             pressure_state = True
         elif self.step['SeparationTypeVacuumRadio']:
-            logging.error('Unsupported: Separation with vacuum')
-            return False
+            vacuum_state = True
 
         if self.step['SeparationTypeWithPressureCheck']:
             pressure_state = True
         elif self.step['SeparationTypeWithVacuumCheck']:
-            logging.error('Unsupported: Separation with vacuum.')
-            return False
+            vacuum_state = True
 
         duration = float(self.step['ValuesDurationEdit'])
 
@@ -193,6 +192,9 @@ class RunMethod:
             self.hardware.set_voltage(voltage_level)
         if pressure_state:
             self.hardware.pressure_rinse_start()
+        if vacuum_state:
+            self.hardware.vacuum_rinse_start()
+
 
         state = self.wait_sleep(duration)
         # Save Data

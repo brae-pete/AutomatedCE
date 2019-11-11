@@ -264,6 +264,10 @@ class BaseSystem:
         """Starts rinsing pressure.."""
         logging.error('pressure_rinse_start not implemented in hardware class.')
 
+    def vacuum_rinse_start(self):
+        """ Starts vacuum pressure..."""
+        logging.error("vacuum_rinse_start not implemented in hardware class")
+
     def pressure_rinse_stop(self):
         """Stops rinsing pressure."""
         logging.error('pressure_rinse_stop not implemented in hardware class.')
@@ -1184,6 +1188,11 @@ class NikonEclipseTi(BaseSystem):
 
     def pressure_rinse_stop(self):
         self.pressure_control.stop_rinse_pressure()
+        return True
+
+    def vacuum_rinse_start(self):
+        """ Starts vacuum pressure..."""
+        self.pressure_control.apply_vacuum()
         return True
 
     def pressure_valve_open(self):
