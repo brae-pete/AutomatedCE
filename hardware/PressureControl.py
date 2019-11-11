@@ -30,18 +30,21 @@ class PressureControl:
             self.state = True
             self.state = self.arduino.applyPressure()
 
+    def apply_vacuum(self):
+        """ Applys a vacuum via the 3rd Solenoid"""
+        with self.lock:
+            self.state=True
+            self.arduino.write_command("P0V")
+
     def stop_rinse_pressure(self):
 
-        """Only need to open release valve momentarily, this reduces heat build up on the MOSFET"""
-        # with self.lock:
-        #    self.state= self.arduino.openValves()
-        # time.sleep(0.5)
+        """Stop the rinse pressure, also stops vacuum pressure"""
+
         with self.lock:
             self.state = False
             self.state = self.arduino.removePressure()
             logging.info("Released Pressure")
-        #time.sleep(1.5)
-        #self.close_valve()
+
 
     def open_valve(self):
         with self.lock:

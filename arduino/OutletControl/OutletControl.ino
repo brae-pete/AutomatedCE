@@ -42,6 +42,7 @@ int outlet_div = 32;
 // Set variables for Pressure
 int SOLENOID1 = 23;
 int SOLENOID2 = 29;
+int SOLENOID3 = 27
 int LED_R = 35;
 int LED_G = 37;
 int LED_B = 39;
@@ -317,20 +318,26 @@ void pressureTalk(){
   //Serial.println(inputString[2]);
   if (inputString[2]=='R'){
     Serial.println("ON");
-    digitalWrite(SOLENOID2,LOW);  
-    digitalWrite(SOLENOID1,HIGH);
+    digitalWrite(SOLENOID2,HIGH);  
+    digitalWrite(SOLENOID1,LOW);
+    digitalWrite(SOLENOID3, LOW);
   } else if(inputString[2]=='S'){
-    digitalWrite(SOLENOID2,HIGH);
-    digitalWrite(SOLENOID1,LOW);
-    Serial.println("OFF");
-  } else if(inputString[2]=='X'){
-    digitalWrite(SOLENOID1,LOW);
     digitalWrite(SOLENOID2,LOW);
+    digitalWrite(SOLENOID1,HIGH);
+    digitalWrite(SOLENOID3, LOW);
+  } else if(inputString[2]=='X'){
+    digitalWrite(SOLENOID1,HIGH);
+    digitalWrite(SOLENOID2,HIGH);
+    digitalWrite(SOLENOID3, LOW);
     Serial.println("All OPEN");
   } else if (inputString[2]=='C'){
-    digitalWrite(SOLENOID1, HIGH);
-    digitalWrite(SOLENOID2, HIGH);
-    Serial.println("All CLOSED");
+    digitalWrite(SOLENOID1, LOW);
+    digitalWrite(SOLENOID2, LOW);
+    digitalWrite(SOLENOID3, LOW);
+  } else if (inputString[2]=='V'){
+    digitalWrite(SOLENOID1, LOW);
+    digitalWrite(SOLENOID2, LOW);
+    digitalWrite(SOLENOID3, HIGH);
   }
 }
 
