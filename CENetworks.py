@@ -251,6 +251,20 @@ class BarracudaCellDetector:
         logging.info('before return {}'.format(ratioed_boxes))
         return ratioed_boxes, new_probs
 
+def get_classi():
+    start = -100
+    data = []
+    for i in range(52):
+        data.append(start)
+        if np.abs(start) >50:
+            start+=10
+        elif np.abs(start) >25:
+            start+=5
+        elif np.abs(start) > 10:
+            start += 3
+        else:
+            start +=1
+    return data
 
 class BarracudaFocusClassifier:
     _focus_increment = 3  # µm, 39 increments total (19 above and below 0)
@@ -261,6 +275,10 @@ class BarracudaFocusClassifier:
     _graph = None
     _session = None
     loaded = False
+    img_size = [280, 346]
+    focus_class = [-100, -90, -80, -70, -60, -50, -45, -40, -35, -30, -25, -22, -19,
+                   -16, -13, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4,
+                   5, 6, 7, 8, 9, 10, 11, 14, 17, 20, 23, 26, 31, 36, 41, 46, 51, 61, 71, 81, 91, 101]
 
     def __init__(self, net_file=None, load=False):
         self.focus_network_file = net_file if net_file else self._default_focus_network_file
@@ -268,13 +286,13 @@ class BarracudaFocusClassifier:
         if load:
             self.prepare_model()
 
-    @staticmethod
-    def _prepare_image(image):
+
+    def _prepare_image(self,image):
         """Take the image provided and return an array the network can work with."""
         image = img_to_array(image)
         image = image[:, :, 0]
-        image = resize(image, (384, 512))
-        return_image = np.zeros((1, 1, 384, 512))
+        image = resize(image, self.img_size)
+        return_image = np.zeros((1, 1, self.img_size[0], self.img_size[1]))
         return_image[0][0] = image
         return return_image
 
@@ -324,20 +342,11 @@ class BarracudaFocusClassifier:
 
         average_at_prediction = np.mean(output.softmax[0][index-2:index+3])
 
-        index_difference = index - self._in_focus_index
-        opposite_index = self._in_focus_index - index_difference
-
-        average_at_opposite = np.mean(output.softmax[0][opposite_index-2: opposite_index+3])
-
-        logging.info(output.softmax[0][index-2:index+3])
-        logging.info(output.softmax[0][opposite_index-2: opposite_index+3])
-        logging.info('Predicted Mean: {}, Opposite Mean: {}'.format(average_at_prediction, average_at_opposite))
-
-        focus = (index - self._in_focus_index)*self._focus_increment
+        focus = self.focus_class[index ]
 
         score = max(output.softmax[0])
 
-        return focus, score, average_at_opposite
+        return focus, score,output
 
 
 # All code below is provided courtesy of Kevin Bardool and can be found at:
@@ -1247,3 +1256,137 @@ image2 = cv2.imread(r'recentImg.png')
 #     print('Time to run focus network :: {}\n'.format(time.time() - t))
 #
 #     count += 1
+def process_image(img):
+    """ Adjusts the contrast and brightness"""
+    img = np.asarray(img)
+    low, p98 = np.percentile(img, [0.5,98])
+    img_rescale = exposure.rescale_intensity(img, in_range=(low, p98))
+
+    imgr = img_rescale / 256
+    imgr = imgr.astype(np.uint8)
+    return imgr
+
+def grab_images(folder_dir):
+    # Get a list of all images in a folder
+    folder_path = os.path.join(IMG_DIR, folder_dir)
+    imgs =[]
+    for file in os.listdir(folder_path):
+        if file.endswith(".tiff"):
+            imgs.append(os.path.join(folder_path,file))
+
+    print("There are {} images to analyze".format(len(imgs)))
+    return imgs
+
+def get_pos(name):
+    z_pos = name.rsplit('\\')[-1].split('-MOD')[0]
+    z_pos = int(z_pos)
+    return z_pos
+
+import pandas as pd
+import os
+import threading
+
+
+def check_accuracy():
+
+    df_dir = r"C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\focus_data\cell_data.csv"
+    df = pd.read_csv(df_dir)
+    preds = []
+    guess = []
+
+    st = time.time()
+    for z,i in enumerate(df.img_folder[0:2]):
+        imgs = grab_images(i)
+        print("Batch {} out of {}, lapsed {} s".format(z,len(df.img_folder), time.time()-st))
+        for name in imgs:
+            img = Image.open(name)
+            img = process_image(img)
+            output = BFC.get_focus(img)
+            preds.append(output[0])
+            guess.append(get_pos(name))
+    return preds, guess
+
+def get_data(fold,lock,df,guess,preds):
+
+        imgs = grab_images(fold)
+        print("Batch {} out of {}, lapsed {} s".format(fold,len(df.img_folder), time.time()))
+        for name in imgs:
+            img = Image.open(name)
+            img = process_image(img)
+            output = BFC.get_focus(img)
+            with lock:
+                preds.append(output[0])
+                guess.append(get_pos(name))
+
+from queue import Queue
+
+from threading import Thread
+
+
+class Worker(Thread):
+    """ Thread executing tasks from a given tasks queue """
+    def __init__(self, tasks):
+        Thread.__init__(self)
+        self.tasks = tasks
+        self.daemon = True
+        self.start()
+
+    def run(self):
+        while True:
+            func, args, kargs = self.tasks.get()
+            try:
+                func(*args, **kargs)
+            except Exception as e:
+                # An exception happened in this thread
+                print(e)
+            finally:
+                # Mark this task as done, whether an exception happened or not
+                self.tasks.task_done()
+
+
+class ThreadPool:
+    guess = []
+    preds = []
+    """ Pool of threads consuming tasks from a queue """
+    def __init__(self, num_threads):
+        self.tasks = Queue(num_threads)
+        for _ in range(num_threads):
+            Worker(self.tasks)
+
+    def add_task(self, func, *args, **kargs):
+        """ Add a task to the queue """
+        self.tasks.put((func, args, kargs))
+
+    def map(self, func, args_list, lock,df):
+        """ Add a list of tasks to the queue """
+        for args in args_list:
+            self.add_task(func, args,lock,df,self.guess,self.preds)
+
+    def wait_completion(self):
+        """ Wait for completion of all the tasks in the queue """
+        self.tasks.join()
+
+
+def thread_check(guess,preds):
+
+    # Instantiate a thread pool with 5 worker threads
+    pool = ThreadPool(5)
+    lock = threading.Lock()
+    pool.map(get_data,df.img_folder[:],lock,df)
+    pool.wait_completion()
+    return pool.guess, pool.preds
+
+
+if __name__ == "__main__":
+    from PIL import Image
+    from skimage import exposure
+    img = Image.open(r"C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\focus_data\Cell_2019-10-29_16-18-00\+008-MODz_stack_+008.tiff")
+    BFC = BarracudaFocusClassifier(r"C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\focus_model_2.onnx")
+    BFC.prepare_model()
+    IMG_DIR = r'C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\focus_data'
+    preds=[]
+    guess=[]
+    df_dir = r"C:\Users\NikonEclipseTi\Documents\Barracuda\BarracudaQt\focus_data\cell_data.csv"
+    df = pd.read_csv(df_dir)
+
+

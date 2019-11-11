@@ -1,4 +1,5 @@
 # Standard library modules
+import queue
 import sys
 import os
 import pickle
@@ -483,7 +484,7 @@ class MethodScreenController:
 
     def add_step(self, inlets, outlets, action_input=None, inlet_input=None, outlet_input=None,
                  time_input=None, value_input=None, duration_input=None, summary_input=None,
-                 inlet_travel_input=None, outlet_travel_input=None):
+                 inlet_travel_input=None, outlet_travel_input=None, inlet_pos_input=None):
         """Adds a new step to the table for the user to fill out."""
         if not self._populating_table:
             self._form_data.extend([{}])
@@ -515,7 +516,17 @@ class MethodScreenController:
         else:
             inlet_travel.setValue(0)
         inlet_travel.setSuffix('mm')
-        self.screen.insert_table.setCellWidget(row_count, 7, inlet_travel)
+        self.screen.insert_table.setCellWidget(row_count, 9, inlet_travel)
+
+        inlet_pos = QtWidgets.QDoubleSpinBox()
+        inlet_pos.setMaximum(25)
+        inlet_pos.setMinimum(0)
+        if inlet_pos_input:
+            inlet_pos.setValue(inlet_pos_input)
+        else:
+            inlet_pos.setValue(0.25)
+        inlet_pos.setSuffix('mm')
+        self.screen.insert_table.setCellWidget(row_count, 7, inlet_pos)
 
         outlet_travel = QtWidgets.QDoubleSpinBox()
         outlet_travel.setMaximum(25)
@@ -528,9 +539,11 @@ class MethodScreenController:
         self.screen.insert_table.setCellWidget(row_count, 8, outlet_travel)
 
         blank_summary = QtWidgets.QTableWidgetItem()
+
+
         if summary_input:
             blank_summary.setText(summary_input)
-        self.screen.insert_table.setItem(row_count, 9, blank_summary)
+        self.screen.insert_table.setItem(row_count, 10, blank_summary)
 
         add_button = QtWidgets.QPushButton('+')
         add_button.setFixedWidth(38)
@@ -577,7 +590,7 @@ class MethodScreenController:
 
     def set_step_conditions(self, dialog, dialog_data):
         """ Sets table values based on form data from dialog. """
-        logging.info(dialog_data)
+        #logging.info(dialog_data)
         current_row = self.screen.insert_table.currentRow()
 
         data = {'Type': dialog}
@@ -690,7 +703,7 @@ class MethodScreenController:
 
         self.screen.insert_table.setItem(current_row, 3, value_item)
         self.screen.insert_table.setItem(current_row, 4, duration_item)
-        self.screen.insert_table.setItem(current_row, 9, summary_item)
+        self.screen.insert_table.setItem(current_row, 10, summary_item)
 
     def load_dialog(self, dialog_type):
         """ Loads the appropriate dialog based on user input in table. """
@@ -828,22 +841,26 @@ class MethodScreenController:
 
     def save_method(self):
         """ Prompts the user for and saves current method to a file path. """
-        saved_file_path = self.screen.file_name_save.text()
-
-        if not saved_file_path:  # Checks if a file path was actually specified.
-            self.select_file()
+        try:
             saved_file_path = self.screen.file_name_save.text()
 
-            if not saved_file_path:
-                return
+            if not saved_file_path:  # Checks if a file path was actually specified.
+                self.select_file()
+                saved_file_path = self.screen.file_name_save.text()
 
-        self.compile_method()  # Compile all step information into a method object
+                if not saved_file_path:
+                    return
 
-        with open(saved_file_path, 'wb') as saved_file:
-            try:
-                pickle.dump(self.method, saved_file)
-            except pickle.PicklingError:  # Shouldn't occur unless the user really screws up.
-                CEGraphic.ErrorMessageUI(error_message='Could not save the method.')
+            self.compile_method()  # Compile all step information into a method object
+
+            with open(saved_file_path, 'wb') as saved_file:
+                try:
+                    pickle.dump(self.method, saved_file)
+                except pickle.PicklingError:  # Shouldn't occur unless the user really screws up.
+                    CEGraphic.ErrorMessageUI(error_message='Could not save the method.')
+        except Exception as e:
+            logging.error(e)
+
 
     def select_file(self):
         """Prompts the user to select a file to eventually save to."""
@@ -874,7 +891,7 @@ class MethodScreenController:
                 self.add_step([step['Inlet']], [step['Outlet']], action_input=step['Type'], inlet_input=step['Inlet'],
                               outlet_input=step['Outlet'], time_input=step['Time'], value_input=step['Value'],
                               duration_input=step['Duration'], summary_input=step['Summary'],
-                              inlet_travel_input=step['InletTravel'], outlet_travel_input=step['OutletTravel'])
+                              inlet_travel_input=step['InletTravel'], outlet_travel_input=step['OutletTravel'], inlet_pos_input = ['InletPos'])
                 self._form_data += [step]
 
         self._populating_table = False
@@ -884,14 +901,16 @@ class MethodScreenController:
         n = 0
         for data in self._form_data:
             if 'Type' in data.keys():
-                data['InletTravel'] = self.screen.insert_table.cellWidget(n, 7).value()
+                data['InletPos'] = self.screen.insert_table.cellWidget(n, 7).value()
+                data['InletTravel']=self.screen.insert_table.cellWidget(n,9).value()
                 data['OutletTravel'] = self.screen.insert_table.cellWidget(n, 8).value()
                 data['Inlet'] = self.screen.insert_table.cellWidget(n, 5).currentText()
                 data['Outlet'] = self.screen.insert_table.cellWidget(n, 6).currentText()
                 data['Time'] = self.screen.insert_table.item(n, 1).text()
-                data['Summary'] = self.screen.insert_table.item(n, 9).text()
+                data['Summary'] = self.screen.insert_table.item(n, 10).text()
                 data['Value'] = self.screen.insert_table.item(n, 3).text()
                 data['Duration'] = self.screen.insert_table.item(n, 4).text()
+
                 n += 1
 
         self.method = CEObjects.Method(steps=self._form_data, insert=self.insert)
@@ -999,6 +1018,7 @@ class RunScreenController:
     _inject_flag = threading.Event()
     _live_feed = threading.Event()
     _plot_data = threading.Event()
+    machine_flag = threading.Event()
     _laser_position = None
     _t = 350
     _start = True
@@ -1056,6 +1076,12 @@ class RunScreenController:
         self.screen.reset_plot.released.connect(lambda: self.reset_plot())
         self.screen.view_plot.released.connect(lambda: self.view_plot())
         self.screen.reset_fig.released.connect(lambda: self.reset_figure())
+        self.screen.machine_vision.released.connect(lambda check=self.screen.machine_vision.isChecked: self.machine_flag.set() if check() else self.machine_flag.clear())
+
+        self.decision_collection_flag = threading.Event()
+        for button,spin in zip(self.screen.decision_buttons, self.screen.decision_spin):
+            button.released.connect(lambda x=spin: self.decision_collection(x))
+
 
         if self.hardware.hasXYControl:
             self.screen.xy_up.released.connect(
@@ -1163,6 +1189,7 @@ class RunScreenController:
             self.screen.camera_close.released.connect(lambda: self.hardware.close_image())
             self.screen.buffer_save.released.connect(lambda: self.restart_update())
             self.screen.finder_button.released.connect(lambda:self._find_a_cell())
+            self.screen.expos_button.released.connect(lambda x=self.screen.expos_spin:self.hardware.set_exposure(x.value()))
         else:
             self.screen.enable_live_feed(False)
 
@@ -1231,6 +1258,7 @@ class RunScreenController:
 
         # Update the Plots
         self.plotter = UpdatePlots(self.hardware, [self.screen.plot_panel.canvas.axes_rfu, self.screen.plot_panel.canvas.axes_current])
+        self.plotter.machine_vision_flag = self.machine_flag
         self.plotter.signal.connect(self.screen.plot_panel.canvas.draw)
 
         self.plot_timer = QtCore.QTimer()
@@ -1238,44 +1266,7 @@ class RunScreenController:
         self.plot_timer.setSingleShot(False)
         self.plot_timer.setInterval(250)
         self.plot_timer.startTimer(250)
-
-
         self._update_live_feed()
-        """        if self.hardware.hasXYControl:
-                    value = self.hardware.get_xy()
-                    if value is not None:
-                        self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
-                        self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
-                    else:
-                        logging.error('Live updates of stage/motor positions disabled.')
-                        return
-        
-                if self.hardware.hasInletControl:
-                    value = self.hardware.get_z()
-                    if value is not None:
-                        self.screen.z_value.setText("{:.3f}".format(float(value)))
-                    else:
-                        logging.error('Live updates of stage/motor positions disabled.')
-                        return
-        
-                if self.hardware.hasOutletControl:
-                    value = self.hardware.get_outlet()
-                    logging.info(value)
-                    if value is not None:
-                        self.screen.outlet_value.setText("{:.3f}".format(float(value)))
-                    else:
-                        logging.error('Live updates of stage/motor positions disabled.')
-                        return
-        
-                if self.hardware.hasObjectiveControl:
-                    value = self.hardware.get_objective()
-                    logging.info(value)
-                    if value is not None:
-                        self.screen.objective_value.setText("{:.3f}".format(float(value)))
-                    else:
-                        logging.error('Live updates of stage/motor positions disabled.')
-                        return
-        """
 
     def _value_display_interact(self, selected=False):
         """Pauses or starts value update on stage positions when user clicks on or clicks off the edit box."""
@@ -1447,6 +1438,23 @@ class RunScreenController:
             self._plot_data.clear()
         return
 
+    def decision_collection(self, spin):
+        """ When a user selects this optin during a separation step, the collection step will take place in teh specified well"""
+        well = spin.value()
+        try:
+            if well > -1:
+                logging.info("Setting collection to well {}".format(well))
+                # Set the RunLog Collection well and Flag
+                self.decision_collection_flag.set()
+                with self.runs.collection_well_lock:
+                    self.runs.collection_well = well
+            else:
+                logging.info("Reseting collection to default")
+                # clear the Runlog Collection flag
+                self.decision_collection_flag.clear()
+
+        except Exception as e:
+            logging.error("Decision Error: {}".format(e))
     def reset_figure(self):
         self.screen.plot_panel.reset()
 
@@ -2113,12 +2121,11 @@ class RunScreenController:
         pix_map = QtGui.QPixmap('recentImg.png')
         self.screen.feed_pointer.setPixmap(pix_map)
 
-
-
-
     def _find_a_cell(self):
         try:
-            self.runs.current_fc.quickcheck()
+            fl_info = [self.screen.filter_spin.value, self.screen.expos_spin.value]
+            self.runs.current_fc.quickcheck(fl_info)
+            # self.runs.current_fc.fluorcheck()
         except Exception as e:
             logging.error("Could not manually auto find cell")
             logging.error(e)
@@ -2128,7 +2135,7 @@ class RunScreenController:
         if not self.check_system():
             logging.error('Unable to start run.')
         repetitions = self.screen.repetition_input.value()
-        flags = [self._pause_flag, self._stop_thread_flag, self._inject_flag, self._plot_data]
+        flags = [self._pause_flag, self._stop_thread_flag, self._inject_flag, self._plot_data, self.decision_collection_flag]
         self.runs = CERunLogic.RunMethod(self.hardware, self.methods, repetitions, self.methods_id,
                                          flags, self.insert, self.screen.run_prefix.text(), self.lyse.cap_control,
                                          self.cell_focus_getters)
@@ -2500,6 +2507,8 @@ class UpdateHardware(QtCore.QThread):
 class UpdatePlots(QtCore.QThread):
     signal = QtCore.pyqtSignal('PyQt_PyObject')
     plot_data = True
+
+
     def __init__(self, hardware, axes):
         QtCore.QThread.__init__(self)
         self.hardware=hardware
@@ -2546,6 +2555,9 @@ class UpdateLiveFeed(QtCore.QThread):
     stage_inversion = [1,1]
     um2pix = 1 / 300
     selection = 'Stage'
+    machine_vision_flag = threading.Event()
+    machine_queue = queue.Queue()
+    old_artist = None
     def __init__(self, hardware):
         # Call the superclass init
         QtCore.QThread.__init__(self)
@@ -2558,6 +2570,14 @@ class UpdateLiveFeed(QtCore.QThread):
         self.timer.setInterval(500)"""
 
         logging.info("Connected")
+
+    def get_blob_info(self):
+        if self.machine_queue.empty():
+            return None
+        while not self.machine_queue.empty():
+            blob_info = self.machine_queue.get()
+        return blob_info
+
 
     def run(self):
         try:
@@ -2573,6 +2593,7 @@ class UpdateLiveFeed(QtCore.QThread):
                         image = self.hardware.get_image()
                     except ValueError:
                         logging.error("Value Error, could not load image")
+
                     pix_map = QtGui.QPixmap('recentImg.png')
 
                 elif self.selection == 'Stage' and self.hardware.hasXYControl:

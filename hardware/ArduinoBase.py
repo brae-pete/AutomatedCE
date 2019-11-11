@@ -15,8 +15,7 @@ class ArduinoBase:
         if self.com == "Auto":
             self.com = self.getCom()
         self.serial = serial.Serial()
-        self.serial.timeout = 1
-        self.serial.write_timeout=3
+        self.serial.timeout = 0.5
         self.serial.baudrate = 1000000
         self.serial.baudrate = 1000000
 

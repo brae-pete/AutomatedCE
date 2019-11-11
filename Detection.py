@@ -1,3 +1,4 @@
+import random
 import threading
 
 import cv2
@@ -7,8 +8,10 @@ from matplotlib import patches
 import skimage
 from PIL import Image
 from skimage import filters
-from skimage.morphology import square, dilation, remove_small_holes, remove_small_objects
+from skimage.morphology import watershed, erosion,square,diamond, dilation, remove_small_holes, remove_small_objects
 from skimage.measure import label, regionprops
+from skimage.feature import peak_local_max
+from scipy import ndimage as ndi
 from scipy.spatial import distance
 import logging
 import numpy as np
@@ -21,40 +24,62 @@ except ModuleNotFoundError:
 
 CENTER = [3730, -1957]
 RADIUS = 5000
+LASER = [ 760,442] # x, y
 
 
-def get_blobs(img, thresh=0.1, scale=1):
+def get_blobs(img, fl_img=None, scale=1):
     """ This is the main function for getting cell objects from an image. You can test this function against
     test images to see if the blobs you are getting out match up with the cells.
     Adjust the scale and threshold as you see fit to get good cell sucess.
 
-    Scales is according to CoolSnap Hq, 20x objective
+    Scales is according to CoolSnap Hq, 20x objective. Scale of 1 assumes no scaling
 
     """
-    # Filter the noise
-    filt_img = filters.gaussian(np.array(img))
+    # Adjust the local threshold spread, must be odd
+    spread = round(51*scale)
+    if spread%2 ==0:
+        spread += 1
+
+    # Subtract the background
+    img = np.asarray(img)
+    thresh = filters.threshold_local(img, spread)
+    filt_img = (img - thresh)
 
     # Get the edges
     edges = filters.sobel(filt_img)
 
     # Threshold mask on edges
-    bw_mask = edges > thresh
+    thresh = filters.threshold_mean(edges)
+    bw_mask = (edges > thresh)
 
     # Dilation
     dilated = dilation(bw_mask, square(1))
 
     # Remove small holes
-    filled = remove_small_holes(dilated, 1000 * scale)
+    filled = remove_small_holes(dilated, 2000 * scale)
 
     # Remove small objects
-    thinned = remove_small_objects(filled, 300 * scale)
+    eroded = erosion(filled, diamond(2))
+    thinned = remove_small_objects(eroded, 2000 * scale)
 
-    # Get blob info
-    labels = label(thinned)
-    props = regionprops(labels)
+    # Watershed
+    distance = ndi.distance_transform_edt(thinned)
+    area = round(scale * 20)
+    local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((area, area)),
+                                labels=thinned)
+    markers = ndi.label(local_maxi)[0]
+    labels = watershed(-distance, markers, mask=thinned)
+
+    if fl_img is not None:
+        try:
+            props = regionprops(labels, np.asarray(fl_img))
+        except ValueError:
+            logging.error("{} and {} are shapes of BF and FL".format(labels.shape, np.asarray(fl_img).shape))
+            props = regionprops(labels)
+    else:
+        props = regionprops(labels)
 
     return props
-
 
 class CellDetector:
     """
@@ -68,12 +93,15 @@ class CellDetector:
     img_shape = [250, 250]  # This will change to whatever the image shape is
     blob_exclusion_image = r"C:\Users\NikonEclipseTi\Documents\Barracuda\EasyAccess\Background.png"  # Path to empty image (no cells, just the dust and noise on the lens)
     max_diameter = 200  # Maximum radius in ums, anything larger will be excluded.
+    min_diameter = 15
     debug = True
     thresh = 0.1
     scale = 1
     last_blob_xy = None
+    current_blob = None
+    fl_threshold = 195
 
-    def __init__(self, hardware, pix2um=0.4329, laser_spot=(235, 384)):
+    def __init__(self, hardware, pix2um=0.4329, laser_spot = LASER):
         """
 
         :param pix2um: float, conversion scalar from scaled image to um
@@ -93,7 +121,7 @@ class CellDetector:
         self.fig, self.axes = plt.subplots()
         return
 
-    def mover_find_cell(self, mover,xy = None):
+    def mover_find_cell(self, mover,xy = None, fl=None):
         """
         Automated cell finding algorithm
         :param mover: Mover Object, moves to random locations
@@ -101,7 +129,7 @@ class CellDetector:
         """
         if xy is None:
             xy = self.hardware.get_xy()
-        cell = self.find_cell()
+        cell = self.find_cell(fl)
         starting = 0
         while not cell and starting < 10:
             xy = mover.move_random(xy)
@@ -110,30 +138,44 @@ class CellDetector:
             cell = self.find_cell()
         return cell
 
-    def find_cell(self):
+    def find_cell(self, fl=None):
         """
         Find and move to a cell using a morphological process outlined in the get_blobs
         function
+        fl = Tuple of [Filter_Channel, Exposure Setting] for fluorescence image
         :return: True if a cell was found, False if a cell was not found
         """
-        img = self.hardware.get_image()
+        if fl is not None:
+            img = self.hardware.get_image()
+            img = self.hardware.get_raw_image()
+            fl = self.hardware.get_fl_image(fl[1],fl[0])
+
+        else:
+            img = self.hardware.get_image()
         self.img_shape = img.shape
-        blobs = get_blobs(img)
-        blobs = self.check_background(blobs)
+
+        blobs = get_blobs(img, fl)
+        # blobs = self.check_background(blobs)
         blobs = self.check_excluded(blobs)
         blobs = self.check_edges(blobs)
         blobs = self.check_radius(blobs)
+        if fl is not None:
+            blobs = self.check_fluor(blobs)
 
         if len(blobs) > 0:
 
+            # for debugging we can plot what we see
             if self.debug:
                 self.axes.clear()
-
                 cv2.circle(img, (int(blobs[0].centroid[1]), int(blobs[0].centroid[0])), int(blobs[0].major_axis_length),
                            (0, 0, 255), 5)
                 plt.imshow(img)
 
+            # Shuffle the cells around, better random movement
+            random.shuffle(blobs)
             self.move_blobs(blobs[0])
+            # Save this blob as a reference
+            self.current_blob = blobs[0]
             return True
         else:
             return False
@@ -185,7 +227,7 @@ class CellDetector:
         """ Get blobs in the background image found at blob_exclusion_image"""
         img = Image.open(self.blob_exclusion_image)
 
-        return get_blobs(img, self.thresh, self.scale)
+        return get_blobs(img, scale = self.scale)
 
     def check_edges(self, blobs):
         """ If a blob is too close to the edge, remove it from possible cells"""
@@ -205,12 +247,22 @@ class CellDetector:
         new_blobs = []
         for i, blob in enumerate(blobs):
             verified = True
-            if blob.major_axis_length > self.max_diameter:
+            if self.min_diameter > blob.major_axis_length*self.pix2um > self.max_diameter:
                 verified = False
             if verified:
                 new_blobs.append(blob)
         return new_blobs
 
+    def check_fluor(self,blobs):
+        """ Check if the mean intensity of a blob is above the threshold"""
+        new_blobs = []
+        for i, blob in enumerate(blobs):
+            verified = True
+            if blob.mean_intensity < self.fl_threshold:
+                verified = False
+            if verified:
+                new_blobs.append(blob)
+        return new_blobs
     def check_excluded(self, blobs):
         """
         Checks list of already lysed locations to see if blob overlaps
@@ -394,7 +446,7 @@ class FocusGetter:
         if len(self._plane_vectors) < 3:
             logging.warning("You need to collect 3 points")
             return False
-        p1, p2, p3 = np.array(self._plane_vectors)
+        p1, p2, p3 = np.array(self._plane_vectors[0:3])
         v_1 = p3 - p1
         v_2 = p2 - p1
         cross_product = np.cross(v_1, v_2)
@@ -465,17 +517,18 @@ class FocusGetter:
         self.hardware.set_objective(h=z)
         self.last_z = z
 
-    def quickcheck(self):
+    def quickcheck(self, fl_info):
         self.get_plane_focus()
         time.sleep(0.4)
-        self.detector.mover_find_cell(self.mover)
+        #self.detector.mover_find_cell(self.mover, fl=fl_info)
+
 
 
 
 if __name__ == "__main__":
     import CESystems
 
-    hardware = CESystems.NikonTE3000()
+    hardware = CESystems.NikonEclipseTi()
     hardware.start_system()
     hardware.image_control.live_view()
     det = CellDetector(hardware)

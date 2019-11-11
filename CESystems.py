@@ -312,7 +312,9 @@ class BaseSystem:
         """ Returns the current filter channel"""
         logging.error(" Filter Get is not supported in hardware class")
 
-
+    def get_bf_and_fl_images(self):
+        """ Returns brightfield and fluorescent images"""
+        logging.error("get bf and fl images is not supported in hardware class")
 
 class BarracudaSystem(BaseSystem):
     system_id = 'BARRACUDA'
@@ -876,6 +878,12 @@ class NikonEclipseTi(BaseSystem):
         self.image_control.save_image(img,filename)
         return
 
+    def get_raw_image(self):
+        with self.image_control.lock:
+            img = self.image_control.raw_img.copy()
+            img = self.image_control.rotate_raw_img(img,270)
+        return img
+
     def get_image(self):
 
         image = self.image_control.get_recent_image()
@@ -900,6 +908,7 @@ class NikonEclipseTi(BaseSystem):
         if filename is not None:
             self.image_control.save_raw_image(filename)
         self.image_control.save_image(img, "recentImg.png")
+        return img
 
     def save_raw_image(self, filename):
         self.image_control.save_raw_image(filename)
@@ -1206,6 +1215,45 @@ class NikonEclipseTi(BaseSystem):
         """ Returns the current filter channel"""
         return self.filter_control.get_state()
 
+    def get_fl_image(self, exp, chnl, filepath=None):
+        """ Returns brightfield and fluorescent images"""
+        # Turn off the LED
+        old_leds = self.led_control.channel_states.copy()
+        for led in old_leds:
+            if old_leds[led]:
+                self.turn_off_led(led)
+        # Stop continuous image
+        self.stop_feed()
+        time.sleep(0.2)
+        # Adjust Exposure
+        old_exp = self.get_exposure()
+        self.set_exposure(exp)
+        # Adjust Filter
+        old_chnl = self.filter_get()
+        self.filter_set(chnl)
+        logging.info("Filter Set")
+        time.sleep(1)
+        # Adjust Shutter
+        self.shutter_open()
+        # Snap
+        time.sleep((exp / 1000) + 0.5)
+        # st = time.time()
+        img = self.snap_image()
+        if filepath:
+            self.save_raw_image(filepath)
+        # Close Shutter
+        self.shutter_close()
+        # Adjust Filter
+        self.filter_set(old_chnl)
+        # Start LED
+        for led in old_leds:
+            if old_leds[led]:
+                self.turn_on_led(led)
+        # Adjust Exposure
+        self.set_exposure(old_exp)
+        # Restart Live Feed
+        self.start_feed()
+        return self.get_raw_image()
 
 class NikonTE3000(BaseSystem):
     system_id = 'NikonTE3000'

@@ -15,7 +15,7 @@ class CapillaryLED:
 
     """
 
-    channel_states = {'R':False, 'G':False, 'B':False}
+    channel_states = {'R':True, 'G':False, 'B':False}
     dance_stop = threading.Event()
 
     def __init__(self, com="COM9", arduino = -1, lock=threading.Lock(), home= True):
@@ -47,6 +47,9 @@ class CapillaryLED:
         """Closes the resources for the stage"""
         if self.home:
             return
+        for chnl in 'RGB':
+            self.stop_led(chnl)
+
         self.arduino.close()
 
     def start_led(self, channel='R'):

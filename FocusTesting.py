@@ -128,7 +128,7 @@ class ZStackData:
         if x < 10:
             y = 1
         elif x <25:
-            y = 3
+            y = 1
         elif x < 50:
             y = 5
         elif x < 100:

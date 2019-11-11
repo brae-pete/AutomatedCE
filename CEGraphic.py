@@ -355,13 +355,13 @@ class MethodScreen(QtWidgets.QMainWindow):
 
     def init_table(self):
         self.insert_table.setRowCount(0)
-        self.insert_table.setColumnCount(10)
+        self.insert_table.setColumnCount(11)
         self.insert_table.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.insert_table.setHorizontalHeaderLabels(["", 'Time (min)', 'Event', 'Value', 'Duration',
-                                                     'Inlet Vial', 'Outlet Vial', 'Inlet Travel', 'Outlet Travel',
+                                                     'Inlet Vial', 'Outlet Vial', 'Inlet Pos', 'Outlet Pos','Inlet Travel',
                                                      'Summary'])
         self.insert_table.setColumnWidth(0, 30)
-        self.insert_table.setColumnWidth(9, 200)
+        self.insert_table.setColumnWidth(10, 200)
         self.insert_table.verticalHeader().setVisible(False)
         self.insert_table.setMinimumWidth(800)
 
@@ -831,12 +831,16 @@ class RunScreen(QtWidgets.QMainWindow):
         self.expos_spin = QtWidgets.QSpinBox()
         self.expos_spin.setMinimum(10)
         self.expos_spin.setMaximum(10000)
+        self.expos_button = QtWidgets.QPushButton('Set')
         exposure_label = QtWidgets.QLabel('Exposure')
         self.fluor_acq = QtWidgets.QPushButton('Acquire')
+        self.machine_vision = QtWidgets.QCheckBox('Machine Vision')
+
         row_4.addWidget(self.filter_spin)
         row_4.addWidget(filter_label)
         row_4.addWidget(self.expos_spin)
         row_4.addWidget(exposure_label)
+        row_4.addWidget(self.expos_button)
         row_4.addWidget(self.fluor_acq)
 
         self.sequence_display.setColumnCount(3)
@@ -975,7 +979,7 @@ class RunScreen(QtWidgets.QMainWindow):
 
         self.plot_panel = PlotPanel()
         live_plot_window = QtWidgets.QMainWindow()
-
+        # Plot Options
         live_plot_control = QtWidgets.QDockWidget()
         control_widget = QtWidgets.QWidget()
         control_layout = QtWidgets.QHBoxLayout()
@@ -989,10 +993,46 @@ class RunScreen(QtWidgets.QMainWindow):
         control_widget.setLayout(control_layout)
         live_plot_control.setWidget(control_widget)
 
+        # Live Plot Decidions
+        options = ["Cond1", "Cond2", "Cond3", "Ignore"]
+        self.decision_buttons = []
+        self.decision_spin = []
+        run_control = QtWidgets.QDockWidget()
+        run_widget = QtWidgets.QWidget()
+        run_layout = QtWidgets.QFormLayout()
+        button_layer = QtWidgets.QHBoxLayout()
+        spin_layer = QtWidgets.QHBoxLayout()
+        label_layer = QtWidgets.QHBoxLayout()
+        for i in options:
+            button = QtWidgets.QRadioButton(i)
+            button_layer.addWidget(button)
+            button.setFixedWidth(80)
+            if i == "Ignore":
+                button.setToolTip('Skips the collection step')
+            label_layer.addWidget(QtWidgets.QLabel(i))
+            spin = QtWidgets.QSpinBox()
+            spin.setMinimum(-1)
+            spin.setValue(-1)
+
+            spin.setFixedWidth(80)
+            spin.setToolTip('-1 is default, # is well number')
+            spin_layer.addWidget(spin)
+            self.decision_buttons.append(button)
+            self.decision_spin.append(spin)
+        #run_layout.addRow(label_layer)
+        run_layout.addRow(spin_layer)
+        run_layout.addRow(button_layer)
+        run_widget.setLayout(run_layout)
+        run_control.setWidget(run_widget)
+
+
+
         self.save_plot.setFixedWidth(60)
         live_plot_window.setCentralWidget(self.plot_panel)
-        live_plot_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_plot_control)  # fixme when you want to add buttons
+        live_plot_window.addDockWidget(QtCore.Qt.TopDockWidgetArea, live_plot_control)
+        live_plot_window.addDockWidget(QtCore.Qt.BottomDockWidgetArea, run_control)
         live_plot_control.setTitleBarWidget(QtWidgets.QWidget())
+        run_control.setTitleBarWidget(QtWidgets.QWidget())
         # live_plot_window = wrap_widget(live_plot_window)
 
         return live_plot_window
@@ -2468,6 +2508,7 @@ class SeparateDialog(QtWidgets.QDialog):
 
         self.separation_type_form.setLayout(layout)
 
+
     def init_polarity_form(self):
         layout = QtWidgets.QFormLayout()
 
@@ -2534,6 +2575,15 @@ class SeparateDialog(QtWidgets.QDialog):
         wid.setFixedWidth(60)
         row.addWidget(wid)
         row.addWidget(QtWidgets.QLabel('s'))
+        row.addStretch()
+        layout.addRow(row)
+
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(QtWidgets.QLabel('Collection: '))
+        wid = QtWidgets.QCheckBox()
+        self.form_data['CollectionSep'] = wid.isChecked
+        wid.setFixedWidth(60)
+        row.addWidget(wid)
         row.addStretch()
         layout.addRow(row)
 

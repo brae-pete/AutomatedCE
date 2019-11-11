@@ -5,6 +5,7 @@ import pickle
 import threading
 import time
 import numpy as np
+import pandas as  pd
 
 try:
     from BarracudaQt import CESystems, CEObjects, Detection, Lysis
@@ -36,8 +37,9 @@ class RunMethod:
     method = CEObjects.Method(None, None)
     method_id = 0  # method id
     cell_finders = {}  # List of Focus Getters
-
+    collection_well = -1
     injection_wait = 6  # How long to wait after an injection for repeatable spontaneous fluid displacement
+    sequence_id = round(time.time()) # Time in s from epoch, that links a repetitions in a sequence
 
     def __init__(self, hardware, methods, repetitions, methods_id,
                  flags, insert, folder, cap_control, cellfinders):
@@ -67,6 +69,8 @@ class RunMethod:
         self._stop_thread_flag = flags[1]
         self._inject_flag = flags[2]
         self._plot_data = flags[3]
+        self._collection_flag = flags[4]
+        self.collection_well_lock = threading.Lock()
         self.insert = insert
         self.folder = folder
         self.cap_control = cap_control
@@ -109,21 +113,23 @@ class RunMethod:
         self._last_cell_positions['obj'] = obj
         return
 
-    def move_inlet(self, inlet_travel):
+    def move_inlet(self, inlet_travel, wait = True):
         """ Move the inlet for the run method, wait till it has finished"""
         if self._stop_thread_flag.is_set():
             return
         self.hardware.set_z(inlet_travel)
-        self.hardware.wait_z()
+        if wait:
+            self.hardware.wait_z()
         return self.check_flags()
 
-    def move_outlet(self, outlet_travel):
+    def move_outlet(self, outlet_travel, wait = True):
         """ Move the outlet for the run method"""
         if self._stop_thread_flag.is_set():
             return
         self.hardware.set_outlet(rel_h=outlet_travel)
         self.hardware.pressure_valve_close()  # Close pressure to prevent siphon injections
-        self.hardware.wait_outlet()
+        if wait:
+            self.hardware.wait_outlet()
         return self.check_flags()
 
     def move_objective(self, objective_position):
@@ -190,10 +196,12 @@ class RunMethod:
 
         state = self.wait_sleep(duration)
         # Save Data
-        now = datetime.datetime.now()
-        file_name = "{}_{}_self.step_{}_rep_{}.csv".format(self.folder, self.method_id, self.step_id, self.rep)
+        file_name = self.get_save_path(suffix='.csv')
         save_path = os.path.join(self.save_dir, file_name)
-        self.hardware.save_data(save_path)
+        try:
+            self.hardware.save_data(save_path)
+        except IndexError:
+            logging.error("Index Error on DAQ")
         self.hardware.set_voltage(0)
         self.hardware.pressure_rinse_stop()
 
@@ -208,9 +216,10 @@ class RunMethod:
         elif self.step['PressureTypeVacuumRadio']:
             logging.error('Unsupported: Rinsing with vacuum.')
             return False
-
-        duration = float(self.step['ValuesDurationEdit'])
-
+        try:
+            duration = float(self.step['ValuesDurationEdit'])
+        except ValueError:
+            logging.error("Duration was not set correctly: {}".format(self.step['ValuesDurationEdit']))
         if pressure_state:
             self.hardware.pressure_rinse_start()
 
@@ -246,7 +255,7 @@ class RunMethod:
             Load the cell
             Finish
         """
-        self.cell_move(False)
+
         if self.step_id not in self.cell_finders.keys():
             center = self.insert.get_well_xy(self.step['Inlet'])
             mov = Detection.Mover(center=center)
@@ -287,7 +296,7 @@ class RunMethod:
                      "Press Start when finished \n ")
         self._pause_flag.set()
         # Move the objective into position
-        fc.quickcheck()
+        fc.quickcheck([1,500])
         state = self.check_flags()
         # Take a Snapshot
         if not self.step['Video']:
@@ -308,6 +317,7 @@ class RunMethod:
             old_chnl = self.hardware.filter_get()
             chnl = self.step['FilterChannel']
             self.hardware.filter_set(chnl)
+            logging.info("Filter Set")
             time.sleep(1)
             # Turn off the LED
             old_leds = self.hardware.led_control.channel_states.copy()
@@ -453,9 +463,8 @@ class RunMethod:
         return True
 
     def get_save_path(self, prefix='',suffix=''):
-        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder,prefix, self.method_id, self.step_id, self.rep,suffix)
+        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder,prefix, self.sequence_id, self.step_id, self.rep,suffix)
         return os.path.join(self.save_dir, file_name)
-
 
     def create_run_folder(self):
         cwd = os.getcwd()
@@ -467,7 +476,18 @@ class RunMethod:
             return save_dir
         except FileExistsError:
             return save_dir
-
+    def move_wells(self):
+        try:
+            cycles = int(self.step['TrayPositionsIncrementEdit'])
+        except ValueError:
+            state = self.move_xy_stage(self.insert.get_well_xy(self.step['Inlet']))
+        else:
+            if self.rep + 1 > cycles:
+                state = self.move_xy_stage(
+                    self.insert.get_next_well_xy(self.step['Inlet'], int(np.floor(self.rep / cycles))))
+            else:
+                state = self.move_xy_stage(self.insert.get_well_xy(self.step['Inlet']))
+        return state
     def logic(self):
         self.save_dir = self.create_run_folder()
         for self.rep in range(self.repetitions):
@@ -476,30 +496,46 @@ class RunMethod:
                 return False
             previous_step = None
             self._inject_flag.clear()
-            for step_id, self.step in enumerate(self.method.steps):
+            self.sequence_id = round(time.time())
+            for self.step_id, self.step in enumerate(self.method.steps):
                 if 'Type' in self.step.keys():
                     logging.info('{} Step: {}'.format(self.step['Type'], self.step['Summary']))
                     state = self.check_flags()
-
                     if not state:
                         return False
-
                     step_start = time.time()
-                    state = self.move_inlet(0.25)
-
+                    state = self.move_inlet(self.step['InletTravel'], wait = True)
+                    if not state:
+                        return False
+                    state = self.move_outlet(self.step['OutletTravel'], wait=False)
                     if not state:
                         return False
 
-                    try:
-                        cycles = int(self.step['TrayPositionsIncrementEdit'])
-                    except ValueError:
-                        state = self.move_xy_stage(self.insert.get_well_xy(self.step['Inlet']))
-                    else:
-                        if self.rep + 1 > cycles:
-                            state = self.move_xy_stage(
-                                self.insert.get_next_well_xy(self.step['Inlet'], int(np.floor(self.rep / cycles))))
+                    self.hardware.wait_z()
+                    state = self.check_flags()
+                    if not state:
+                        return False
+
+                    # Sometimes we move other places than the center of a well
+                    # If this is a collection step move to a special vial if requested (flag is set),
+                    # otherwise normal move
+                    if self.step['Type']=='Separate' and self._collection_flag.is_set() :
+                        # Only move if this is a collection separation and the well is within range
+                        if self.step['CollectionSep'] and -1 < self.collection_well < len(self.insert.wells)-1 :
+                            xy = self.insert.wells[self.collection_well].location
+                            state = self.move_xy_stage(xy)
                         else:
-                            state = self.move_xy_stage(self.insert.get_well_xy(self.step['Inlet']))
+                            state = self.move_wells()
+                    # if this is a single cell injection step, we need to try and move to the last place we were
+                    elif self.step['Type']=='Injection':
+                        if self.step['SingleCell']:
+                            self.cell_move(semi=False)
+                            state = self.check_flags()
+                        else:
+                            state = self.move_wells()
+                    else:
+                        state = self.move_wells()
+
                     if not state:
                         return False
 
@@ -509,11 +545,8 @@ class RunMethod:
                         if not state:
                             return False
 
-                    state = self.move_outlet(self.step['OutletTravel'])
-                    if not state:
-                        return False
 
-                    state = self.move_inlet(self.step['InletTravel'])
+                    state = self.move_inlet(self.step['InletPos'])
                     if not state:
                         return False
 

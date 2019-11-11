@@ -85,6 +85,7 @@ class ImageControl:
     sequence_prefix = "IMGS"
     capture_folder = os.path.join(sequence_filepath, 'Capture')
     raw_img = np.array((100, 100))  # Full raw image
+    is_live = threading.Event()
 
     def open(self):
         """Opens the camera resources"""
@@ -148,7 +149,17 @@ class ImageControl:
     def _rotate_img(img, rotation):
         if rotation == 0:
             return img
-        return transform.rotate(img, rotation, resize=True)
+        #img = img.astype(np.float64)
+        img = transform.rotate(img, rotation, resize=True)
+        #img = img.astype(np.uint16)
+        return img
+
+    @staticmethod
+    def rotate_raw_img(img, rotation):
+        img = img.astype(np.float64)
+        img = transform.rotate(img, rotation, resize=True)
+        img = img.astype(np.uint16)
+        return img
 
     def image_conversion(self, img):
         """ Adjusts the contrast and brightness"""
@@ -162,6 +173,7 @@ class ImageControl:
         img = self._rotate_img(img, rotation)
         img = self.image_conversion(img)
         img = img_as_ubyte(img)
+
         return img
 
     @staticmethod
@@ -181,7 +193,10 @@ class ImageControl:
 
         def animate(i):
             # Get an image
-            img = self.get_recent_image()
+            if self.is_live.is_set():
+                img = self.get_recent_image()
+            else:
+                img = None
             if img is not None:
                 # put the image into the display data array
                 im.set_array(img)
@@ -193,6 +208,7 @@ class ImageControl:
         time.sleep(1)
         img = self.get_recent_image()
         im = plt.imshow(img, animated=True)
+        self.is_live.set()
 
         # Calls the above animate function every 50 ms. Uses blit to reduce workload.
         ani = animation.FuncAnimation(fig, animate, interval=50, blit=True)
@@ -494,6 +510,7 @@ class MicroControl(ImageControl):
 
     def start_video_feed(self):
         """ Starts a live video feed, typicall using camera circular buffer """
+        self.is_live.set()
         with self.lock:
             self.mmc.send_command('camera,start_continuous\n')
             response = self.mmc.read_response()
@@ -502,10 +519,12 @@ class MicroControl(ImageControl):
 
     def stop_video_feed(self):
         """Stops the live video feed"""
+        self.is_live.clear()
         with self.lock:
             self.mmc.send_command('camera,stop_continuous\n')
             response = self.mmc.read_response()
         msg = "Could not stop live video feed"
+
         return self.mmc.ok_check(response, msg)
 
     def get_recent_image(self, size=0.5, rotation=270):
