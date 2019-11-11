@@ -363,7 +363,7 @@ class PVCamImageControl(ImageControl):
         self.live_running.clear()
 
     def get_single_image(self):
-        """Snaps single image, returns image, for when live feed is not runniing"""
+        """Snaps single image, returns image, for when live feed is not running"""
 
         with self.lock:
             image = self.cam.get_frame(self.exposure)

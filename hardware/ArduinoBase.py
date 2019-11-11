@@ -123,10 +123,14 @@ class ArduinoBase:
             return
         self.serial.write("M0H\n".encode())
 
-    def go_home(self):
+    def go_home(self, invt):
         if self.home:
             return
-        self.serial.write("M0G\n".encode())
+        if invt:
+            invt=0
+        else:
+            invt = 1
+        self.serial.write("M0G{}{}\n".format(invt,invt).encode())
 
 
     def go_home_objective(self):
@@ -208,5 +212,11 @@ class ArduinoBase:
 
     def openValves(self):
         if self.home:
-            self.serial.write("P0X\n".encode())
             return False
+        self.serial.write("P0X\n".encode())
+        return True
+
+    def write_command(self,cmd):
+        """ Writes a command to the Arduino, function adds terminator"""
+        self.serial.write("{}\n".format(cmd).encode())
+        return True

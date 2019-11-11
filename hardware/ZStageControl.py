@@ -383,7 +383,7 @@ class ThorLabs:
         """
         # Lock the resources we are going to use
         pos = float(str(self.device.DevicePosition))
-        self.pos = pos + self.offset
+        self.pos =self.inversion *( pos + self.offset)
         return self.pos
 
     def save_history(self):

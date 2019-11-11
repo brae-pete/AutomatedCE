@@ -40,12 +40,11 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 // Set up variables for motors
 int outlet_div = 32;
 // Set variables for Pressure
-int SOLENOID1 = 23;
-int SOLENOID2 = 29;
-int SOLENOID3 = 27
-int LED_R = 35;
-int LED_G = 37;
-int LED_B = 39;
+int SOLENOID1 = 7;
+int SOLENOID2 = 6;
+int LED_R = 5;
+int LED_G = 5;
+int LED_B = 5;
 
 //SERIAL 
 String inputString = "";   // a String to hold incoming data
@@ -69,6 +68,8 @@ void setup()
   pinMode(LED_R, OUTPUT);
   pinMode(LED_G, OUTPUT);
   pinMode(LED_B, OUTPUT);
+  pinMode(SOLENOID1,OUTPUT);
+  pinMode(SOLENOID2,OUTPUT);
 
   // Reset powerSTEP and set CS
   digitalWrite(nSTBY_nRESET_PIN_2, HIGH);
@@ -77,14 +78,16 @@ void setup()
   digitalWrite(nCS_PIN_2, HIGH);
 
  // Turn pressure off
- digitalWrite(SOLENOID1, HIGH);
- digitalWrite(SOLENOID2,HIGH);
+ digitalWrite(SOLENOID1, LOW);
+ digitalWrite(SOLENOID2,LOW
+ 
+ );
 
  // Turn LED ON
- digitalWrite(LED_R, HIGH);
+
  digitalWrite(LED_G, LOW);
  digitalWrite(LED_B, LOW);
-
+ digitalWrite(LED_R, HIGH);
  
 
 
@@ -237,7 +240,11 @@ void motorHomePosition(){
   if (sw_val == 4){
     Serial.println("Go Down");
     
-    driver_2.releaseSw(B0,B1);
+    if (dir == true){
+      dir = false;
+    }
+    Serial.println(dir);
+    driver_2.releaseSw(B0,dir);
   }else{
   driver_2.goUntil(B0,dir,400);
   }
@@ -318,26 +325,20 @@ void pressureTalk(){
   //Serial.println(inputString[2]);
   if (inputString[2]=='R'){
     Serial.println("ON");
-    digitalWrite(SOLENOID2,HIGH);  
-    digitalWrite(SOLENOID1,LOW);
-    digitalWrite(SOLENOID3, LOW);
-  } else if(inputString[2]=='S'){
-    digitalWrite(SOLENOID2,LOW);
+    digitalWrite(SOLENOID2,LOW);  
     digitalWrite(SOLENOID1,HIGH);
-    digitalWrite(SOLENOID3, LOW);
+  } else if(inputString[2]=='S'){
+    digitalWrite(SOLENOID2,HIGH);
+    digitalWrite(SOLENOID1,LOW);
+    Serial.println("OFF");
   } else if(inputString[2]=='X'){
     digitalWrite(SOLENOID1,HIGH);
     digitalWrite(SOLENOID2,HIGH);
-    digitalWrite(SOLENOID3, LOW);
     Serial.println("All OPEN");
   } else if (inputString[2]=='C'){
     digitalWrite(SOLENOID1, LOW);
     digitalWrite(SOLENOID2, LOW);
-    digitalWrite(SOLENOID3, LOW);
-  } else if (inputString[2]=='V'){
-    digitalWrite(SOLENOID1, LOW);
-    digitalWrite(SOLENOID2, LOW);
-    digitalWrite(SOLENOID3, HIGH);
+    Serial.println("All CLOSED");
   }
 }
 
