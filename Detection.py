@@ -114,7 +114,7 @@ class CellDetector:
         self.laser_spot = laser_spot
         self.hardware = hardware
 
-        if USER.find('NikonEclipse'):
+        if USER.find('NikonEclipse')>0:
             self.blob_exclusion_image = r"C:\Users\NikonEclipseTi\Documents\Barracuda\EasyAccess\Background.png"
 
 

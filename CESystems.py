@@ -1499,12 +1499,14 @@ class NikonTE3000(BaseSystem):
 
     def set_xy_home(self):
         """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
+        self.set_xy(rel_xy=[-160000, +160000])
         self.xy_stage_control.set_origin()
         return True
 
     def home_xy(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        self.xy_stage_control.origin()
+        self.xy_stage_control.rel_xy(-160000,+160000)
+        self.xy_stage_control.set_origin()
         return True
 
     def close_z(self):
