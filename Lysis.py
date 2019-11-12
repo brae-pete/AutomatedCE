@@ -80,7 +80,7 @@ class CapillaryControl:
         """ if the objective is lower by 5 units, the capillary must also
         be lower by 5 units (which corresponds to increasing the distance from
         home by 0.005). Units of objective ~ um, Units of cap ~ mm"""
-        cap_adjust = -(self.hardware.get_objective() - self.last_obj_height) * self.obj2cap + self.last_cap_height
+        cap_adjust = (self.hardware.get_objective() - self.last_obj_height) * self.obj2cap + self.last_cap_height
         return cap_adjust
 
     def move_cap_above_cell(self):

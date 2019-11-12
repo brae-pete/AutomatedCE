@@ -40,12 +40,12 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 // Set up variables for motors
 int outlet_div = 32;
 // Set variables for Pressure
-int SOLENOID1 = 23;
-int SOLENOID2 = 29;
-int SOLENOID3 = 27
-int LED_R = 35;
-int LED_G = 37;
-int LED_B = 39;
+int SOLENOID2 = 25;
+int SOLENOID1 = 27;
+int SOLENOID3 = 29;
+int LED_R = 31;
+int LED_G = 33;
+int LED_B = 35;
 
 //SERIAL 
 String inputString = "";   // a String to hold incoming data
@@ -69,6 +69,9 @@ void setup()
   pinMode(LED_R, OUTPUT);
   pinMode(LED_G, OUTPUT);
   pinMode(LED_B, OUTPUT);
+  pinMode(SOLENOID1, OUTPUT);
+  pinMode(SOLENOID2, OUTPUT);
+  pinMode(SOLENOID3, OUTPUT);
 
   // Reset powerSTEP and set CS
   digitalWrite(nSTBY_nRESET_PIN_2, HIGH);
@@ -78,7 +81,8 @@ void setup()
 
  // Turn pressure off
  digitalWrite(SOLENOID1, HIGH);
- digitalWrite(SOLENOID2,HIGH);
+ digitalWrite(SOLENOID2,LOW);
+ digitalWrite(SOLENOID3, LOW);
 
  // Turn LED ON
  digitalWrite(LED_R, HIGH);
@@ -236,8 +240,13 @@ void motorHomePosition(){
   }
   if (sw_val == 4){
     Serial.println("Go Down");
-    
-    driver_2.releaseSw(B0,B1);
+    if (dir){
+      dir = 0;
+    }
+    else{
+      dir=1;
+    }
+    driver_2.releaseSw(B0,dir);
   }else{
   driver_2.goUntil(B0,dir,400);
   }

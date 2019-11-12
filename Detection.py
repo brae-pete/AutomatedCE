@@ -1,3 +1,4 @@
+import os
 import random
 import threading
 
@@ -80,7 +81,7 @@ def get_blobs(img, fl_img=None, scale=1):
         props = regionprops(labels)
 
     return props
-
+USER = os.getcwd()
 class CellDetector:
     """
     Detects cells using morphological filters
@@ -112,6 +113,11 @@ class CellDetector:
         # Laser spot is recorded in X (column) and Y (row)
         self.laser_spot = laser_spot
         self.hardware = hardware
+
+        if USER.find('NikonEclipse'):
+            self.blob_exclusion_image = r"C:\Users\NikonEclipseTi\Documents\Barracuda\EasyAccess\Background.png"
+
+
 
         if self.debug:
             self._start_plots()

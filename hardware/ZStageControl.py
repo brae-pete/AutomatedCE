@@ -43,7 +43,7 @@ class ZStageControl:
     This is called by the GUI and needs data types to match
     """
 
-    def __init__(self, com="COM3", lock=-1, home=False):
+    def __init__(self, com="COM3", lock=-1, home=False,invt=1):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -53,6 +53,7 @@ class ZStageControl:
         self.com = com
         self.stage = None
         self.pos = 0
+        self.invert = invt
         if lock == -1:
             lock = threading.RLock()
         self.lock = lock
@@ -319,7 +320,7 @@ class NikonZStage:
             with self.lock:
                 self.mmc.stop(self.stage_id)
 
-class ThorLabs:
+class ThorLabs(ZStageControl):
     """ Class for controlling a ThorLabs Labjack usingn the Kinesis Library
     You will need to adjust the Kinesis file reference if you installed it outside of the default location
 
@@ -484,14 +485,15 @@ class ThorLabs:
         return self.get_z()
 
 
-class PowerStep:
+class PowerStep(ZStageControl):
     min_z = 0
     max_z = 24.5
-    def __init__(self, lock, com = "COM3", arduino = -1, home=False, ):
+    offset = 24.5
+    def __init__(self, lock, com = "COM3", arduino = -1, home=False,invt=1 ):
         self.lock = lock
         self.home = home
-        self.inversion = 1
-        self.offset = 0
+        self.inversion = invt
+        self.invert = invt
         self.com = "COM3"
         self.pos = 0
         self.have_arduino = True
@@ -538,10 +540,10 @@ class PowerStep:
                     self.pos = args[0]
                 return self.pos
             pos, check_offset = self.arduino.read_outlet_z()
-            if check_offset:
-                self.offset = self.pos
             self.pos = pos*self.inversion
             self.pos = self.pos + self.offset
+
+
             """
             if self.first_read:
                 self.load_history()
@@ -577,13 +579,16 @@ class PowerStep:
             if self.home:
                 self.pos = 0
                 return
-            self.arduino.go_home()
+            if self.invert == -1:
+                invt = True
+            else:
+                invt = False
+            self.arduino.go_home(invt)
             self.wait_for_move()
-            self.arduino.go_home()
+            self.arduino.go_home(invt)
             self.pos = self.wait_for_move()
-            self.offset = 0
             logging.info("{} is pos 0, {} is stage 0".format(self.pos, self.arduino.pos))
-            self.set_z(0.1)
+            self.set_z(24)
             cz=self.wait_for_move()
             logging.info("{} is current z".format(cz))
 

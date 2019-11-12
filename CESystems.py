@@ -871,10 +871,10 @@ class NikonEclipseTi(BaseSystem):
         pass
 
     def _start_outlet(self):
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME)
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME, invt=1)
 
     def _start_zstage(self):
-        self.z_stage_control = ZStageControl.ZStageControl(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME)
+        self.z_stage_control = ZStageControl.PowerStep(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME, invt=-1)
 
     def close_system(self):
         try:
@@ -1042,7 +1042,7 @@ class NikonEclipseTi(BaseSystem):
         return False
 
     def get_z(self):
-        return self.z_stage_control.read_z()
+        return self.z_stage_control.get_z()
 
     def stop_z(self):
         self.z_stage_control.stop()

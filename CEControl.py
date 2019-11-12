@@ -36,6 +36,8 @@ HOME = False
 
 
 # fixme have the program not load and start the systems on startup (for obvious reasons)
+USER = os.getcwd()
+
 
 
 # Control Classes
@@ -46,7 +48,10 @@ class ProgramController:
     def __init__(self):
         # Initialize system model, system hardware and the GUI
         self.repository = CEObjects.CERepository()
-        self.hardware = CESystems.NikonTE3000()
+        if USER.find('NikonEclipseTi')>=0:
+            self.hardware = CESystems.NikonEclipseTi()
+        elif USER.find('TE3000'):
+            self.hardware = CESystems.NikonTE3000()
         self.hardware.start_system()
 
         app = QtWidgets.QApplication(sys.argv)
