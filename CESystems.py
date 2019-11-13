@@ -381,8 +381,8 @@ class BarracudaSystem(BaseSystem):
     image_size = 0.5
     objective_focus = 0
     xy_stage_size = [112792, 64340]  # Rough size in mm
-    xy_stage_offset = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
-    xy_stage_inversion = [-1, -1]
+    xy_stage_offset = [112739, 0]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_inversion = [1, -1]
 
     _focus_network = CENetworks.BarracudaFocusClassifier()
     _find_network = CENetworks.BarracudaCellDetector()
@@ -808,7 +808,7 @@ class NikonEclipseTi(BaseSystem):
     _z_stage_lock = threading.RLock()
     _outlet_lock = threading.RLock()
     _scope_lock = threading.Lock()
-    _cam_lock = threading.RLock()
+    _camera_lock = threading.RLock()
     _led_lock = _outlet_lock
 
     xy_stage_inversion = [1, -1]
@@ -846,7 +846,7 @@ class NikonEclipseTi(BaseSystem):
         outlet.join()
 
         # Image Control uses separate MMC
-        self.image_control = ImageControl.MicroControl(port = 7813, lock = self._cam_lock)
+        self.image_control = ImageControl.MicroControl(port = 7813, lock = self._camera_lock)
 
         #Nikon Scope shares a MMC
         self.objective_control = ObjectiveControl.MicroControl(port = 7812, lock = self._scope_lock) # Use Presets
@@ -1315,7 +1315,7 @@ class NikonTE3000(BaseSystem):
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
     _pressure_lock = _outlet_lock
-    _cam_lock = threading.RLock()
+    _camera_lock = threading.RLock()
     _laser_lock = threading.Lock()
     _laser_poll_flag = threading.Event()
     _led_lock = _outlet_lock
@@ -1326,7 +1326,7 @@ class NikonTE3000(BaseSystem):
     objective_focus = 0
     xy_stage_size = [112792, 64340]  # Rough size in mm
     xy_stage_offset = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
-    xy_stage_inversion = [-1, -1]
+    xy_stage_inversion = [1, 1]
 
     _focus_network = CENetworks.BarracudaFocusClassifier()
     _find_network = CENetworks.BarracudaCellDetector()
@@ -1379,7 +1379,7 @@ class NikonTE3000(BaseSystem):
         #zstage.join()
         outlet.join()
         objective.join()
-        self.image_control = ImageControl.MicroControl(port = 3121, lock = self._cam_lock)
+        self.image_control = ImageControl.MicroControl(port = 3121, lock = self._camera_lock)
         self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock, com = 'COM4')
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,

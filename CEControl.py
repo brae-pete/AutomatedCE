@@ -156,7 +156,7 @@ class InsertScreenController:
 
         self._um2pix = 1 / 300
         self._mm2pix = 3
-        self._stage_offset = self.hardware.xy_stage_offset
+        self._stage_offset = [0,0]
         self._stage_inversion = self.hardware.xy_stage_inversion
         self._initial = True
         self._initial_point = None
@@ -202,10 +202,11 @@ class InsertScreenController:
         # The event we are sending holds the current coordinates of the stage and converts them to pixel
         event_location = self.hardware.get_xy()
         logging.info(event_location)
-        event_location = [event_location[0] - self.hardware.xy_stage_offset[0],
-                          event_location[1] - self.hardware.xy_stage_offset[1]]
+        # event_location = [event_location[0] - self.hardware.xy_stage_offset[0],
+        #                   event_location[1] - self.hardware.xy_stage_offset[1]]
         logging.info(event_location)
         logging.info(self.hardware.xy_stage_offset)
+        logging.info(self._stage_inversion)
 
 
         # We want the pixel location of the objective relative to the stage.
@@ -273,7 +274,6 @@ class InsertScreenController:
                         y += dy
                     y = self._initial_point[1]
                     x += dx
-
     def _add_row(self, well_location, label_saved=None, pixels=True):
         """ Adds a row to the table with the well label and location. """
         row_count = self.screen.insert_table.rowCount()
@@ -436,7 +436,7 @@ class MethodScreenController:
 
         self._um2pix = 1 / 300
         self._mm2pix = 3
-        self._stage_offset = self.hardware.xy_stage_offset
+        self._stage_offset = [0,0]
         self._stage_inversion = self.hardware.xy_stage_inversion
         self._selecting = False
         self._step_well = None
