@@ -260,11 +260,11 @@ class DAQBoard:
         with open(filename, 'w') as f_in:
             f_in.write('time, rfu, kV, uA, avg, raw\n')
             data = self.data
-            for i in range(len(data['ai3'])):
+            for i in range(len(data[self.rfu_chan])):
                 t_point = float(i * (1 / self.downsampled_freq))
-                rfu = data['ai3'][i]
-                ua = data['ai5'][i]
-                kv = data['ai1'][i]
+                rfu = data[self.rfu_chan][i]
+                ua = data[self.current_readout][i]
+                kv = data[self.voltage_readout][i]
                 avg = data['avg'][i]
                 raw = data['raw'][i]
                 try:

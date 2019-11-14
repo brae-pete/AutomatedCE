@@ -166,9 +166,21 @@ class ZStageControl:
     def go_home(self):
         self.stage.go_home()
 
-    def wait_for_move(self):
-        with self.lock:
-            self.stage.wait_for_move()
+    def wait_for_move(self,clearance=0.0):
+        """
+        returns the final position of the motor after it has stopped moving.
+
+        :return: current_pos, float in mm of where the stage is at
+        """
+        prev_pos = self.get_z()
+        current_pos = prev_pos + 1
+        # Update position while moving
+        while np.abs(prev_pos-current_pos) > clearance:
+            time.sleep(0.25)
+            prev_pos = current_pos
+            current_pos = self.get_z()
+        return current_pos
+
 
 
 class OpticsFocusZStage:
@@ -420,6 +432,11 @@ class ThorLabs(ZStageControl):
             return
         else:
             logging.info("{} set z".format(set_z))
+
+        # Check if moving
+        status = self.device.get_Status()
+        if status.get_IsInMotion():
+            self.device.StopImmediate()
         if self.home_check():
             go_to = self.inversion * (set_z - self.offset)
             threading.Thread(target = self.device.MoveTo,args=(Decimal(go_to),60000,)).start()
@@ -470,15 +487,17 @@ class ThorLabs(ZStageControl):
                 output.write(line + '\n'.encode())
         print("Done. Saved %s bytes." % (len(content) - outsize))
 
-    def wait_for_move(self, clearance=0.0):
+    def wai2t_for_move(self, clearance=0.0):
         """
         returns the final position of the motor after it has stopped moving.
 
         :return: current_pos, float in mm of where the stage is at
         """
+        time.sleep(0.25)
         status = self.device.get_Status()
 
         while status.get_IsInMotion():
+            logging.info("Zstage is moving")
             time.sleep(0.1)
             status = self.device.get_Status()
 

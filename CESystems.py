@@ -1305,7 +1305,7 @@ class NikonTE3000(BaseSystem):
     _laser_com = "COM6"
     _pressure_com = "COM5"
     _daq_dev = "/Dev2/"
-    _daq_current_readout = "ai2"
+    _daq_current_readout = "ai0"
     _daq_voltage_readout = "ai1"
     _daq_voltage_control = 'ao1'
     _daq_rfu = "ai3"
@@ -1502,6 +1502,10 @@ class NikonTE3000(BaseSystem):
         self.set_xy(rel_xy=[-160000, +160000])
         self.xy_stage_control.set_origin()
         return True
+
+    def wait_xy(self):
+        """ Waits for the stage to stop moving (blocking)"""
+        self.xy_stage_control.wait_for_move()
 
     def home_xy(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
