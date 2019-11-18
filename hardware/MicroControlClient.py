@@ -46,6 +46,7 @@ class MicroControlClient:
         """
         self.server = subprocess.Popen([PYTHON2_PATH,
                                         SERVER_FILE, '{}'.format(self.address[1])], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        time.sleep(1)
     def open(self):
         """ Opens the Python 2 server and starts the connection"""
         if self.conn is None:

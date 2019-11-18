@@ -432,7 +432,7 @@ class RunMethod:
             self.hardware.set_voltage(0)
             if self.step['SingleCell']:
                 # Move the capillary up to see if it was successful
-                self.hardware.set_z(z=1)
+                self.move_inlet(self.step['InletTravel'], wait=False)
                 logging.info("If a cell did not lyse, press Pause within 5 seconds... ")
                 state = self.wait_sleep(5)
                 if not state:
