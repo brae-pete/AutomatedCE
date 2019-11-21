@@ -103,10 +103,11 @@ class XYControl:
         prev_pos = self.read_xy()
         current_pos = [prev_pos[0]+1,prev_pos[1]]
         # Update position while moving
-        while abs(prev_pos[0]-current_pos[0])>tolerance and abs(prev_pos[1]- current_pos[1])>tolerance:
+        while abs(prev_pos[0]-current_pos[0])>tolerance or abs(prev_pos[1]- current_pos[1])>tolerance:
             time.sleep(0.05)
             prev_pos = current_pos
             current_pos = self.read_xy()
+
         return current_pos
 
 
