@@ -145,9 +145,16 @@ class RunMethod:
         if inlet_location is None:
             logging.error('Unable to make next XY movement.')
             return False
-        self.hardware.set_xy(xy=inlet_location)
-        self.hardware.wait_xy()
-        time.sleep(2)
+        # Check if Z Stage is at correct height
+        z = self.hardware.get_z()
+        if np.abs(z-self.step['InletTravel']) <0.1:
+            self.hardware.set_xy(xy=inlet_location)
+            self.hardware.wait_xy()
+            time.sleep(2)
+        else:
+            logging.error("Z stage is not in position. "
+                          "Current: {:.2f}, Expected {:.2f}".format(z, self.step['InletTravel']))
+            return False
         return self.check_flags()
 
     def wait_sleep(self, wait_time):
