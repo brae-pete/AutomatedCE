@@ -42,7 +42,7 @@ class RunMethod:
     sequence_id = round(time.time()) # Time in s from epoch, that links a repetitions in a sequence
 
     def __init__(self, hardware, methods, repetitions, methods_id,
-                 flags, insert, folder, cap_control, cellfinders):
+                 flags, insert, folder, cap_control, cell_finders):
         """
         Logic to run a CE run
 
@@ -74,7 +74,7 @@ class RunMethod:
         self.insert = insert
         self.folder = folder
         self.cap_control = cap_control
-        self.cell_finders = cellfinders
+        self.cell_finders = cell_finders
         self.current_fc = None
 
     def start_run(self):
@@ -598,6 +598,537 @@ class RunMethod:
 
                     previous_step = self.step['Type']
         return True
+
+class NewCELogic:
+
+    def __init__(self, hardware, method, repetitions, methods_id, pause_flag, insert, folder, cellfinders):
+        self.hardware = hardware
+        self.method = method
+        self.repetitions = repetitions
+        self.methods_id = methods_id
+        self.insert = insert
+        self.folder = folder
+        self.cell_finders = cellfinders
+        self.timeout = 20
+        self.collection_well = -1
+        self.spont_time = 12
+        self.last_inject_time = time.time()-self.spont_time
+
+        # Threading Events
+        self.pause_flag = pause_flag
+        self.quit_flag = threading.Event()
+
+        # Initialize Method
+        self.step_id = 0
+        self.step = self.method.steps[self.step_id]
+        self.current_repetition = 0
+
+
+
+
+
+
+    def stage_up(self, tolerance = 0.1):
+        """ All actions that need to occur as stage moves from current position to its travel height.
+
+         1. Move Z Stage Up
+
+         return Bool (True if successful, False if error)
+         """
+
+        running = self.step_check()
+
+        # Set to Z Travel Hight
+        travel_height = self.step['InletTravel']
+        self.hardware.set_z(travel_height)
+
+        # Wait for Z stage to reach height
+        running = self._wait_for_height(travel_height)
+
+        if running:
+            running = self.move_over()
+
+        return running
+
+    def move_over(self, tolerance = 5):
+        """
+        All actions that need to be performed while the inlet is moving.
+
+        1. Move XY
+        2. Lower Outlet (non-blocking)
+
+        :return: bool (True if still running, False if error or stop requested)
+        """
+
+        running = self.step_check()
+        if not running:
+            return running
+
+        # Adjust XY position based on repetitions
+        try:
+            cycles = int( self.step['TrayPositionsIncrementEdit'])
+        except ValueError:
+            target_xy = self.insert.get_well_xy(self.step['Inlet'])
+        else:
+            if self.current_repetition +1 > cycles:
+                target_xy = self.insert.get_next_well_xy(self.step['Inlet'], int(np.floor(self.current_repetition/cycles)))
+            else:
+                target_xy = self.insert.get_well_xy(self.step['Inlet'])
+
+        # Move XY can be modified during a collection step. Account for that here.
+        if self.step['Type']=='Separate':
+            if self.step['CollectionSep'] and -1 <self.collection_well < len(self.insert.wells)-1:
+                target_xy = self.insert.wells[self.collection_well].location
+
+        self.hadware.set_xy(xy=target_xy)
+
+
+        start_time = time.time()
+        xy = self.hardware.get_xy()
+        # Check X position
+        while np.abs(xy[0]-target_xy[0])>tolerance and running:
+            time.sleep(0.25)
+            xy = self.hardware.get_xy()
+            if time.time()-start_time > self.timeout:
+                running = False
+            else:
+                running = self.step_check()
+
+        # Check Y position
+        while np.abs(xy[1]-target_xy[1]) > tolerance and running:
+            time.sleep(0.25)
+            xy = self.hardware.get_xy()
+            running = self.step_check()
+            if time.time()-start_time > self.timeout:
+                running = False
+            else:
+                running = self.step_check()
+
+        if running:
+            running = self.stage_down()
+
+        return running
+
+    def stage_down(self, tolerance = 0.1):
+        """
+        All actions that must take place while the Z-stage is lowered.
+
+        1. Make sure spontaneous fluid time matches
+        2. Lower Z Stage
+
+        :param tolerance:
+        :return:
+        """
+
+
+        # Spontaneous Fluid displacement requires all time in air after injections are consisitent
+        if time.time()-self.last_inject_time < self.spont_time:
+            time.sleep(self.spont_time-(time.time()-self.last_inject_time))
+
+        running = self.step_check()
+        if not running:
+            return running
+
+        target_height = self.step['InletPos']
+        self.hardware.set_z(target_height)
+
+        running = self._wait_for_height(target_height)
+
+        if running:
+            self.pre_run()
+
+        return running
+
+
+    def pre_run(self):
+        """
+        All actions that must occur prior to the run step, but after the inlet has been brought into position
+
+        1. Automated Cell Injections & Commands
+
+        :return:
+        """
+
+
+        running = self.run_step()
+        return running
+
+    def run_step(self):
+        """
+        All actions that occur during the run step
+
+        1. Call appropriate Run Step (Separation, Rinse, Injection)
+        2. Increment Step
+
+        :return:
+        """
+
+        if self.step['Type'] == 'Separate':
+            executed = self.separate()
+            if not executed:
+                return False
+
+        elif self.step['Type'] == 'Rinse':
+            executed = self.rinse()
+            if not executed:
+                return False
+
+        elif self.step['Type'] == 'Inject':
+            executed = self.inject()
+
+            if not executed:
+                return False
+
+    def separate(self):
+        voltage_level = None
+        pressure_state = None
+        vacuum_state = False
+
+        if self.step['SeparationTypeVoltageRadio']:
+            voltage_level = float(self.step['ValuesVoltageEdit'])
+        elif self.step['SeparationTypeCurrentRadio']:
+            logging.error('Unsupported: Separation with current')
+            return False
+        elif self.step['SeparationTypePowerRadio']:
+            logging.error('Unsupported: Separation with power')
+            return False
+
+        # Give user option to run combo of pressure and voltage
+        if self.step['SeparationTypePressureRadio']:
+            pressure_state = True
+        elif self.step['SeparationTypeVacuumRadio']:
+            vacuum_state = True
+
+        if self.step['SeparationTypeWithPressureCheck']:
+            pressure_state = True
+        elif self.step['SeparationTypeWithVacuumCheck']:
+            vacuum_state = True
+
+        duration = float(self.step['ValuesDurationEdit'])
+
+        if voltage_level:
+            self.hardware.set_voltage(voltage_level)
+        if pressure_state:
+            self.hardware.pressure_rinse_start()
+        if vacuum_state:
+            self.hardware.vacuum_rinse_start()
+
+
+        state = self.wait_sleep(duration)
+        # Save Data
+        file_name = self.get_save_path(suffix='.csv')
+        save_path = os.path.join(self.save_dir, file_name)
+        try:
+            self.hardware.save_data(save_path)
+        except IndexError:
+            logging.error("Index Error on DAQ")
+        self.hardware.set_voltage(0)
+        self.hardware.pressure_rinse_stop()
+
+        return state
+
+    def rinse(self):
+        if self._stop_thread_flag.is_set():
+            return
+        pressure_state = None
+        if self.step['PressureTypePressureRadio']:
+            pressure_state = True
+        elif self.step['PressureTypeVacuumRadio']:
+            logging.error('Unsupported: Rinsing with vacuum.')
+            return False
+        try:
+            duration = float(self.step['ValuesDurationEdit'])
+        except ValueError:
+            logging.error("Duration was not set correctly: {}".format(self.step['ValuesDurationEdit']))
+        if pressure_state:
+            self.hardware.pressure_rinse_start()
+
+        time.sleep(duration)
+        self.hardware.pressure_rinse_stop()
+
+        return True
+
+    def auto_cell(self):
+        """ Move cell to last position,
+            Find and Focus a Cell
+            (Start loading that cell)
+            Lyse that cell
+            Load the cell
+            Finish
+        """
+        try:
+            if self.step_id not in self.cell_finders.keys():
+                center = self.insert.get_well_xy(self.step['Inlet'])
+                mov = Detection.Mover(center=center)
+                # fixme: Hey so 0.4329 and (235,384) are they pixel to um conversion and laser location on the image
+                # These will need to be adjusted for each system
+                laser_spot = (235, 384)
+                det = Detection.CellDetector(self.hardware, 0.4329, laser_spot)
+                fc = Detection.FocusGetter(det, mov, laser_spot)
+                cap_control = Lysis.CapillaryControl(self.hardware)
+                self.cell_finders[self.step_id] = [det, fc, mov, cap_control]
+
+                # We need to create a focal plane at the start of the method:
+                logging.info("Pausing Run...For now...")
+                logging.info("Please bring 3 cells into focus at 3 corners of the well")
+                logging.info("Press 'Start' after a cell is into focus")
+                for i in range(3):
+                    logging.info("Focus Point #{}".format(i + 1))
+                    self.pause_flag.set()
+                    state = self.step_check()
+                    if not state:
+                        return state
+                    fc.add_focus_point()
+                fc.find_a_plane()
+                self.current_fc = fc
+                logging.info(" Please Bring a cell into focus, press start to continue")
+                self.pause_flag.set()
+                state = self.step_check()
+                if not state:
+                    return state
+                cap_control.record_cell_height()
+                logging.info("Please Bring the capillary into focus, press start to continue")
+                self.pause_flag.set()
+                state = self.step_check()
+                if not state:
+                    return state
+                cap_control.record_cap_height()
+                self.cap_control = cap_control
+
+            else:
+                _, fc, _, cap = self.cell_finders[self.step_id]
+                self.current_fc = fc
+                self.cap_control = cap
+
+            logging.info("Finding a cell, press pause to manually find a cell")
+            self.hardware.set_objective(h=fc.last_z)
+
+            logging.info("Moving Objective into Focus")
+            while np.abs(self.hardware.get_objective() - fc.last_z) > 5:
+                time.sleep(0.5)
+            logging.info("Pausing Run... Allow the program to find a cell.\n "
+                         "When a cell is found focus the cell manually \n"
+                         "Press Start when finished \n ")
+            self.pause_flag.set()
+            # Move the objective into position
+            fc.quickcheck([1,500])
+            state = self.step_check()
+            if not state:
+                return state
+            # Take a Snapshot
+            if not self.step['Video']:
+                logging.info("Taking Brightfield image...")
+                # Take a Brightfield Picture
+                savepath= self.get_save_path(prefix='BF',suffix='.tiff')
+                self.hardware.save_raw_image(savepath)
+            if self.step['FluorSnap']:
+                logging.info("Taking Fluorescent image...")
+                # Take a Fluorescence Picture
+                # Stop Live Feed
+                self.hardware.stop_feed()
+                # Adjust Exposure
+                old_exp = self.hardware.get_exposure()
+                exp = self.step['Exposure']
+                self.hardware.set_exposure(exp)
+                # Adjust Filter
+                old_chnl = self.hardware.filter_get()
+                chnl = self.step['FilterChannel']
+                self.hardware.filter_set(chnl)
+                logging.info("Filter Set")
+                time.sleep(1)
+                # Turn off the LED
+                old_leds = self.hardware.led_control.channel_states.copy()
+                for led in old_leds:
+                    if old_leds[led]:
+                        self.hardware.turn_off_led(led)
+
+                # Adjust Shutter
+                self.hardware.shutter_open()
+                time.sleep(0.2)
+                # Snap
+                filepath = self.get_save_path(prefix='FL', suffix='.tiff')
+                time.sleep((exp / 1000) + 0.5)
+                self.hardware.snap_image()
+
+                self.hardware.save_raw_image(filepath)
+
+                """            self.hardware.snap_image()
+                st = time.time()
+                while time.time() - st < exp / 1000:
+                    time.sleep(exp / 10000)
+                self.hardware.save_raw_image(filepath)"""
+                # Close Shutter
+                self.hardware.shutter_close()
+                # Start LED
+                for led in old_leds:
+                    if old_leds[led]:
+                        self.hardware.turn_on_led(led)
+                # Adjust Filter
+                self.hardware.filter_set(old_chnl)
+                # Adjust Exposure
+                self.hardware.set_exposure(100)
+                # Restart Live Feed
+                self.hardware.start_feed()
+
+            # Lower the Capillary
+            get_focus = self.cap_control.move_cap_above_cell()
+            if not get_focus:
+                self.pause_flag.set()
+                logging.info("Bring Capillary into the correct position and record its location")
+                logging.info("Press Start to Continue...")
+                state = self.step_check()
+                if not state:
+                    return state
+            self.hardware.wait_z()
+            return state
+        except Exception as e:
+            logging.info("Error with Auto Cell: {}".format(e))
+            return False
+
+    def semi_auto_cell(self):
+        """ Move the cell to the last  position and start"""
+        logging.info(" Press Start when you wish to continue...")
+        running = self.pause_flag.set()
+
+        return running
+
+    def inject(self):
+        running = self.step_check()
+        st = time.time()
+        logging.info("Starting Injection {}".format(time.time() - st))
+        if self._stop_thread_flag.is_set():
+            return
+        pressure_state = False
+        voltage_level = None
+
+        if self.step['InjectionTypeVoltageRadio']:
+            voltage_level = float(self.step['ValuesVoltageEdit'])
+        elif self.step['InjectionTypePressureRadio']:
+            pressure_state = True
+        elif self.step['InjectionTypeVacuumRadio']:
+            logging.error('Unsupported: Injection with vacuum.')
+            return False
+
+        duration = float(self.step['ValuesDurationEdit'])
+        # repeat the following until the user says a cell is loaded
+        loading_cell = True
+        while loading_cell:
+            lyse = False
+            if self.step['SingleCell']:
+                if self.step['AutoSingleCell']:
+                    logging.info("Automated single cell....")
+                    running = self.auto_cell()
+                    lyse = running
+                else:
+                    running = self.semi_auto_cell()
+
+            else:
+                loading_cell = False
+
+            if running:
+                running = self.step_check()
+            if not running:
+                return running
+
+            # Open the outlet to outside air or apply a pressure
+            if pressure_state:
+                self.hardware.pressure_rinse_start()
+            else:
+                self.hardware.pressure_rinse_stop()
+            if voltage_level:
+                self.hardware.set_voltage(voltage_level)
+            self.wait_sleep(0.5)
+
+            # Fire the laser half a second after starting the load velocity
+            if lyse:
+                self.hardware.laser_fire()
+
+            state = self.wait_sleep(duration)
+            if not state:
+                return state
+
+            self.hardware.set_voltage(0)
+            if self.step['SingleCell']:
+                # Move the capillary up to see if it was successful
+                self.move_inlet(self.step['InletTravel'], wait=False)
+                logging.info("If a cell did not lyse, press Pause within 5 seconds... ")
+                state = self.wait_sleep(8)
+                if not state:
+                    return state
+                if self.pause_flag.is_set():
+                    loading_cell = True
+                else:
+                    loading_cell = False
+                    self.hardware.set_objective(h=50)
+                    self.hardware.pressure_rinse_stop()
+                self.pause_flag.clear()
+            # Move then objective down
+
+            self.hardware.pressure_rinse_stop()
+            # Take a picture if we are in single cell mode
+            if self.step['SingleCell']:
+                # Record buffer of injection after lysis.
+                if self.step['Video']:
+                    save_path = self.get_save_path()
+                    threading.Thread(target=self.hardware.save_buffer, args=(save_path, 'cell_lysis.avi')).start()
+                else:
+                    logging.info("Taking Brightfield image...")
+                    # Take a Brightfield Picture
+                    savepath = self.get_save_path(prefix='Post_BF', suffix='.tiff')
+                    self.hardware.save_raw_image(savepath)
+            self.hardware.objective_control.wait_for_move()
+            state_n = self.step_check()
+            if not state_n:
+                return False
+        return True
+
+    def quit_run(self):
+        pass
+
+    def wait_sleep(self, wait_time):
+        """ Returns false if wait time was interupted by stop command"""
+        start_time = time.time()
+        running = self.step_check()
+        while time.time() - start_time < wait_time and running:
+            time.sleep(0.05)
+            running = self.step_check()
+        return running
+
+    def _wait_for_height(self, travel_height, tolerance = 0.1):
+        """ Waits for the Z Stage to reach its target height """
+        # Wait while zStage has not reached target
+        running = self.step_check()
+        start_move = time.time()
+        while (np.abs(travel_height-self.hardware.get_z())> tolerance) and running:
+            time.sleep(0.25)
+            # If user presses pause or stop, or timout has expired respond accordingly
+            if time.time()-start_move > self.timeout:
+                running = False
+                logging.error("lift_up TIMEOUT: Did not reach travel height in {} s".format(self.timeout))
+            else:
+                running = self.step_check()
+        return running
+
+    def get_save_path(self, prefix='',suffix=''):
+        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder,prefix, self.sequence_id, self.step_id, self.rep,suffix)
+        return os.path.join(self.save_dir, file_name)
+
+    def step_check(self):
+        """
+        Checks flags, pauses (blocks) if pause flag is set. Returns false if quit flag is set.
+
+        :return: Bool. (True if okay to continue, false if user has requested a pause or a stop).
+        """
+
+        while self.pause_flag.is_set():
+            time.sleep(0.1)
+
+        if self.quit_flag.is_set():
+            return False
+        else:
+            return True
+
+
 
 
 def test_run(hardware):
