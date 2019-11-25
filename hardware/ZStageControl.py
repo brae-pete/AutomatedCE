@@ -343,7 +343,7 @@ class ThorLabs(ZStageControl):
     min_z = 0
     max_z = 50
     offset = 0
-    def __init__(self, lock=threading.RLock() , serial =  '49117634'):
+    def __init__(self, lock=threading.RLock() , serial =  '49125264'):
         self.lock = lock
         self.inversion = 1
         self.com = "COM3"
@@ -385,7 +385,7 @@ class ThorLabs(ZStageControl):
 
         #Set the speed to 5 mm/s
         vel_prms = self.device.GetVelocityParams()
-        vel_prms.set_MaxVelocity(Decimal(5))
+        vel_prms.set_MaxVelocity(Decimal(3.5))
         self.device.SetVelocityParams(vel_prms)
 
 
@@ -435,8 +435,9 @@ class ThorLabs(ZStageControl):
 
         # Check if moving
         status = self.device.get_Status()
-        if status.get_IsInMotion():
-            self.device.StopImmediate()
+        while status.get_IsInMotion():
+            time.sleep(0.5)
+            status = self.device.get_Status()
         if self.home_check():
             go_to = self.inversion * (set_z - self.offset)
             threading.Thread(target = self.device.MoveTo,args=(Decimal(go_to),60000,)).start()
@@ -480,12 +481,10 @@ class ThorLabs(ZStageControl):
         outsize = 0
         with open(in_file, 'rb') as infile:
             content = infile.read()
-            print(content)
         with open(out_file, 'wb') as output:
             for line in content.splitlines():
                 outsize += len(line) + 1
                 output.write(line + '\n'.encode())
-        print("Done. Saved %s bytes." % (len(content) - outsize))
 
     def wai2t_for_move(self, clearance=0.0):
         """
