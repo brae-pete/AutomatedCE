@@ -75,6 +75,7 @@ class RunMethod:
         self.folder = folder
         self.cap_control = cap_control
         self.cell_finders = cellfinders
+        self.current_fc = None
 
     def start_run(self):
         for self.method, self.method_id in zip(self.methods, self.methods_id):
@@ -144,8 +145,16 @@ class RunMethod:
         if inlet_location is None:
             logging.error('Unable to make next XY movement.')
             return False
-        self.hardware.set_xy(xy=inlet_location)
-        self.hardware.wait_xy()
+        # Check if Z Stage is at correct height
+        z = self.hardware.get_z()
+        if np.abs(z-self.step['InletTravel']) <0.1:
+            self.hardware.set_xy(xy=inlet_location)
+            self.hardware.wait_xy()
+            time.sleep(2)
+        else:
+            logging.error("Z stage is not in position. "
+                          "Current: {:.2f}, Expected {:.2f}".format(z, self.step['InletTravel']))
+            return False
         return self.check_flags()
 
     def wait_sleep(self, wait_time):
@@ -257,116 +266,132 @@ class RunMethod:
             Load the cell
             Finish
         """
+        try:
+            if self.step_id not in self.cell_finders.keys():
+                center = self.insert.get_well_xy(self.step['Inlet'])
+                mov = Detection.Mover(center=center)
+                # fixme: Hey so 0.4329 and (235,384) are they pixel to um conversion and laser location on the image
+                # These will need to be adjusted for each system
+                laser_spot = (235, 384)
+                det = Detection.CellDetector(self.hardware, 0.4329, laser_spot)
+                fc = Detection.FocusGetter(det, mov, laser_spot)
+                cap_control = Lysis.CapillaryControl(self.hardware)
+                self.cell_finders[self.step_id] = [det, fc, mov, cap_control]
 
-        if self.step_id not in self.cell_finders.keys():
-            center = self.insert.get_well_xy(self.step['Inlet'])
-            mov = Detection.Mover(center=center)
-            # fixme: Hey so 0.4329 and (235,384) are they pixel to um conversion and laser location on the image
-            # These will need to be adjusted for each system
-            laser_spot = (235, 384)
-            det = Detection.CellDetector(self.hardware, 0.4329, laser_spot)
-            fc = Detection.FocusGetter(det, mov, laser_spot)
-            self.cell_finders[self.step_id] = [det, fc, mov]
-
-            # We need to create a focal plane at the start of the method:
-            logging.info("Pausing Run...For now...")
-            logging.info("Please bring 3 cells into focus at 3 corners of the well")
-            logging.info("Press 'Start' after a cell is into focus")
-            for i in range(3):
-                logging.info("Focus Point #{}".format(i + 1))
+                # We need to create a focal plane at the start of the method:
+                logging.info("Pausing Run...For now...")
+                logging.info("Please bring 3 cells into focus at 3 corners of the well")
+                logging.info("Press 'Start' after a cell is into focus")
+                for i in range(3):
+                    logging.info("Focus Point #{}".format(i + 1))
+                    self._pause_flag.set()
+                    state = self.check_flags()
+                    if not state:
+                        return state
+                    fc.add_focus_point()
+                fc.find_a_plane()
+                self.current_fc = fc
+                logging.info(" Please Bring a cell into focus, press start to continue")
                 self._pause_flag.set()
                 state = self.check_flags()
                 if not state:
                     return state
-                fc.add_focus_point()
-            fc.find_a_plane()
-            self.current_fc = fc
+                cap_control.record_cell_height()
+                logging.info("Please Bring the capillary into focus, press start to continue")
+                self._pause_flag.set()
+                state = self.check_flags()
+                if not state:
+                    return state
+                cap_control.record_cap_height()
+                self.cap_control = cap_control
 
-        else:
-            _, fc, _ = self.cell_finders[self.step_id]
-            self.current_fc = fc
+            else:
+                _, fc, _, cap = self.cell_finders[self.step_id]
+                self.current_fc = fc
+                self.cap_control = cap
 
-        logging.info("Finding a cell, press pause to manually find a cell")
+            logging.info("Finding a cell, press pause to manually find a cell")
+            self.hardware.set_objective(h=fc.last_z)
 
-        self.hardware.set_objective(h=fc.last_z)
-
-        logging.info("Moving Objective into Focus")
-        while np.abs(self.hardware.get_objective() - fc.last_z) > 5:
-            time.sleep(0.5)
-        logging.info("Pausing Run... Allow the program to find a cell.\n "
-                     "When a cell is found focus the cell manually \n"
-                     "Press Start when finished \n ")
-        self._pause_flag.set()
-        # Move the objective into position
-        fc.quickcheck([1,500])
-        state = self.check_flags()
-        # Take a Snapshot
-        if not self.step['Video']:
-            logging.info("Taking Brightfield image...")
-            # Take a Brightfield Picture
-            savepath= self.get_save_path(prefix='BF',suffix='.tiff')
-            self.hardware.save_raw_image(savepath)
-        if self.step['FluorSnap']:
-            logging.info("Taking Fluorescent image...")
-            # Take a Fluorescence Picture
-            # Stop Live Feed
-            self.hardware.stop_feed()
-            # Adjust Exposure
-            old_exp = self.hardware.get_exposure()
-            exp = self.step['Exposure']
-            self.hardware.set_exposure(exp)
-            # Adjust Filter
-            old_chnl = self.hardware.filter_get()
-            chnl = self.step['FilterChannel']
-            self.hardware.filter_set(chnl)
-            logging.info("Filter Set")
-            time.sleep(1)
-            # Turn off the LED
-            old_leds = self.hardware.led_control.channel_states.copy()
-            for led in old_leds:
-                if old_leds[led]:
-                    self.hardware.turn_off_led(led)
-
-            # Adjust Shutter
-            self.hardware.shutter_open()
-            time.sleep(0.2)
-            # Snap
-            filepath = self.get_save_path(prefix='FL', suffix='.tiff')
-            time.sleep((exp / 1000) + 0.5)
-            #st = time.time()
-            self.hardware.snap_image()
-
-            self.hardware.save_raw_image(filepath)
-
-            """            self.hardware.snap_image()
-            st = time.time()
-            while time.time() - st < exp / 1000:
-                time.sleep(exp / 10000)
-            self.hardware.save_raw_image(filepath)"""
-            # Close Shutter
-            self.hardware.shutter_close()
-            # Start LED
-            for led in old_leds:
-                if old_leds[led]:
-                    self.hardware.turn_on_led(led)
-            # Adjust Filter
-            self.hardware.filter_set(old_chnl)
-            # Adjust Exposure
-            self.hardware.set_exposure(100)
-            # Restart Live Feed
-            self.hardware.start_feed()
-
-        # Lower the Capillary
-        get_focus = self.cap_control.move_cap_above_cell()
-        if not get_focus:
+            logging.info("Moving Objective into Focus")
+            while np.abs(self.hardware.get_objective() - fc.last_z) > 5:
+                time.sleep(0.5)
+            logging.info("Pausing Run... Allow the program to find a cell.\n "
+                         "When a cell is found focus the cell manually \n"
+                         "Press Start when finished \n ")
             self._pause_flag.set()
-            logging.info("Bring Capillary into the correct position and record its location")
-            logging.info("Press Start to Continue...")
+            # Move the objective into position
+            fc.quickcheck([1,500])
             state = self.check_flags()
-            if not state:
-                return state
-        self.hardware.wait_z()
-        return state
+            # Take a Snapshot
+            if not self.step['Video']:
+                logging.info("Taking Brightfield image...")
+                # Take a Brightfield Picture
+                savepath= self.get_save_path(prefix='BF',suffix='.tiff')
+                self.hardware.save_raw_image(savepath)
+            if self.step['FluorSnap']:
+                logging.info("Taking Fluorescent image...")
+                # Take a Fluorescence Picture
+                # Stop Live Feed
+                self.hardware.stop_feed()
+                # Adjust Exposure
+                old_exp = self.hardware.get_exposure()
+                exp = self.step['Exposure']
+                self.hardware.set_exposure(exp)
+                # Adjust Filter
+                old_chnl = self.hardware.filter_get()
+                chnl = self.step['FilterChannel']
+                self.hardware.filter_set(chnl)
+                logging.info("Filter Set")
+                time.sleep(1)
+                # Turn off the LED
+                old_leds = self.hardware.led_control.channel_states.copy()
+                for led in old_leds:
+                    if old_leds[led]:
+                        self.hardware.turn_off_led(led)
+
+                # Adjust Shutter
+                self.hardware.shutter_open()
+                time.sleep(0.2)
+                # Snap
+                filepath = self.get_save_path(prefix='FL', suffix='.tiff')
+                time.sleep((exp / 1000) + 0.5)
+                self.hardware.snap_image()
+
+                self.hardware.save_raw_image(filepath)
+
+                """            self.hardware.snap_image()
+                st = time.time()
+                while time.time() - st < exp / 1000:
+                    time.sleep(exp / 10000)
+                self.hardware.save_raw_image(filepath)"""
+                # Close Shutter
+                self.hardware.shutter_close()
+                # Start LED
+                for led in old_leds:
+                    if old_leds[led]:
+                        self.hardware.turn_on_led(led)
+                # Adjust Filter
+                self.hardware.filter_set(old_chnl)
+                # Adjust Exposure
+                self.hardware.set_exposure(100)
+                # Restart Live Feed
+                self.hardware.start_feed()
+
+            # Lower the Capillary
+            get_focus = self.cap_control.move_cap_above_cell()
+            if not get_focus:
+                self._pause_flag.set()
+                logging.info("Bring Capillary into the correct position and record its location")
+                logging.info("Press Start to Continue...")
+                state = self.check_flags()
+                if not state:
+                    return state
+            self.hardware.wait_z()
+            return state
+        except Exception as e:
+            logging.info("Error with Auto Cell: {}".format(e))
+            return False
 
     def semi_auto_cell(self):
         """ Move the cell to the last  position and start"""
@@ -432,7 +457,7 @@ class RunMethod:
             self.hardware.set_voltage(0)
             if self.step['SingleCell']:
                 # Move the capillary up to see if it was successful
-                self.hardware.set_z(z=1)
+                self.move_inlet(self.step['InletTravel'], wait=False)
                 logging.info("If a cell did not lyse, press Pause within 5 seconds... ")
                 state = self.wait_sleep(5)
                 if not state:
@@ -482,6 +507,7 @@ class RunMethod:
         try:
             cycles = int(self.step['TrayPositionsIncrementEdit'])
         except ValueError:
+            logging.info("Step Tray Positions Increment Edit {}".format(self.step['TrayPositionsIncrementEdit']))
             state = self.move_xy_stage(self.insert.get_well_xy(self.step['Inlet']))
         else:
             if self.rep + 1 > cycles:

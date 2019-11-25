@@ -360,11 +360,8 @@ class Mover:
 
 class FocusGetter:
     """ Focuses the Cell """
-    um = []
-    fm = []
-    _plane_vectors = []
-    _plane_coefficients = [0, 0, 0, 0]
-    pixel_cell_diameter_min = 20
+
+
 
     def __init__(self, detector, mover, laser_spot=(235, 384)):
         self.hardware = detector.hardware
@@ -373,6 +370,11 @@ class FocusGetter:
         self.center = mover.center
         self.radius = mover.max_radius
         self.mover = mover
+        self._plane_vectors = []
+        self._plane_coefficients = [0, 0, 0, 0]
+        self.pixel_cell_diameter_min = 20
+        self.um = []
+        self.fm = []
 
     def move_focus(self, focal_range, steps):
         """

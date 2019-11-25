@@ -505,8 +505,8 @@ class ThorLabs(ZStageControl):
 
 class PowerStep(ZStageControl):
     min_z = 0
-    max_z = 24.5
-    offset = 24.5
+    max_z = 25.1
+    offset = 25
     def __init__(self, lock, com = "COM3", arduino = -1, home=False,invt=1 ):
         self.lock = lock
         self.home = home
@@ -631,11 +631,8 @@ class PowerStep(ZStageControl):
         return True
 
     def set_rel_z(self, set_z):
-        pos = self.read_z()
-        if self.home:
-            self.pos = set_z
-            return
-        go_to = set_z - pos
+        pos = self.get_z()
+        go_to = pos+set_z
         self.set_z(go_to)
         return True
 

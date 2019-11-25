@@ -884,22 +884,25 @@ class MethodScreenController:
 
     def populate_table(self, method):
         """Populates table with new insert."""
-        self._populating_table = True
+        try:
+            self._populating_table = True
 
-        self.screen.insert_table.clearContents()
-        for row in range(self.screen.insert_table.rowCount()):
-            self.screen.insert_table.removeRow(self.screen.insert_table.rowCount() - 1)
+            self.screen.insert_table.clearContents()
+            for row in range(self.screen.insert_table.rowCount()):
+                self.screen.insert_table.removeRow(self.screen.insert_table.rowCount() - 1)
 
-        self._form_data = []
-        for step in method.steps:
-            if step:
-                self.add_step([step['Inlet']], [step['Outlet']], action_input=step['Type'], inlet_input=step['Inlet'],
-                              outlet_input=step['Outlet'], time_input=step['Time'], value_input=step['Value'],
-                              duration_input=step['Duration'], summary_input=step['Summary'],
-                              inlet_travel_input=step['InletTravel'], outlet_travel_input=step['OutletTravel'], inlet_pos_input = ['InletPos'])
-                self._form_data += [step]
+            self._form_data = []
+            for step in method.steps:
+                if step:
+                    self.add_step([step['Inlet']], [step['Outlet']], action_input=step['Type'], inlet_input=step['Inlet'],
+                                  outlet_input=step['Outlet'], time_input=step['Time'], value_input=step['Value'],
+                                  duration_input=step['Duration'], summary_input=step['Summary'],
+                                  inlet_travel_input=step['InletTravel'], outlet_travel_input=step['OutletTravel'], inlet_pos_input = step['InletPos'])
+                    self._form_data += [step]
 
-        self._populating_table = False
+            self._populating_table = False
+        except Exception as e:
+            logging.error("Error loading method: {}".format(e))
 
     def compile_method(self):
         """ Compiles all step information into a method object. """
@@ -1152,8 +1155,8 @@ class RunScreenController:
 
         if self.hardware.hasInletControl:
 
-            self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
-            self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
+            self.screen.z_up.released.connect(lambda: self.hardware.set_z(rel_z=self.screen.z_step_size.value()))
+            self.screen.z_down.released.connect(lambda: self.hardware.set_z(rel_z=-self.screen.z_step_size.value()))
             self.screen.z_value.returnPressed.connect(lambda: self.hardware.set_z(float(self.screen.z_value.text())))
             self.screen.z_stop.released.connect(lambda: self.hardware.stop_z())
             self.screen.z_value.selected.connect(lambda: self._value_display_interact(selected=True))
