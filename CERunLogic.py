@@ -121,6 +121,8 @@ class RunMethod:
         self.hardware.set_z(inlet_travel)
         if wait:
             self.hardware.wait_z()
+        while np.abs(self.hardware.get_z()-inlet_travel) > 0.1:
+            time.sleep(0.25)
         return self.check_flags()
 
     def move_outlet(self, outlet_travel, wait = True):
@@ -157,9 +159,10 @@ class RunMethod:
             return False
         return self.check_flags()
 
-    def wait_sleep(self, wait_time):
+    def wait_sleep(self, wait_time, start_time=None):
         """ Returns false if wait time was interupted by stop command"""
-        start_time = time.time()
+        if start_time is None:
+            start_time = time.time()
         while time.time() - start_time < wait_time and not self._stop_thread_flag.is_set():
             time.sleep(0.05)
 
@@ -444,13 +447,13 @@ class RunMethod:
                 self.hardware.pressure_rinse_stop()
             if voltage_level:
                 self.hardware.set_voltage(voltage_level)
-            self.wait_sleep(0.5)
+            self.wait_sleep(0.5,st)
 
             # Fire the laser half a second after starting the load velocity
             if lyse:
                 self.hardware.laser_fire()
 
-            state = self.wait_sleep(duration)
+            state = self.wait_sleep(duration, st)
             if not state:
                 return state
 
@@ -1085,9 +1088,10 @@ class NewCELogic:
     def quit_run(self):
         pass
 
-    def wait_sleep(self, wait_time):
+    def wait_sleep(self, wait_time,start_time=None):
         """ Returns false if wait time was interupted by stop command"""
-        start_time = time.time()
+        if start_time is None:
+            start_time = time.time()
         running = self.step_check()
         while time.time() - start_time < wait_time and running:
             time.sleep(0.05)
