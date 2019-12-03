@@ -39,7 +39,7 @@ class RunMethod:
     cell_finders = {}  # List of Focus Getters
     collection_well = -1
     injection_wait = 6  # How long to wait after an injection for repeatable spontaneous fluid displacement
-    sequence_id = round(time.time()) # Time in s from epoch, that links a repetitions in a sequence
+    sequence_id = round(time.time())  # Time in s from epoch, that links a repetitions in a sequence
 
     def __init__(self, hardware, methods, repetitions, methods_id,
                  flags, insert, folder, cap_control, cell_finders):
@@ -114,7 +114,7 @@ class RunMethod:
         self._last_cell_positions['obj'] = obj
         return
 
-    def move_inlet(self, inlet_travel, wait = True):
+    def move_inlet(self, inlet_travel, wait=True):
         """ Move the inlet for the run method, wait till it has finished"""
         if self._stop_thread_flag.is_set():
             return
@@ -123,7 +123,7 @@ class RunMethod:
             self.hardware.wait_z()
         return self.check_flags()
 
-    def move_outlet(self, outlet_travel, wait = True):
+    def move_outlet(self, outlet_travel, wait=True):
         """ Move the outlet for the run method"""
         if self._stop_thread_flag.is_set():
             return
@@ -147,7 +147,7 @@ class RunMethod:
             return False
         # Check if Z Stage is at correct height
         z = self.hardware.get_z()
-        if np.abs(z-self.step['InletTravel']) <0.1:
+        if np.abs(z - self.step['InletTravel']) < 0.1:
             self.hardware.set_xy(xy=inlet_location)
             self.hardware.wait_xy()
             time.sleep(2)
@@ -204,7 +204,6 @@ class RunMethod:
         if vacuum_state:
             self.hardware.vacuum_rinse_start()
 
-
         state = self.wait_sleep(duration)
         # Save Data
         file_name = self.get_save_path(suffix='.csv')
@@ -251,7 +250,7 @@ class RunMethod:
 
             cap = self._last_cell_positions['cap']
             if cap is not None:
-                #self.hardware.set_z(cap)
+                # self.hardware.set_z(cap)
                 pass
             obj = self._last_cell_positions['obj']
             if obj is not None and semi:
@@ -321,13 +320,13 @@ class RunMethod:
                          "Press Start when finished \n ")
             self._pause_flag.set()
             # Move the objective into position
-            fc.quickcheck([1,500])
+            fc.quickcheck([1, 500])
             state = self.check_flags()
             # Take a Snapshot
             if not self.step['Video']:
                 logging.info("Taking Brightfield image...")
                 # Take a Brightfield Picture
-                savepath= self.get_save_path(prefix='BF',suffix='.tiff')
+                savepath = self.get_save_path(prefix='BF', suffix='.tiff')
                 self.hardware.save_raw_image(savepath)
             if self.step['FluorSnap']:
                 logging.info("Taking Fluorescent image...")
@@ -489,8 +488,9 @@ class RunMethod:
                 return False
         return True
 
-    def get_save_path(self, prefix='',suffix=''):
-        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder,prefix, self.sequence_id, self.step_id, self.rep,suffix)
+    def get_save_path(self, prefix='', suffix=''):
+        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder, prefix, self.sequence_id, self.step_id, self.rep,
+                                                    suffix)
         return os.path.join(self.save_dir, file_name)
 
     def create_run_folder(self):
@@ -503,6 +503,7 @@ class RunMethod:
             return save_dir
         except FileExistsError:
             return save_dir
+
     def move_wells(self):
         try:
             cycles = int(self.step['TrayPositionsIncrementEdit'])
@@ -516,6 +517,7 @@ class RunMethod:
             else:
                 state = self.move_xy_stage(self.insert.get_well_xy(self.step['Inlet']))
         return state
+
     def logic(self):
         self.save_dir = self.create_run_folder()
         for self.rep in range(self.repetitions):
@@ -532,7 +534,7 @@ class RunMethod:
                     if not state:
                         return False
                     step_start = time.time()
-                    state = self.move_inlet(self.step['InletTravel'], wait = True)
+                    state = self.move_inlet(self.step['InletTravel'], wait=True)
                     if not state:
                         return False
                     state = self.move_outlet(self.step['OutletTravel'], wait=False)
@@ -547,15 +549,15 @@ class RunMethod:
                     # Sometimes we move other places than the center of a well
                     # If this is a collection step move to a special vial if requested (flag is set),
                     # otherwise normal move
-                    if self.step['Type']=='Separate' and self._collection_flag.is_set() :
+                    if self.step['Type'] == 'Separate' and self._collection_flag.is_set():
                         # Only move if this is a collection separation and the well is within range
-                        if self.step['CollectionSep'] and -1 < self.collection_well < len(self.insert.wells)-1 :
+                        if self.step['CollectionSep'] and -1 < self.collection_well < len(self.insert.wells) - 1:
                             xy = self.insert.wells[self.collection_well].location
                             state = self.move_xy_stage(xy)
                         else:
                             state = self.move_wells()
                     # if this is a single cell injection step, we need to try and move to the last place we were
-                    elif self.step['Type']=='Injection':
+                    elif self.step['Type'] == 'Injection':
                         if self.step['SingleCell']:
                             self.cell_move(semi=False)
                             state = self.check_flags()
@@ -572,7 +574,6 @@ class RunMethod:
                         state = self.check_flags()
                         if not state:
                             return False
-
 
                     state = self.move_inlet(self.step['InletPos'])
                     if not state:
@@ -599,6 +600,7 @@ class RunMethod:
                     previous_step = self.step['Type']
         return True
 
+
 class NewCELogic:
 
     def __init__(self, hardware, method, repetitions, methods_id, pause_flag, insert, folder, cellfinders):
@@ -612,7 +614,7 @@ class NewCELogic:
         self.timeout = 20
         self.collection_well = -1
         self.spont_time = 12
-        self.last_inject_time = time.time()-self.spont_time
+        self.last_inject_time = time.time() - self.spont_time
 
         # Threading Events
         self.pause_flag = pause_flag
@@ -622,13 +624,10 @@ class NewCELogic:
         self.step_id = 0
         self.step = self.method.steps[self.step_id]
         self.current_repetition = 0
+        self.sequence_id = round(time.time())
+        self.save_dir = self.create_run_folder()
 
-
-
-
-
-
-    def stage_up(self, tolerance = 0.1):
+    def stage_up(self, tolerance=0.1):
         """ All actions that need to occur as stage moves from current position to its travel height.
 
          1. Move Z Stage Up
@@ -637,7 +636,6 @@ class NewCELogic:
          """
 
         running = self.step_check()
-
         # Set to Z Travel Hight
         travel_height = self.step['InletTravel']
         self.hardware.set_z(travel_height)
@@ -650,7 +648,7 @@ class NewCELogic:
 
         return running
 
-    def move_over(self, tolerance = 5):
+    def move_over(self, tolerance=5):
         """
         All actions that need to be performed while the inlet is moving.
 
@@ -666,40 +664,40 @@ class NewCELogic:
 
         # Adjust XY position based on repetitions
         try:
-            cycles = int( self.step['TrayPositionsIncrementEdit'])
+            cycles = int(self.step['TrayPositionsIncrementEdit'])
         except ValueError:
             target_xy = self.insert.get_well_xy(self.step['Inlet'])
         else:
-            if self.current_repetition +1 > cycles:
-                target_xy = self.insert.get_next_well_xy(self.step['Inlet'], int(np.floor(self.current_repetition/cycles)))
+            if self.current_repetition + 1 > cycles:
+                target_xy = self.insert.get_next_well_xy(self.step['Inlet'],
+                                                         int(np.floor(self.current_repetition / cycles)))
             else:
                 target_xy = self.insert.get_well_xy(self.step['Inlet'])
 
         # Move XY can be modified during a collection step. Account for that here.
-        if self.step['Type']=='Separate':
-            if self.step['CollectionSep'] and -1 <self.collection_well < len(self.insert.wells)-1:
+        if self.step['Type'] == 'Separate':
+            if self.step['CollectionSep'] and -1 < self.collection_well < len(self.insert.wells) - 1:
                 target_xy = self.insert.wells[self.collection_well].location
 
-        self.hadware.set_xy(xy=target_xy)
-
+        self.hardware.set_xy(xy=target_xy)
 
         start_time = time.time()
         xy = self.hardware.get_xy()
         # Check X position
-        while np.abs(xy[0]-target_xy[0])>tolerance and running:
+        while np.abs(xy[0] - target_xy[0]) > tolerance and running:
             time.sleep(0.25)
             xy = self.hardware.get_xy()
-            if time.time()-start_time > self.timeout:
+            if time.time() - start_time > self.timeout:
                 running = False
             else:
                 running = self.step_check()
 
         # Check Y position
-        while np.abs(xy[1]-target_xy[1]) > tolerance and running:
+        while np.abs(xy[1] - target_xy[1]) > tolerance and running:
             time.sleep(0.25)
             xy = self.hardware.get_xy()
             running = self.step_check()
-            if time.time()-start_time > self.timeout:
+            if time.time() - start_time > self.timeout:
                 running = False
             else:
                 running = self.step_check()
@@ -709,7 +707,7 @@ class NewCELogic:
 
         return running
 
-    def stage_down(self, tolerance = 0.1):
+    def stage_down(self, tolerance=0.1):
         """
         All actions that must take place while the Z-stage is lowered.
 
@@ -719,11 +717,9 @@ class NewCELogic:
         :param tolerance:
         :return:
         """
-
-
         # Spontaneous Fluid displacement requires all time in air after injections are consisitent
-        if time.time()-self.last_inject_time < self.spont_time:
-            time.sleep(self.spont_time-(time.time()-self.last_inject_time))
+        if time.time() - self.last_inject_time < self.spont_time:
+            time.sleep(self.spont_time - (time.time() - self.last_inject_time))
 
         running = self.step_check()
         if not running:
@@ -739,7 +735,6 @@ class NewCELogic:
 
         return running
 
-
     def pre_run(self):
         """
         All actions that must occur prior to the run step, but after the inlet has been brought into position
@@ -748,8 +743,6 @@ class NewCELogic:
 
         :return:
         """
-
-
         running = self.run_step()
         return running
 
@@ -762,7 +755,6 @@ class NewCELogic:
 
         :return:
         """
-
         if self.step['Type'] == 'Separate':
             executed = self.separate()
             if not executed:
@@ -778,6 +770,11 @@ class NewCELogic:
 
             if not executed:
                 return False
+            else:
+                # Check iterations
+                # if cyc
+                pass
+
 
     def separate(self):
         voltage_level = None
@@ -813,7 +810,6 @@ class NewCELogic:
         if vacuum_state:
             self.hardware.vacuum_rinse_start()
 
-
         state = self.wait_sleep(duration)
         # Save Data
         file_name = self.get_save_path(suffix='.csv')
@@ -828,8 +824,9 @@ class NewCELogic:
         return state
 
     def rinse(self):
-        if self._stop_thread_flag.is_set():
-            return
+        running = self.step_check()
+        if not running:
+            return running
         pressure_state = None
         if self.step['PressureTypePressureRadio']:
             pressure_state = True
@@ -840,13 +837,15 @@ class NewCELogic:
             duration = float(self.step['ValuesDurationEdit'])
         except ValueError:
             logging.error("Duration was not set correctly: {}".format(self.step['ValuesDurationEdit']))
+            return False
         if pressure_state:
             self.hardware.pressure_rinse_start()
 
-        time.sleep(duration)
+        running = self.wait_sleep(duration)
+
         self.hardware.pressure_rinse_stop()
 
-        return True
+        return running
 
     def auto_cell(self):
         """ Move cell to last position,
@@ -911,7 +910,7 @@ class NewCELogic:
                          "Press Start when finished \n ")
             self.pause_flag.set()
             # Move the objective into position
-            fc.quickcheck([1,500])
+            fc.quickcheck([1, 500])
             state = self.step_check()
             if not state:
                 return state
@@ -919,7 +918,7 @@ class NewCELogic:
             if not self.step['Video']:
                 logging.info("Taking Brightfield image...")
                 # Take a Brightfield Picture
-                savepath= self.get_save_path(prefix='BF',suffix='.tiff')
+                savepath = self.get_save_path(prefix='BF', suffix='.tiff')
                 self.hardware.save_raw_image(savepath)
             if self.step['FluorSnap']:
                 logging.info("Taking Fluorescent image...")
@@ -994,10 +993,10 @@ class NewCELogic:
 
     def inject(self):
         running = self.step_check()
+        if not running:
+            return running
         st = time.time()
         logging.info("Starting Injection {}".format(time.time() - st))
-        if self._stop_thread_flag.is_set():
-            return
         pressure_state = False
         voltage_level = None
 
@@ -1050,9 +1049,12 @@ class NewCELogic:
             self.hardware.set_voltage(0)
             if self.step['SingleCell']:
                 # Move the capillary up to see if it was successful
-                self.move_inlet(self.step['InletTravel'], wait=False)
+                self.hardware.set_z(self.step['InletTravel'])
+                running = self._wait_for_height(self.step['InletTravel'])
+                if not running:
+                    return running
                 logging.info("If a cell did not lyse, press Pause within 5 seconds... ")
-                state = self.wait_sleep(8)
+                state = self.wait_sleep(5)
                 if not state:
                     return state
                 if self.pause_flag.is_set():
@@ -1094,24 +1096,36 @@ class NewCELogic:
             running = self.step_check()
         return running
 
-    def _wait_for_height(self, travel_height, tolerance = 0.1):
+    def _wait_for_height(self, travel_height, tolerance=0.1):
         """ Waits for the Z Stage to reach its target height """
         # Wait while zStage has not reached target
         running = self.step_check()
         start_move = time.time()
-        while (np.abs(travel_height-self.hardware.get_z())> tolerance) and running:
+        while (np.abs(travel_height - self.hardware.get_z()) > tolerance) and running:
             time.sleep(0.25)
             # If user presses pause or stop, or timout has expired respond accordingly
-            if time.time()-start_move > self.timeout:
+            if time.time() - start_move > self.timeout:
                 running = False
                 logging.error("lift_up TIMEOUT: Did not reach travel height in {} s".format(self.timeout))
             else:
                 running = self.step_check()
         return running
 
-    def get_save_path(self, prefix='',suffix=''):
-        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder,prefix, self.sequence_id, self.step_id, self.rep,suffix)
+    def get_save_path(self, prefix='', suffix=''):
+        file_name = "{}{}_{}_step{}_rep{}{}".format(self.folder, prefix, self.sequence_id, self.step_id,
+                                                    self.current_repetition, suffix)
         return os.path.join(self.save_dir, file_name)
+
+    def create_run_folder(self):
+        cwd = os.getcwd()
+        now = datetime.datetime.now()
+        folder_name = self.folder + now.strftime("RunData__%Y_%m_%d__%H_%M_%S")
+        save_dir = os.path.join(cwd, 'Data', folder_name)
+        try:
+            os.makedirs(save_dir, exist_ok=True)
+            return save_dir
+        except FileExistsError:
+            return save_dir
 
     def step_check(self):
         """
@@ -1127,8 +1141,6 @@ class NewCELogic:
             return False
         else:
             return True
-
-
 
 
 def test_run(hardware):
@@ -1166,6 +1178,7 @@ class ZStackData:
     _focus_dir = os.getcwd() + "\\focus_data"
     _temp_file = _focus_dir + "\\cap_data.csv"
     file_prefix = "Orig-"
+
     def __init__(self, apparatus):
         self.apparatus = apparatus
         self.df = self._create_dataframe()
