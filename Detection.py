@@ -95,7 +95,7 @@ class CellDetector:
     blob_exclusion_image = r"C:\Users\NikonTE3000\Documents\Barracuda\BarracudaQt\recentImg.png" # Path to empty image (no cells, just the dust and noise on the lens)
     max_diameter = 200  # Maximum radius in ums, anything larger will be excluded.
     min_diameter = 15
-    debug = True
+    debug = False
     thresh = 0.1
     scale = 1
     last_blob_xy = None
@@ -504,8 +504,6 @@ class FocusGetter:
                 self.move_focus(75, 75)
                 time.sleep(1)
                 cell = self.cell_check()
-            plt.scatter(fc.um,fc.fm)
-            plt.show()
             time.sleep(2)
             x, y = self.hardware.get_xy()
             z = self.hardware.get_objective()

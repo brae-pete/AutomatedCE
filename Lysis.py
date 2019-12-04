@@ -1,6 +1,7 @@
 import CESystems
 import time
 import logging
+from numpy import abs
 
 
 class Lysis():
@@ -92,8 +93,14 @@ class CapillaryControl:
         if self.last_cap_height is None or self.last_obj_height is None:
             logging.warning("You have not set the capillary or cell focal planes")
             return False
-
-        self.hardware.set_z(self.calculate_cap_difference())
+        total = self.calculate_cap_difference()
+        #self.hardware.set_z(total+0.5)
+        #while abs(total - self.hardware.get_z()) >0.505:
+        #    time.sleep(0.2)
+        #time.sleep(1)
+        self.hardware.jog_z(total - self.hardware.get_z())
+        while abs(total - self.hardware.get_z()) > 0.03:
+            time.sleep(0.2)
         return True
 
 

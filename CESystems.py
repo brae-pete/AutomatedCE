@@ -98,6 +98,11 @@ class BaseSystem:
         """Stops current movement of the Z stage/motor."""
         logging.error('stop_z not implemented in hardware class.')
 
+    def jog_z(self, direction):
+        """Jogs the Z axis"""
+        self.set_z(rel_z=direction)
+        logging.info("Jog and Rel_z are equivalent")
+
     def set_z_home(self):
         """Sets the current position of the Z stage/motor as home. Return False if device has no 'home' capability."""
         logging.error('set_z_home not implemented in hardware class.')
@@ -1431,8 +1436,14 @@ class NikonTE3000(BaseSystem):
         with self._camera_lock:
             self.image_control.record_recent_image(filename)
 
-    def record_image(self, filename):
-        self.image_control.record_recent_image(filename)
+    def set_exposure(self,exp):
+        with self._camera_lock:
+            self.image_control.set_exposure(exp)
+        return
+
+    def get_exposure(self):
+        with self._camera_lock:
+            return self.image_control.get_exposure()
 
     def get_image(self):
         with self._camera_lock:
@@ -1443,6 +1454,9 @@ class NikonTE3000(BaseSystem):
             if not HOME:
                 self.image_control.save_image(image, "recentImg.png")
         return image
+
+    def save_raw_image(self, filename):
+        self.image_control.save_raw_image(filename)
 
     def close_image(self):
         self.image_control.close()
@@ -1523,10 +1537,14 @@ class NikonTE3000(BaseSystem):
             return True
 
         elif rel_z:
-            self.z_stage_control.set_rel_z(rel_z)
+            self.jog_z(rel_z)
             return True
 
         return False
+
+    def jog_z(self,direction):
+        self.z_stage_control.jog(direction)
+        return True
 
     def get_z(self):
         return self.z_stage_control.get_z()
@@ -1681,20 +1699,21 @@ class NikonTE3000(BaseSystem):
             return True
 
     def laser_fire(self):
-        self.laser_control.fire()
+
+        #self.laser_control.fire()
         return True
 
     def laser_stop(self):
-        self.laser_control.stop()
+        #self.laser_control.stop()
         return True
 
     def laser_close(self):
-        self.laser_control.off()
+        #self.laser_control.off()
         return True
 
     def laser_check(self):
-        self.laser_control.check_status()
-        self.laser_control.check_parameters()
+        #self.laser_control.check_status()
+        #self.laser_control.check_parameters()
         return True
 
     def restart_laser_run_time(self):
@@ -1728,6 +1747,11 @@ class NikonTE3000(BaseSystem):
 
     def pressure_valve_close(self):
         self.pressure_control.close_valve()
+        return True
+
+    def vacuum_rinse_start(self):
+        """ Starts vacuum pressure..."""
+        self.pressure_control.apply_vacuum()
         return True
 
     def turn_on_led(self, channel='R'):
