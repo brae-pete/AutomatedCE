@@ -157,6 +157,12 @@ class ZStageControl:
         self.close()
         self.open()
 
+    def jog(self, distance):
+        """ Jog move """
+        self.set_rel_z(distance)
+        return
+
+
     def close(self):
         """Closes the resources for the stage"""
         if self.home:
@@ -256,6 +262,7 @@ class OpticsFocusZStage:
             steps = self.min_steps - pos_steps
         logging.info("{:+d} STteps to move ,{} pos_steps, {} Pos, {} mm_to_travel".format(steps,pos_steps, self.pos, mm_to_travel))
         self.serial.write("X{:+d}\r".format(steps).encode())
+
 
     def go_home(self):
         self.serial.write("HX0\r".encode())
@@ -390,7 +397,7 @@ class ThorLabs(ZStageControl):
 
 
 
-    def get_z(self, *args):
+    def        get_z(self, *args):
         """ returns float of current position
         User requests to get current position of stage, returned in mm
         """
@@ -457,6 +464,37 @@ class ThorLabs(ZStageControl):
         go_to =  pos + set_z
         self.set_z(go_to)
         return True
+
+    def jog(self, distance):
+        """
+
+        :param distance: float, distance to travel
+        :return:
+        """
+
+        dist_up = self.inversion*distance
+        if dist_up < 0:
+            direction = MotorDirection.Backward
+        else:
+            direction = MotorDirection.Forward
+        logging.info("{} ".format(distance))
+        distance = Decimal(float(np.abs(distance)))
+
+        status = self.device.get_Status()
+
+        # Try this then maybe timeout reset?
+
+        if status.get_IsInMotion():
+            self.device.Stop(1000)
+        jog_prms = self.device.GetJogParams()
+        if distance != jog_prms.get_StepSize():
+            jog_prms.set_StepSize(distance)
+            logging.error("{} distance, {} status".format(distance, status.get_IsInMotion()))
+            self.device.SetJogParams(jog_prms)
+
+        if self.home_check():
+            threading.Thread(target=self.device.MoveJog, args=(direction,60000,)).start()
+            #self.device.MoveJog(direction,10000)
 
     def stop_z(self):
         """ Stops the objective motor where it is at. """

@@ -451,6 +451,7 @@ class RunMethod:
             # Fire the laser half a second after starting the load velocity
             if lyse:
                 self.hardware.laser_fire()
+                st = time.time()
 
             state = self.wait_sleep(duration, st)
             if not state:

@@ -40,8 +40,10 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 // Set up variables for motors
 int outlet_div = 32;
 // Set variables for Pressure
-int SOLENOID1 = 7;
+int SOLENOID1 = 4;
 int SOLENOID2 = 6;
+int SOLENOID3 = 7;
+
 int LED_R = 5;
 int LED_G = 5;
 int LED_B = 5;
@@ -70,6 +72,7 @@ void setup()
   pinMode(LED_B, OUTPUT);
   pinMode(SOLENOID1,OUTPUT);
   pinMode(SOLENOID2,OUTPUT);
+  pinMode(SOLENOID3, OUTPUT);
 
   // Reset powerSTEP and set CS
   digitalWrite(nSTBY_nRESET_PIN_2, HIGH);
@@ -79,9 +82,8 @@ void setup()
 
  // Turn pressure off
  digitalWrite(SOLENOID1, LOW);
- digitalWrite(SOLENOID2,LOW
- 
- );
+ digitalWrite(SOLENOID2,LOW );
+ digitalWrite(SOLENOID3, LOW);
 
  // Turn LED ON
 
@@ -327,18 +329,26 @@ void pressureTalk(){
     Serial.println("ON");
     digitalWrite(SOLENOID2,LOW);  
     digitalWrite(SOLENOID1,HIGH);
+    digitalWrite(SOLENOID3,LOW);
   } else if(inputString[2]=='S'){
     digitalWrite(SOLENOID2,HIGH);
     digitalWrite(SOLENOID1,LOW);
+    digitalWrite(SOLENOID3,LOW);
     Serial.println("OFF");
   } else if(inputString[2]=='X'){
     digitalWrite(SOLENOID1,HIGH);
     digitalWrite(SOLENOID2,HIGH);
+    digitalWrite(SOLENOID3,LOW);
     Serial.println("All OPEN");
   } else if (inputString[2]=='C'){
     digitalWrite(SOLENOID1, LOW);
     digitalWrite(SOLENOID2, LOW);
+    digitalWrite(SOLENOID3,LOW);
     Serial.println("All CLOSED");
+  } else if (inputString[2]=='V'){
+    digitalWrite(SOLENOID1, LOW);
+    digitalWrite(SOLENOID2, LOW);
+    digitalWrite(SOLENOID3, HIGH);
   }
 }
 
