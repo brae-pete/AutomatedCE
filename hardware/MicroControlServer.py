@@ -1,4 +1,5 @@
 import datetime
+import time
 
 MICROMANAGER_DIRECTORY = r'C:\Program Files\Micro-Manager-1.4'
 
@@ -221,6 +222,7 @@ class MicroControl:
         x = float(args[3])
         y = float(args[4])
         self.mmc.setXYPosition(args[2], x, y)
+        time.sleep(1)
         return 'Ok'
 
     def set_rel_xy_position(self, args):
@@ -228,11 +230,13 @@ class MicroControl:
         x = float(args[3])
         y = float(args[4])
         self.mmc.setRelativeXYPosition(args[2], x, y)
+        time.sleep(1)
         return 'Ok'
 
     def set_xy_origin(self, args):
         """ Sets the software XY stage origin"""
         self.mmc.setOriginXY(args[2])
+        time.sleep(1)
         return 'Ok'
 
     def set_filter_channel(self, args):
@@ -240,6 +244,7 @@ class MicroControl:
         device = args[2]
         channel = int(args[3])
         self.mmc.setState(device, channel)
+
         return 'Ok'
 
     def get_filter_channel(self, args):
