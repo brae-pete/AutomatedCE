@@ -389,7 +389,7 @@ class RunMethod:
                 state = self.check_flags()
                 if not state:
                     return state
-            self.hardware.wait_z()
+            #self.hardware.wait_z()
             return state
         except Exception as e:
             logging.info("Error with Auto Cell: {}".format(e))
@@ -439,6 +439,14 @@ class RunMethod:
             state_n = self.check_flags()
             if not state_n:
                 return False
+
+
+            if lyse:
+                self._pause_flag.set()
+                logging.info("Press start to Lyse")
+                state = self.check_flags()
+                if not state:
+                    return state
             # Open the outlet to outside air or apply a pressure
             if pressure_state:
                 self.hardware.pressure_rinse_start()
@@ -1044,6 +1052,8 @@ class NewCELogic:
 
             # Fire the laser half a second after starting the load velocity
             if lyse:
+                logging.info("Pause here...")
+
                 self.hardware.laser_fire()
 
             state = self.wait_sleep(duration)

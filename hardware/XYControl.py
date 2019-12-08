@@ -100,6 +100,7 @@ class XYControl:
 
     def wait_for_move(self,tolerance=100):
         """ Waits for the stage to stop moving"""
+        time.sleep(0.15)
         prev_pos = self.read_xy()
         current_pos = [prev_pos[0]+1,prev_pos[1]]
         # Update position while moving
