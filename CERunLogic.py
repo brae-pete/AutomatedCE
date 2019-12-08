@@ -460,8 +460,6 @@ class RunMethod:
 
             # Fire the laser half a second after starting the load velocity
             if lyse:
-                logging.info("Adjust Capillary, Start to Lyse")
-                self._pause_flag.set()
                 state = self.check_flags()
                 if not state:
                     return state
