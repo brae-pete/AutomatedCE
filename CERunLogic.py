@@ -325,6 +325,8 @@ class RunMethod:
             # Move the objective into position
             fc.quickcheck([1, 500])
             state = self.check_flags()
+            if not state:
+                return state
             # Take a Snapshot
             if not self.step['Video']:
                 logging.info("Taking Brightfield image...")
@@ -458,6 +460,11 @@ class RunMethod:
 
             # Fire the laser half a second after starting the load velocity
             if lyse:
+                logging.info("Adjust Capillary, Start to Lyse")
+                self._pause_flag.set()
+                state = self.check_flags()
+                if not state:
+                    return state
                 self.hardware.laser_fire()
                 st = time.time()
 
