@@ -555,5 +555,19 @@ class MicroControl(ImageControl):
         return self.state
 
 
+class TestImageControl(ImageControl):
+    """
+    Image control testing for a given signal. It uses randomly generated spheres (circles) over a grid. Depending on the
+    XY coordinates given, TestImageControl will return the corresponding set of spheres. This is Test class is for
+    testing object movements and cell finding logic.
+    >>>ic=TestImageControl()
+    >>>img = ic.get_single_image()
+    >>>img.shape == ic.camera_shape
+    True
+    """
+    def __init__(self):
+        self.camera_shape = [720, 1280]
+
+
 if __name__ == "__main__":
     ic = MicroControl()
