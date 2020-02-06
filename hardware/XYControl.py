@@ -9,7 +9,7 @@ import time
 import sys
 
 from hardware import MicroControlClient
-
+from hardware.ScopeControl import PriorController
 # Locate the directory of config files
 cwd = os.getcwd()
 contents = os.listdir(cwd)
@@ -85,6 +85,7 @@ class XYControl:
     def origin(self):
         """ Moves to the origin position"""
         pass
+
 
     def close(self):
         """Releases any communication ports that may be used"""
@@ -227,7 +228,8 @@ class MicroControl(XYControl):
 
 
 
-class PriorControl(XYControl):
+
+class PriorControl(XYControl, PriorController):
     """ Basic XY Control class. If you switch hardware so that it no longer uses MMC. You only need
     to maintain the outputs for each method.
 
@@ -238,11 +240,10 @@ class PriorControl(XYControl):
     scale = 1
     x_inversion = 1
     y_inversion = 1
-    ser = serial.Serial()  # Serial port
 
-    def __init__(self, com="COM5", lock=threading.Lock()):
-        self.ser.port = com
+    def __init__(self, com="COM5", lock=threading.RLock()):
         self.lock = lock
+        self.port = com
         self.open()
 
     def _read_lines(self):
@@ -328,20 +329,9 @@ class PriorControl(XYControl):
 
     def origin(self):
         " Return to 0,0 "
-        self.set_xy([0, 0])
+        self.set_rel_xy((-160000, +160000))
+        self.set_origin()
 
-    def close(self):
-        """Releases any communication ports that may be used"""
-        self.ser.close()
-
-    def reset(self):
-        """ Resets the device in case of a communication error elsewhere """
-        self.close()
-        self.open()
-
-    def open(self):
-        """ Opens serial communicaiton port"""
-        self.ser.open()
 
     def stop(self):
         """

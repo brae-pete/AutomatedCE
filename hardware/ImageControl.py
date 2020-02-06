@@ -68,24 +68,30 @@ CONFIG_FILE = os.path.join(CONFIG_FOLDER, "PVCAM.cfg")
 
 
 class ImageControl:
-    """GUI will read an image (recentImage). In mmc use Continuous sequence Acquisition
-    Default uses micromanager (mmc). Instead you can use PVCAM shown below if using a PVCAM compatiable camera
-    like the coolnap hq2
-     """
+    """
+    Hardware class for image acquisition. ImageControl also handles constrast adjustment and live feeds. See the
+    TestImageControl or your specific class for how to use the base ImageControl functionality.
 
-    contrast_exposure = [0.5, 99]  # Low and high percintiles for contrast exposure
-    rotate = 90
-    _frame_num = 0
-    _capture_ref = []
-    buffer_time = 30  # time to buffer images in seconds
-    _capture_lock = threading.Lock()
-    live_running = threading.Event()
-    save_sequence = threading.Event()
-    sequence_filepath = os.getcwd()
-    sequence_prefix = "IMGS"
-    capture_folder = os.path.join(sequence_filepath, 'Capture')
-    raw_img = np.array((100, 100))  # Full raw image
-    is_live = threading.Event()
+
+    """
+
+    def __init__(self, *, contrast_percentile=[0.5,99], rotate=0, buffer_time=30, sequence_prefix="IMGS", save_path=os.getcwd()):
+        # Image Acquisition Variables
+        self.contrast_exposure = contrast_percentile  # Low and high percintiles for contrast exposure
+        self.rotate = rotate # how far to rotate the image in degrees
+        self.buffer_time = buffer_time  # time to buffer images in seconds
+        # File saving variables
+        self.save_sequence = threading.Event()
+        self.sequence_filepath = save_path
+        self.sequence_prefix = sequence_prefix
+        self.capture_folder = os.path.join(self.sequence_filepath, 'Capture')
+        # Threading and Misc. variables
+        self.raw_img = np.array((100, 100))  # Full raw image
+        self._frame_num = 0
+        self._capture_ref = []
+        self._capture_lock = threading.Lock()
+        self.live_running = threading.Event()
+        self.is_live = threading.Event()
 
     def open(self):
         """Opens the camera resources"""
@@ -95,16 +101,16 @@ class ImageControl:
         """ Closes the camera resources, called when program exits"""
         pass
 
+    def start_video_feed(self):
+        """ Starts a live video feed, typicall using camera circular buffer """
+        pass
+
     def stop_video_feed(self):
         """Stops the live video feed"""
         pass
 
     def get_single_image(self):
         """Snaps single image, returns image"""
-        pass
-
-    def start_video_feed(self):
-        """ Starts a live video feed, typicall using camera circular buffer """
         pass
 
     def get_recent_image(self, size=None):
@@ -135,10 +141,15 @@ class ImageControl:
 
     @staticmethod
     def _adjust_size(img, size):
+        """
+        Adjusts the size of the image (WxH dimensions) according to a scalar value 'size'.
+        :param img: image array.
+        :param size: Scalar the image should be scaled by.
+        :return:
+        """
         ims = img.shape
         if ims is None:
             return None
-
         new_ims = [0, 0]
         new_ims[0] = int(ims[0] * size)
         new_ims[1] = int(ims[1] * size)
@@ -147,27 +158,49 @@ class ImageControl:
 
     @staticmethod
     def _rotate_img(img, rotation):
+        """
+        Rotates an image by the specified angle in degrees.
+        :param img: image array
+        :param rotation: rotation angle in degrees
+        :return:
+        """
         if rotation == 0:
             return img
-        #img = img.astype(np.float64)
         img = transform.rotate(img, rotation, resize=True)
-        #img = img.astype(np.uint16)
         return img
 
     @staticmethod
     def rotate_raw_img(img, rotation):
+        """
+        Rotates the raw image. Raw image types need to be preserved explicitly, .astype is used to keep the true data
+        preserved.
+        :param img:
+        :param rotation:
+        :return:
+        """
         img = img.astype(np.float64)
         img = transform.rotate(img, rotation, resize=True)
         img = img.astype(np.uint16)
         return img
 
     def image_conversion(self, img):
-        """ Adjusts the contrast and brightness"""
+        """
+        Adjusts the image brightness and contrast using the contrast_exposure fields defined at init.
+        :param img: image array
+        :return: rescaled image array
+        """
         low, p98 = np.percentile(img, self.contrast_exposure)
         img_rescale = exposure.rescale_intensity(img, in_range=(low, p98))
         return img_rescale
 
     def modify_img(self,img,  size, rotation):
+        """
+        Performs image rescaling, rotation, and brightness/contrast adjustment.
+        :param img: image array
+        :param size: how much to scale the image by, 1=100% or no change.
+        :param rotation: how  much to rotate the image by (in degrees)
+        :return: adjusted image array
+        """
         # Process image for live feed
         img = self._adjust_size(img, size)
         img = self._rotate_img(img, rotation)
@@ -178,16 +211,29 @@ class ImageControl:
 
     @staticmethod
     def save_image(img, filename):
-        """ Saves PIL image with filename"""
+        """
+        Saves the image to the specified filename. Determines the image type using the file extension in filename
+        .png, .jpg, .tiff are acceptable inputs. See skimage.io.imsave for more details.
+
+        :param img: image array to be saved as an image
+        :param filename: file path/filename.ext where the image will be saved.
+        :return: Nothing
+        """
         io.imsave(filename, img)
 
     def save_raw_image(self, filename):
-        """ Saves last raw image"""
+        """
+        Saves the raw_image field associated with the instance to the filepath specified by filename. Determines the
+        image type using the file extension in filename
+        .png, .jpg, .tiff are acceptable inputs. See skimage.io.imsave for more details.
+        :param filename:
+        :return:
+        """
         io.imsave(filename, self.raw_img)
 
     def live_view(self):
         """ Simple window to view the camera feed using matplotlib
-         Live update is performed using the animate functionality in matplotlib
+         Live update is performed using the animate functionality in matplotlib and a matplotlib window will appear.
 
          """
 
@@ -247,16 +293,20 @@ class ImageControl:
 
 
     def _get_unique_folder(self, parent, folder):
-        """ Returns a unique folder name """
+        """ Returns a unique folder name, if the folder already exists, it adds on a (i) where i is the first number to
+        make the directory name unique."""
         tracker = 0
         folder = folder + ' ({})'.format(tracker)
         while os.path.exists(os.path.join(parent, folder)):
             tracker += 1
             folder = folder + ' ({})'.format(tracker)
-
         return folder
 
     def _clear_buffer(self):
+        """
+        Remmoves all images in the image buffer. 
+        :return:
+        """
         for file_del in os.listdir(self.capture_folder):
             file_path = os.path.join(self.capture_folder, file_del)
             if file_path.endswith('.png'):
@@ -557,9 +607,7 @@ class MicroControl(ImageControl):
 
 class TestImageControl(ImageControl):
     """
-    Image control testing for a given signal. It uses randomly generated spheres (circles) over a grid. Depending on the
-    XY coordinates given, TestImageControl will return the corresponding set of spheres. This is Test class is for
-    testing object movements and cell finding logic.
+    Image Control for testing, pulls up one image from (test_image.tiff) that it uses for display
     >>>ic=TestImageControl()
     >>>img = ic.get_single_image()
     >>>img.shape == ic.camera_shape

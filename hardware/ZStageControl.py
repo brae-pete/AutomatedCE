@@ -8,8 +8,10 @@ import numpy as np
 import time
 try:
     from hardware import ArduinoBase
+    from hardware.ScopeControl import PriorController
 except ModuleNotFoundError:
     import ArduinoBase
+    from ScopeControl import PriorController
 
 
 try:
@@ -71,7 +73,7 @@ class ZStageControl:
         if len(args) > 0:
             self.com = args[0]
             return
-        self.stage = PowerStep(self.lock, self.com)
+        pass
 
     def read_z(self, *args):
         """ returns float of current position
@@ -83,14 +85,6 @@ class ZStageControl:
                 if len(args) > 0:
                     self.pos = args[0]
                 return self.pos
-
-            z = self.stage.get_z()
-        if type(z) == str:
-            # Don't update position if the controller was busy
-            pass
-        else:
-            self.pos = z
-
         return self.pos
 
     def set_z(self, set_z=0, *args):
@@ -102,17 +96,6 @@ class ZStageControl:
             if self.home:
                 self.pos = set_z
                 return True
-
-            # Get Current position and check if stage is busy/moving
-            response = self.stage.get_z()
-            if response == type(str):
-                return False
-            else:
-                self.pos = response
-
-            set_z = set_z
-            self.stage.set_z(set_z)
-
         return True
 
     def set_rel_z(self, set_z=0):
@@ -120,14 +103,6 @@ class ZStageControl:
             if self.home:
                 self.pos = set_z
                 return True
-
-            # check if stage is busy
-            response = self.stage.get_z()
-            if response == type(str):
-                return False
-            self.pos = response
-
-            self.stage.set_z(self.pos + set_z)
         return True
 
     def set_speed(self, speed):
@@ -135,19 +110,16 @@ class ZStageControl:
         with self.lock:
             if self.home:
                 return
-            self.stage.set_speed(speed)
 
     def set_accel(self, accel):
         with self.lock:
             if self.home:
                 return
 
-            self.stage.set_accel(accel)
     def stop(self):
         """Stop the Z-stage from moving"""
         if self.home:
             return
-        self.stage.stop()
 
     def reset(self):
         """Resets the resources for the stage"""
@@ -162,15 +134,13 @@ class ZStageControl:
         self.set_rel_z(distance)
         return
 
-
     def close(self):
         """Closes the resources for the stage"""
         if self.home:
             return
-        self.stage.close()
 
     def go_home(self):
-        self.stage.go_home()
+        return
 
     def wait_for_move(self,clearance=0.0):
         """
@@ -178,13 +148,13 @@ class ZStageControl:
 
         :return: current_pos, float in mm of where the stage is at
         """
-        prev_pos = self.get_z()
+        prev_pos = self.read_z()
         current_pos = prev_pos + 1
         # Update position while moving
         while np.abs(prev_pos-current_pos) > clearance:
             time.sleep(0.25)
             prev_pos = current_pos
-            current_pos = self.get_z()
+            current_pos = self.read_z()
         return current_pos
 
 

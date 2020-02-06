@@ -450,24 +450,52 @@ class FocusGetter:
         return blob.minor_axis_length > self.pixel_cell_diameter_min
 
     def find_a_plane(self):
+        """
+        Calculate the scalar equation of the plane using the cross product of two vectors.
+        Requires that 3 points are recorded in the _plane_vectors list before.
 
+        ax + by + cz = d
+
+        a,b,c are coefficients calculated from the cross product of two vectors that lie in the plane.
+        d can be calculated by taking the dot product of [a,b,c] and one of the 3 points.
+
+        :return:
+        """
         if len(self._plane_vectors) < 3:
             logging.warning("You need to collect 3 points")
             return False
+
+        # Get the 3 points
         p1, p2, p3 = np.array(self._plane_vectors[0:3])
+
+        # Calculate the vectors
         v_1 = p3 - p1
         v_2 = p2 - p1
+
+        # Get the ccross product
         cross_product = np.cross(v_1, v_2)
         a, b, c = cross_product
         d = np.dot(cross_product, p3)
+
+        # Save the coeffecients of the scalar plane equation
         self._plane_coefficients = [a, b, c, d]
 
         return True
 
     def add_focus_point(self):
-        logging.info("adding point...what...who said that")
+        """
+        Add points to the _plane_vectors list.
+        The points are ordered as xyz and use
+        the CESystems class to get the XY and Z points
+        from their respective controllers
+        :return:
+        """
+        # Get XY from the XY stage
         x,y = self.hardware.get_xy()
+
+        # Get z from the objective (focus)
         z = self.hardware.get_objective()
+
         self._plane_vectors.append([x,y,z])
         self.last_z = z
 
@@ -482,34 +510,6 @@ class FocusGetter:
             self.move_focus(14,14)
             time.sleep(0.5)
             cell = self.cell_check()
-
-    def gather_plane_points(self):
-        positions = [0, 120, 240]  # Theta positions to check
-        # Reset the plane vectors
-        self._plane_vectors = []
-        plt.figure()
-        starting = self.hardware.get_objective()
-        for theta in positions:
-            x = self.radius * np.cos(np.deg2rad(theta)) + self.center[0]
-            y = self.radius * np.sin(np.deg2rad(theta)) + self.center[1]
-            self.hardware.set_xy([x, y])
-            time.sleep(1)
-            # Find a cell and scan at high resolution to bring it into focus
-            cell = False
-            while not cell:
-                self.hardware.set_objective(starting)
-                time.sleep(1)
-                self.detector.mover_find_cell(self.mover)
-                time.sleep(1)
-                self.move_focus(75, 75)
-                time.sleep(1)
-                cell = self.cell_check()
-            time.sleep(2)
-            x, y = self.hardware.get_xy()
-            z = self.hardware.get_objective()
-            self._plane_vectors.append([x, y, z])
-
-        self.find_a_plane()
 
     def get_plane_focus(self):
         # If spline is not set up, keep the objective at the same position

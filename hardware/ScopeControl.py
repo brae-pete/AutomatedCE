@@ -1,5 +1,6 @@
 import threading
 import sys
+import serial
 import pickle
 import logging
 import time
@@ -26,11 +27,58 @@ else:
 try:
     from hardware import MicroControlClient
     from hardware import ArduinoBase
+
 except:
     sys.path.append(os.path.relpath('..'))
     from hardware import MicroControlClient
     from hardware import ArduinoBase
 
+
+class PriorController:
+    """
+    Controller class for any prior instrumentation. There can be only one prior controller for a given system.
+    Prior controller is responsible for opening a serial connection and reading data from the controller.
+
+    """
+
+    ser = serial.Serial() # Only one serial object for several classes
+    open_controller = False # this will be shared across classes
+    port = None
+
+    def read_lines(self):
+        """
+        Reads entire buffer and returns response as a list
+        :return:
+        """
+        lines = []
+        while self.ser.in_waiting > 0:
+            lines.append(self._read_line())
+        return lines
+
+    def open(self):
+        """ Opens serial communication port"""
+        if not self.open_controller:
+            assert self.ser.is_open(), "ERROR: Prior controller is already open. COM={}".format(self.port)
+            self.ser.open()
+            self.open_controller=True
+
+    def close(self):
+        """Releases any communication ports that may be used"""
+        self.ser.close()
+
+    def reset(self):
+        """ Resets the device in case of a communication error elsewhere """
+        self.close()
+        self.open()
+
+
+    def _read_line(self):
+        """
+        reads one line, using \r as the terminator
+        returns decoded response as a string
+        :return: string response
+        """
+        return self.ser.read_until('\r'.encode()).decode()
 
 class FilterWheelControl:
     """ Class to control the filter wheel"""
@@ -53,6 +101,25 @@ class FilterWheelControl:
         """ Reads the filter wheel channel"""
         logging.warning("FilterWheelControl.get_state not implemented in hardware class")
 
+
+class PriorControl(FilterWheelControl, PriorController):
+    """ Class to control the filter wheel"""
+    def __init__(self, lock=threading.RLock()):
+        self.lock = lock
+
+    def set_state(self, channel, wheel=1):
+        """ Sets the filter wheel to the corresponding channel (starting at zero) """
+        assert channel in [1,2,3, 'N', 'P', 'H'], "Error: Channel not in filter wheel list"
+        with self.lock:
+            self.ser.write('7 {},{} \r'.format(wheel,channel))
+            self._read_line()
+
+    def get_state(self, wheel=1):
+        """ Reads the filter wheel channel"""
+        with self.lock:
+            self.ser.write("7 {},F".format(wheel))
+            filter = self._read_line()
+        return filter
 
 class FilterMicroControl(FilterWheelControl):
     device = 'TIFilterBlock1'

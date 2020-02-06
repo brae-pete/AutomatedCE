@@ -41,6 +41,11 @@ class BaseSystem:
 
     def __init__(self):
         self.laser_max_time = None
+        self.xy_stage_control = XYControl.XYControl()
+        self.z_stage_control = ZStageControl.ZStageControl()
+        self.outlet_control = OutletControl.OutletControl()
+        self.objective_control = ObjectiveControl.ObjectiveControl()
+
 
     def calibrate_system(self, permissions_gui):
         """Calibrates the system."""
@@ -56,119 +61,145 @@ class BaseSystem:
 
     def close_xy(self):
         """Removes immediate functionality of XY stage."""
-        logging.error('close_xy not implemented in hardware class.')
+        self.xy_stage_control.close()
 
     def set_xy(self, xy=None, rel_xy=None):
         """Sets the position of the XY Stage. 'xy' is absolute, 'rel_xy' is relative to current."""
-        logging.error('set_xy not implemented in hardware class.')
+        if xy is not None:
+            self.xy_stage_control.set_xy(xy)
+        elif rel_xy is not None:
+            self.xy_stage_control.set_rel_xy(rel_xy)
 
     def get_xy(self):
         """Gets the current position of the XY stage."""
-        logging.error('get_xy not implemented in hardware class.')
+        return self.xy_stage_control.read_xy()
 
     def stop_xy(self):
         """Stops current movement of the XY stage."""
-        logging.error('stop_xy not implemented in hardware class.')
+        self.xy_stage_control.stop()
 
     def set_xy_home(self):
         """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
-        logging.error('set_xy_home not implemented in hardware class.')
+        self.xy_stage_control.set_origin()
 
     def wait_xy(self):
         """ Waits for the stage to stop moving (blocking)"""
-        logging.error('wait_xy not implented in hardware class')
+        self.xy_stage_control.wait_for_move()
 
     def home_xy(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        logging.error('home_xy not implemented in hardware class.')
+        self.xy_stage_control.origin()
 
     def close_z(self):
         """Removes immediate functionality of Z stage/motor."""
-        logging.error('close_z not implemented in hardware class.')
+        self.z_stage_control.close()
 
     def set_z(self, z=None, rel_z=None):
         """Sets the position of the Z stage/motor. 'z' is absolute, 'rel_z' is relative to current."""
-        logging.error('set_z not implemented in hardware class.')
+        if z is not None:
+            self.z_stage_control.set_z(z)
+        elif rel_z is not None:
+            self.z_stage_control.jog(z)
+        else:
+            return False
+        return True
 
     def get_z(self):
         """Gets the current position of the Z stage/motor."""
-        logging.error('get_z not implemented in hardware class.')
+        return self.z_stage_control.read_z()
 
     def stop_z(self):
         """Stops current movement of the Z stage/motor."""
-        logging.error('stop_z not implemented in hardware class.')
+        self.z_stage_control.stop()
 
-    def jog_z(self, direction):
+    def jog_z(self, distance):
         """Jogs the Z axis"""
-        self.set_z(rel_z=direction)
+        self.z_stage_control.jog(distance)
         logging.info("Jog and Rel_z are equivalent")
 
     def set_z_home(self):
         """Sets the current position of the Z stage/motor as home. Return False if device has no 'home' capability."""
-        logging.error('set_z_home not implemented in hardware class.')
+        self.z_stage_control.go_home()
 
     def home_z(self):
         """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        logging.error('home_z not implemented in hardware class.')
+        self.z_stage_control.go_home()
 
     def wait_z(self):
         """ Waits until the z-stage has finished its move before releasing the lock"""
-        logging.error("wait_z not implemented in hardware class")
+        self.z_stage_control.wait_for_move()
 
     def close_outlet(self):
         """Removes immediate functionality of the outlet stage/motor."""
-        logging.error('close_outlet not implemented in hardware class.')
+        self.outlet_control.close()
 
     def set_outlet(self, h=None, rel_h=None):
         """Sets the position of the outlet stage/motor. 'h' is absolute, 'rel_h' is relative to current."""
-        logging.error('set_outlet not implemented in hardware class.')
+        if h is not None:
+            self.outlet_control.set_z(h)
+        elif rel_h is not None:
+            self.outlet_control.set_rel_z(rel_h)
+        else:
+            return False
+        return True
 
     def get_outlet(self):
         """Gets the current position of the outlet stage/motor."""
-        logging.error('get_outlet not implemented in hardware class.')
+        return self.outlet_control.read_z()
 
     def stop_outlet(self):
         """Stops current movement of the outlet stage/motor."""
-        logging.error('stop_outlet not implemented in hardware class.')
+        return self.outlet_control.stop()
 
     def wait_outlet(self):
-        logging.error("Waits for the outlet to finish moving")
+        """
+        Waits for the outlet to stop moving, return final height
+        :return:
+        """
+        return self.outlet_control.wait_for_move()
 
     def set_outlet_home(self):
         """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
-        logging.error('set_outlet_home not implemented in hardware class.')
+        return False
 
     def home_outlet(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        logging.error('home_outlet not implemented in hardware class.')
+        self.outlet_control.go_home()
+        return True
 
     def close_objective(self):
         """Removes immediate functionality of the objective stage/motor."""
-        logging.error('close_objective not implemented in hardware class.')
-
+        self.objective_control.close()
     def set_objective(self, h=None, rel_h=None):
         """Sets the position of the objective stage/motor. 'h' is absolute, 'rel_h' is relative to current."""
-        logging.error('set_objective not implemented in hardware class.')
+        if h is not None:
+            self.objective_control.set_z(h)
+        elif rel_h is not None:
+            self.objective_control.set_rel_z(rel_h)
+        else:
+            return False
+        return True
 
     def get_objective(self):
         """Gets the current position of the objective stage/motor."""
-        logging.error('get_objective not implemented in hardware class.')
+        self.objective_control.read_z()
 
     def stop_objective(self):
         """Stops the current movement of the objective stage/motor."""
-        logging.error('stop_objective not implemented in hardware class.')
+        self.objective_control.stop()
 
     def set_objective_home(self):
         """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
-        logging.error('set_objective_home not implemented in hardware class.')
+        return False
 
     def wait_objective(self):
         """ Waits till the objective has stopped moving"""
-        logging.error("wait_objective not implemented in hardware class")
+        self.objective_control.wait_for_move()
 
     def home_objective(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        logging.error('home_objective not implemented in hardware class.')
+        self.objective_control.go_home()
+        return True
 
     def close_voltage(self):
         """Removes immediate functionality of the voltage source."""
@@ -1491,142 +1522,9 @@ class NikonTE3000(BaseSystem):
         """ Checks if camera resources are available"""
         return self.image_control.camera_state()
 
-    def close_xy(self):
-        self.xy_stage_control.close()
-        return True
-
-    def set_xy(self, xy=None, rel_xy=None):
-        """Move the XY Stage"""
-        if xy:
-            self.xy_stage_control.set_xy(xy)
-        elif rel_xy:
-            self.xy_stage_control.set_rel_xy(rel_xy)
-
-        return True
-
-    def get_xy(self):
-        return self.xy_stage_control.read_xy()
-
-    def stop_xy(self):
-        self.xy_stage_control.stop()
-        return True
-
-    def set_xy_home(self):
-        """Sets the current position of XY stage as home. Return False if device has no 'home' capability."""
-        self.set_xy(rel_xy=[-160000, +160000])
-        self.xy_stage_control.set_origin()
-        return True
-
-    def wait_xy(self):
-        """ Waits for the stage to stop moving (blocking)"""
-        self.xy_stage_control.wait_for_move()
-
-    def home_xy(self):
-        """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        self.xy_stage_control.rel_xy(-160000,+160000)
-        self.xy_stage_control.set_origin()
-        return True
-
-    def close_z(self):
-        self.z_stage_control.close()
-        return True
-
-    def set_z(self, z=None, rel_z=None):
-        if z:
-            self.z_stage_control.set_z(z)
-            return True
-
-        elif rel_z:
-            self.jog_z(rel_z)
-            return True
-
-        return False
-
-    def jog_z(self,direction):
-        self.z_stage_control.jog(direction)
-        return True
-
-    def get_z(self):
-        return self.z_stage_control.get_z()
-
-    def stop_z(self):
-        self.z_stage_control.stop()
-        return True
-
-    def set_z_home(self):
-        """Sets the current position of the Z stage as home. Return False if device has no 'home' capability."""
-
-        return False
-
-    def wait_z(self):
-        self.z_stage_control.wait_for_move()
-
-    def home_z(self):
-        """Goes to current position marked as home. Return False if device has no 'home' capability."""
-        self.z_stage_control.go_home()
-        return True
-
-    def close_outlet(self):
-        self.outlet_control.close()
-        return True
-
-    def set_outlet(self, h=None, rel_h=None):
-
-        if h:
-            self.outlet_control.set_z(h)
-            return True
-
-        elif rel_h:
-            self.outlet_control.set_rel_z(rel_h)
-            return True
-
-        return False
-
-    def get_outlet(self):
-        return self.outlet_control.read_z()
-
-    def stop_outlet(self):
-        self.outlet_control.stop()
-        return True
-
-    def set_outlet_home(self):
-        """Sets the current position of the outlet stage/motor as home. Return False if device is not capable."""
-        return False  # fixme, add a history like objectivehistory.p?
-
-    def home_outlet(self):
-        """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        return False
-
-    def close_objective(self):
-        self.objective_control.close()
-        return True
-
-    def set_objective(self, h=None, rel_h=None):
-        if h:
-            self.objective_control.set_z(h)
-            return True
-
-        elif rel_h:
-            self.objective_control.set_rel_z(rel_h)
-            return True
-
-        return False
-
-    def get_objective(self):
-        return self.objective_control.read_z()
-
-    def stop_objective(self):
-        self.objective_control.stop()
-        return True
-
     def set_objective_home(self):
         """Sets the current position of the objective stage/motor as home. Return False if device is not capable."""
         self.objective_control.set_origin()
-        return True
-
-    def home_objective(self):
-        """Goes to the current position marked as home. Return False if device has no 'home' capability."""
-        self.objective_control.go_home()
         return True
 
     def close_voltage(self):

@@ -6,13 +6,116 @@ import logging
 import time
 
 class OutletControl:
+    invert = -1
+    default_pos = -4
+    lock = threading.RLock()
+
+    def __init__(self):
+        self.pos=0
+        self.offset=0
+    def open(self):
+        """
+        Opens required resources for the hardware
+        """
+        return
+
+    def close(self):
+        """
+        closes required resources for the hardware
+        :return:
+        """
+        return
+
+    def read_z(self):
+        """
+        returns a float of the current position in cm.
+
+        :return:
+        """
+        with self.lock:
+            return self.pos*self.invert
+
+    def set_z(self, set_z):
+        """
+        Sets the absolute position of the outlet in cm.
+        :param set_z: float. cm position for outlet to move to
+        :return:
+        """
+
+        with self.lock:
+            self.pos = set_z*self.invert
+        return
+
+    def set_rel_z(self, set_z):
+        """
+        Sets the relative distance to move the outlet
+
+        :param set_z: float. cm distance to move the outlet
+        :return:
+        """
+        pos = self.read_z()
+        self.set_z(set_z + pos)
+        return
+
+    def set_speed(self, speed):
+        """
+        Sets the speed of the outlet motor.
+        :param speed:
+        :return:
+        """
+        with self.lock:
+            return
+
+    def stop(self):
+        """
+        Stops the motor from moving
+        :return:
+        """
+        pos = self.read_z()
+        self.set_z(pos)
+
+    def reset(self):
+        """
+        Resets teh resources for the motor
+        :return:
+        """
+        self.close()
+        self.open()
+
+    def go_home(self):
+        """
+        Moves the capillary to the upper home position
+        :return:
+        """
+
+        self.set_rel_z(20)
+        self.wait_for_move()
+        self.set_rel_z(-0.1)
+        self.wait_for_move()
+        self.set_z(0.1)
+        self.offset=0
+        self.set_z(self.default_pos)
+        self.wait_for_move()
+
+    def wait_for_move(self):
+        """
+        Waits for the motor to stop moving, returns final position
+        :return:
+        """
+        prev_pos = self.read_z()
+        current_pos = prev_pos +1
+        while prev_pos != current_pos:
+            time.sleep(0.1)
+            prev_pos = current_pos
+            current_pos = self.read_z()
+        return current_pos
+
+class ArduinoOutlet(OutletControl):
     """Class to control Z-stage for capillary/optical train
     If switching controllers modify the function calls here
     Make sure that what you program matches the inputs and outputs
     This is called by the GUI and needs data types to match
     """
-    invert = -1
-    default_pos = -4
     def __init__(self, com="COM7", arduino=-1, lock=-1, home=True, invt=1):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
@@ -25,11 +128,6 @@ class OutletControl:
         self.have_arduino = True
         self.arduino = arduino
         self.invert = invt
-
-        if arduino == -1:
-            self.check = False
-            self.arduino = ArduinoBase.ArduinoBase(self.com, self.home)
-
         if lock == -1:
             lock = threading.Lock()
 
@@ -88,59 +186,8 @@ class OutletControl:
                 return
         self.arduino.set_outlet_speed(speed)
 
-    def stop(self):
-        """Stop the Z-stage from moving"""
-        if self.home:
-            return
-
-    def reset(self):
-        """Resets the resources for the stage"""
-        if self.home:
-            self.close()
-            return
-        self.close()
-        self.open()
-
     def close(self):
         """Closes the resources for the stage"""
         if self.home:
             return
         self.arduino.close()
-
-    def go_home(self):
-        with self.lock:
-            if self.home:
-                self.pos=0
-                return
-            if self.invert == -1:
-                invt = True
-            else:
-                invt = False
-            self.arduino.go_home(invt)
-            self.wait_for_move()
-            self.arduino.go_home(invt)
-            self.pos = self.wait_for_move()
-            self.offset = 0
-            self.set_z(self.default_pos)
-            cz = self.wait_for_move()
-
-
-    def wait_for_move(self):
-        """
-        returns the final position of the motor after it has stopped moving.
-
-        :return: current_pos, float in mm of where the stage is at
-        """
-        time.sleep(0.1)
-        try:
-            prev_pos = self.read_z()
-        except serial.serialutil.SerialException:
-            logging.warning(" Arduino is confused... port is closed? ")
-            self.open()
-        current_pos = prev_pos + 1
-        # Update position while moving
-        while prev_pos != current_pos:
-            time.sleep(0.1)
-            prev_pos = current_pos
-            current_pos = self.read_z()
-        return current_pos
