@@ -87,7 +87,6 @@ class OutletControl:
         Moves the capillary to the upper home position
         :return:
         """
-
         self.set_rel_z(20)
         self.wait_for_move()
         self.set_rel_z(-0.1)

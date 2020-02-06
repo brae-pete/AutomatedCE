@@ -43,49 +43,72 @@ class XYControl:
     x_inversion = 1  # -1 to invert the x-axis
     y_inversion = 1  # -1 to invert the y-axis
 
+    def __init__(self):
+        self.pos = [0,0]
+        self._raw_pos=[0,0]
+
     def open(self):
         """ Opens all the hardware resources that will be needed (ie open serial ports, micromanager config, etc..,.
 
          """
-        pass
+        return True
 
     def read_xy(self):
         """ Reads the current XY position of the stage, and returns list [X, Y] in microns """
-        pass
+
+        um = [x / self.scale for x in self._raw_pos]
+        um[0] *= self.x_inversion
+        um[1] *= self.y_inversion
+        self.pos = um
+        return um
 
     def set_xy(self, xy):
         """Moves stage to position defined by pos (x,y). Returns nothing
         pos must be defined in microns """
-        pass
+
+        xy[0]*= self.x_inversion
+        xy[1]*= self.y_inversion
+        xy = [x * self.scale for x in xy]
+        self._raw_pos = xy
+        return True
 
     def set_x(self, x):
         """ Sets absolute position for X in microngs"""
-        pass
+        xy = self.read_xy()
+        xy[0]=x
+        return self.set_xy(xy)
 
     def set_y(self, y):
         """ Sts absolute position for Y in microns"""
-        pass
+        xy = self.read_xy()
+        xy[1] = y
+        return self.set_xy(xy)
 
     def set_rel_xy(self, xy):
         """ Moves x and y by values specified in list 'xy' given in microns"""
-        pass
+        xy[0] *= self.x_inversion
+        xy[1] *= self.y_inversion
+        xy = [x * self.scale for x in xy]
+        um = self.read_xy()
+        self.set_xy([xy[0]+um[0], xy[1]+um[1]])
+        return True
 
     def set_rel_x(self, x):
         """ Moves x axis by value specified by x in microns"""
-        pass
+        return self.set_rel_xy([x, 0])
 
     def set_rel_y(self, y):
         """ Moves y axis b value specified by y in microns"""
-        pass
+        return self.set_rel_xy([y, 0])
 
     def set_origin(self):
         """Redefines current position as Origin. """
-        pass
+        self._raw_pos=[0,0]
+        return True
 
     def origin(self):
         """ Moves to the origin position"""
-        pass
-
+        return self.set_xy([0, 0])
 
     def close(self):
         """Releases any communication ports that may be used"""
@@ -93,11 +116,13 @@ class XYControl:
 
     def reset(self):
         """ Resets the device in case of a communication error elsewhere """
-        pass
+        self.close()
+        self.open()
 
     def stop(self):
         """ Stops movement of the stage """
-        pass
+        xy = self.read_xy()
+        self.set_xy(xy)
 
     def wait_for_move(self,tolerance=100):
         """ Waits for the stage to stop moving"""
@@ -177,18 +202,6 @@ class MicroControl(XYControl):
         msg = "Did not set XY Stage"
         return self.mmc.ok_check(response, msg)
 
-    def set_x(self, x):
-        """ Sets absolute position for X in microns"""
-        xy = self.read_xy()
-        xy[0] = x
-        return self.set_xy(xy)
-
-    def set_y(self, y):
-        """ Sts absolute position for Y in microns"""
-        xy = self.read_xy()
-        xy[1] = y
-        return self.set_xy(xy)
-
     def set_rel_xy(self, xy):
         """ Moves x and y by values specified in list 'xy' given in microns"""
 
@@ -201,14 +214,6 @@ class MicroControl(XYControl):
         msg = "Did not set XY Stage"
         return self.mmc.ok_check(response, msg)
 
-    def set_rel_x(self, x):
-        """ Moves x axis by value specified by x in microns"""
-        return self.set_rel_xy([x, 0])
-
-    def set_rel_y(self, y):
-        """ Moves y axis b value specified by y in microns"""
-        return self.set_rel_xy([y, 0])
-
     def set_origin(self):
         """Redefines current position as Origin in micromanager software """
         with self.lock:
@@ -216,17 +221,6 @@ class MicroControl(XYControl):
             response = self.mmc.read_response()
         msg = "Could not set XY Software Origin"
         return self.mmc.ok_check(response, msg)
-
-    def origin(self):
-        """ Moves to the origin position"""
-        return self.set_xy([0, 0])
-
-    def stop(self):
-        """ Stops movement of the stage """
-        xy = self.read_xy()
-        self.set_xy(xy)
-
-
 
 
 class PriorControl(XYControl, PriorController):

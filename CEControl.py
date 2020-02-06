@@ -45,13 +45,18 @@ class ProgramController:
     """Builds the pieces of the program and puts them together. Ooooooh we could probably just make this a function
     now that I think about it. Class is cooler though. hmmm"""
 
-    def __init__(self):
+    def __init__(self, user):
         # Initialize system model, system hardware and the GUI
         self.repository = CEObjects.CERepository()
         if USER.find('NikonEclipseTi')>=0:
             self.hardware = CESystems.NikonEclipseTi()
         elif USER.find('TE3000'):
             self.hardware = CESystems.NikonTE3000()
+
+        if user is None:
+            pass
+        elif user == 'Base':
+            self.hardware= CESystems.BaseSystem()
         self.hardware.start_system()
 
         app = QtWidgets.QApplication(sys.argv)
@@ -1400,11 +1405,11 @@ class RunScreenController:
         if self.hardware.hasVoltageControl:
 
             data = self.hardware.get_data()
-            with self.hardware.daq_board_control.data_lock:
+            with self.hardware.adc_control.data_lock:
                 rfu = data['rfu'][:]
                 kv = data['volts'][:]
                 ua = data['current'][:]
-            freq = self.hardware.daq_board_control.downsampled_freq
+            freq = self.hardware.adc_control.downsampled_freq
 
 
             if self._plot_data.is_set():

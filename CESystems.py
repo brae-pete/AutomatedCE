@@ -31,14 +31,21 @@ class BaseSystem:
     system_id = None
 
     # Supported hardware checks for the program controllers
-    hasCameraControl = False
-    hasXYControl = False
-    hasInletControl = False
-    hasOutletControl = False
-    hasVoltageControl = False
-    hasPressureControl = False
-    hasObjectiveControl = False
-    hasLaserControl = False
+    hasCameraControl = True
+    hasXYControl = True
+    hasInletControl = True
+    hasOutletControl = True
+    hasVoltageControl = True
+    hasPressureControl = True
+    hasObjectiveControl = True
+    hasLaserControl = True
+    hasLEDControl = True
+
+    image_size = 0.5
+    objective_focus = 0
+    xy_stage_size = [112792, 64340]  # Rough size in mm
+    xy_stage_offset = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_inversion = [1, 1]
 
     def __init__(self):
         #Laser Variables
@@ -52,7 +59,8 @@ class BaseSystem:
         self.outlet_control = OutletControl.OutletControl()
         self.objective_control = ObjectiveControl.ObjectiveControl()
         self.power_supply_control = PowerSupplyControl.PowerSupply()
-        self.adc_control = DAQControl.NI_DAC()
+        self.adc_control = DAQControl.ADC()
+        self.daq_board_control = self.adc_control
         self.filter_control = DAQControl.Filter()
         self.image_control = ImageControl.ImageControl()
         self.laser_control = LaserControl.Laser()
@@ -61,6 +69,8 @@ class BaseSystem:
         self.shutter_control = ScopeControl.ShutterControl()
         self.filter_control = ScopeControl.FilterWheelControl()
 
+        # Start the processes needed
+        self.adc_control.start()
 
 
     def calibrate_system(self, permissions_gui):
@@ -195,7 +205,7 @@ class BaseSystem:
 
     def get_objective(self):
         """Gets the current position of the objective stage/motor."""
-        self.objective_control.read_z()
+        return self.objective_control.read_z()
 
     def stop_objective(self):
         """Stops the current movement of the objective stage/motor."""
@@ -246,6 +256,14 @@ class BaseSystem:
         if len(data)>100:
             data = self.filter_control.filter_data(data)
         return data
+    def get_data(self):
+        """ Returns the data """
+
+        rfu = self.get_rfu_data()
+        volts = self.get_voltage_data()
+        current = self.get_current_data()
+        return {'rfu': rfu, 'volts': volts, 'current': current}
+
 
     def close_image(self):
         """Removes the immediate functionality of the camera."""
@@ -1905,7 +1923,7 @@ class OstrichSystem(BaseSystem):
         pass
 
 def test():
-    hardware = NikonEclipseTi()
+    hardware = BaseSystem()
     hardware.start_system()
     return hardware
 

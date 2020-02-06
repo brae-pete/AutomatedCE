@@ -22,10 +22,10 @@ except ModuleNotFoundError:
     logging.warning("PVCam is not installed")
 
 try:
-    from MicroManagerProcess import MicroControlClient
+    from hardware import MicroControlClient
 except:
     sys.path.append(os.path.relpath('..'))
-    from MicroManagerProcess import MicroControlClient
+    from hardware import MicroControlClient
 
 """
 Notes for using this outside the Barracuda Repository: 
@@ -69,6 +69,9 @@ class ImageControl:
 
     def __init__(self):
         # Load in Raw Image
+        self.img = io.imread('recentImg.png')
+        self.raw_img = self.img.copy()
+        self.exposure = 100
 
     def open(self):
         """Opens the camera resources"""
@@ -88,33 +91,25 @@ class ImageControl:
 
     def start_video_feed(self):
         """ Starts a live video feed, typicall using camera circular buffer """
-        pass
+        return
 
     def get_recent_image(self, size=None):
         """Returns most recent image from the camera circular buffer (live feed)
         performs image processing. Returns PIL image
         """
-        pass
-
-    def record_recent_image(self, filename):
-        """ Saves recent image from circular buffer to designaed file"""
-        pass
-
-    def _get_image(self):
-        """ Command that retrieves image from the camera"""
-        pass
+        return self.img
 
     def camera_state(self):
         """ Returns the camera state True is open, false is closed"""
-        return False
+        return True
 
     def get_exposure(self):
         """ Returns camera exposure in milliseconds as a float"""
-        pass
+        return self.exposure
 
     def set_exposure(self, exp):
         """ Sets the camera exposure. Exp is exposure in milliseconds as a float"""
-        pass
+        self.exposure = exp
 
     @staticmethod
     def _adjust_size(img, size):

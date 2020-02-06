@@ -102,12 +102,16 @@ class NI_DAC(DAC, NIDAQ_USB):
         self.task.write(write_list)
 
 class ADC:
-    def __init__(self, channels=['ai1', 'ai2'], mode = 'finite', sampling =50000, samples =5000, dev =0):
+
+    def __init__(self, channels=['ai1', 'ai2', 'ai3'], mode = 'finite', sampling =50000, samples =5000, dev =0, lock=threading.RLock()):
         self.channels=channels
         self.mode = mode
         self.sampling=sampling
         self.samples=samples
+        self.output_data_count = 1  # for oversampling, output the r
+        self.downsampled_freq = self.sampling/self.samples*self.output_data_count
         self.dev=dev
+        self.data_lock = lock
 
         # Create a data variable
         self.data = np.zeros([len(channels), 0])
@@ -125,7 +129,7 @@ class ADC:
         Generate some sample data. The read function should append to the
         Data field along the columns (axis=1).
         """
-        self.data = np.append(self.data, np.random.rand(3,100), axis=1)
+        self.data = np.append(self.data, np.random.rand(len(self.channels),100), axis=1)
 
     def stop(self):
         """
@@ -151,8 +155,6 @@ class NI_ADC(ADC, NIDAQ_USB):
     """
     modes = {'continuous': nidaqmx.constants.AcquisitionType.CONTINUOUS,
              'finite': nidaqmx.constants.AcquisitionType.FINITE}
-    output_data_count = 1  # for oversampling, output the r
-    data_lock = threading.RLock()
 
     def __init__(self, channels=['ai1', 'ai2', 'ai3'], mode='finite', sampling=5000, samples=5000, dev=0):
 

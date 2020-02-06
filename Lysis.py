@@ -64,7 +64,7 @@ class CapillaryControl:
     units_above = 50
     obj2cap = 1/1000
 
-    def __init__(self, hardware=CESystems.BarracudaSystem()):
+    def __init__(self, hardware=CESystems.BaseSystem()):
         self.hardware = hardware
 
     def record_cell_height(self):
