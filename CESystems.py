@@ -232,11 +232,16 @@ class BaseSystem:
         """ Sets the voltage to Zero"""
         self.power_supply_control.stop_voltage()
 
-    def set_voltage(self, v=None):
+    def set_voltage(self, v=None, chnl = 0):
         """Sets the current voltage of the voltage source."""
-        chnl = self.power_supply_control.channels[0]
+        chnl = self.power_supply_control.channels[chnl]
         self.power_supply_control.set_electrode_voltage(chnl, v)
         self.power_supply_control.apply_changes()
+
+    def get_voltage_setting(self, chnl = 0):
+        """ Returns the voltage setting for the DAC"""
+        chnl = self.power_supply_control.channels[chnl]
+        return self.power_supply_control.get_electrode_setting(chnl)
 
     def get_voltage(self):
         """Gets the current voltage of the voltage source."""
@@ -276,6 +281,10 @@ class BaseSystem:
     def camera_state(self):
         """ Checks if camera resources are available"""
         return self.image_control.camera_state()
+
+    def start_live_feed(self):
+        """ Starts a live feed in a separate window"""
+        self.image_control.live_view()
 
     def start_feed(self):
         """Sets camera to start gathering images. Does not return images."""

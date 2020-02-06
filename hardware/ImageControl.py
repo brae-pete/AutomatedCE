@@ -173,7 +173,7 @@ class ImageControl:
             if self.is_live.is_set():
                 img = self.get_recent_image()
             else:
-                img = None
+                img = self.img
             if img is not None:
                 # put the image into the display data array
                 im.set_array(img)

@@ -25,6 +25,9 @@ class PowerSupply:
     def apply_changes(self):
         self.dac.load_changes()
 
+    def get_electrode_setting(self, chnl):
+        return self.dac.get_voltage_setting(chnl)
+
     def stop_voltage(self):
         for i in self.channels:
             self.set_electrode_voltage(i,0)
@@ -32,6 +35,10 @@ class PowerSupply:
 
     @staticmethod
     def conversion(voltage):
+        return voltage
+
+    @staticmethod
+    def reverse_conversion(voltage):
         return voltage
 
 

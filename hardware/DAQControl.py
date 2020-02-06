@@ -35,13 +35,18 @@ class NIDAQ_USB:
 
 class DAC:
 
-    def __inti__(self, channels):
+    def __init__(self, channels=None):
+        if channels is None:
+            channels = [1, 2, 3]
         self.voltages={}
         for i in channels:
             self.voltages[i]=[0,0]
 
     def set_voltage(self, chnl, voltage):
         self.voltages[chnl][1]=voltage
+
+    def get_voltage_setting(self, chnl):
+        return self.voltages[chnl][1]
 
     def load_changes(self):
         """
