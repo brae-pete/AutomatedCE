@@ -1,15 +1,90 @@
 # Standard Library Modules
 import logging
 import threading
+import time
 
+import nidaqmx
 # Installed Modules
 import serial  # PySerial
 
 
 class Laser:
+    pfn = 0
+    att = 0
+    energy = 0
+    mode = 0
+    burst = 0
+
+    def __init__(self):
+        self.enable = False
+
+    def set_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
+        if pfn is not None:
+            self.pfn = pfn
+        if att is not None:
+            self.att = att
+        if energy is not None:
+            self.energy = energy
+        if mode is not None:
+            self.mode = mode
+        if burst is not None:
+            self.burst = burst
+
+    def laser_standby(self):
+        """ Laser is ready to fire in this mode"""
+        self.enable = True
+
+    def laser_stop(self):
+        """ Stop firing the laser, remove laser from standby"""
+        self.enable = False
+
+    def laser_fire(self):
+        """ Fire the laser """
+        if self.enable:
+            return True
+        return False
+
+    def close(self):
+        """ Close the laser hardware resources"""
+        self.enable = False
+        return True
+
+    def laser_check(self):
+        """ Returns the status of the laser"""
+        return self.enable
+
+
+class Uniphase(Laser):
+
+    def __init__(self):
+        super().__init__()
+        self.laser_task = nidaqmx.Task()
+
+        # Initialize the Settings
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line0')  # pin3, Computer Control Channel
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line1')  # pin 5, Laser OnOFf Channel
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line5')  # Pulse Command Channel
+        self.laser_task.write([False, True, False])
+
+    def laser_fire(self):
+        """
+        This is a thread blocking task. Requires the laser to be in standby mode before firing. We set the pulse to
+        50 ms.
+        :return:
+        """
+        if self.enable:
+            self.laser_task.write([True, True, True])  # Read the docs, good luck
+            time.sleep(0.05)
+            self.laser_task.write([False, True, False])
+
+    def close(self):
+        """ Close the resources """
+        self.laser_task.write([False, True, False])
+
+
+class NewWave:
     _safety_pfn_limit = 255
     _timer_count = 0
-
 
     def __init__(self, com="COM6", baudrate=9600, stopbits=1, timeout=0.1, lock=None, home=False):
         self.serial = serial.Serial()
@@ -29,41 +104,41 @@ class Laser:
             self.serial.open()
 
         self.commands = {  # Commented out commands are not supported by our laser configuration.
-                         'MANUFACTURERS_DATE': ';LAMD{}\r'.format,  # ?
-                         'ATTENUATION': ';LAAT{}\r'.format,  # ? or ### (000 - 255)
-                         'BURST_COUNT': ';LABU{}\r'.format,  # ? or #### (0001 - 4000)
-                         'ENABLE_Q-SWITCH': ';LADQ{}\r'.format,  # ? or # (0 (enable) or 1 (disable))
-                         'ENABLE_COMMAND_ECHO': ';LAEC{}\r'.format,  # ? or # (0 (disable) or 1 (enable))
-                         'FIRE': ';LAGO\r'.format,  # no input
-                         'WAVELENGTH': ';LAHS{}\r'.format,  # ? or #? or #. #? returns filter configuration byte.
-                         'LASER_STATUS': ';LAIS\r'.format,  # no input
-                         'LASER_TYPE': ';LALT{}\r'.format,  # ?
-                         'LASER_MODE': ';LAMO{}\r'.format,  # ? or # (0 is continuous, 1 is single shot, 2 is burst)
-                         'MAXIMUM_REPETITION_RATE': ';LAMR{}\r'.format,  # ?
-                         'NUMBER_HOLES': ';LANH{}\r'.format,  # ?
-                         'LASER_OFF': ';LAOF\r'.format,  # no input
-                         'LASER_ON': ';LAON\r'.format,  # no input
-                         'PULSE_MODE': ';LAPM{}\r'.format,  # ? or # (1 enables long pulse, 0 disables it)
-                         # 'ROTATING_POLARIZER': ';LARP{}\r'.format,  # ### (0 to max channel travel)
-                         # 'ROTATING_POLARIZER_POSITION': ';LARP{}\r'.format,  # ? or xxx (measured in motor steps)
-                         # 'ROTATING_POLARIZER_TRAVEL': ';LARPT{}\r'.format,  # ?
-                         # 'ROTATING_POLARIZER_ZERO': ';LARPTZ{}\r'.format,  # ? or xxx!
-                         'LASER_REPETITION_RATE': ';LARR{}\r'.format,  # ? or ###
-                         'RESET': ';LARS\r'.format,  # no input
-                         'LASER_SHOT_COUNT': ';LASC\r'.format,  # no input
-                         'SERIAL_MODE': ';LASM{}\r'.format,  # ? or # (0 is off and 1 is on)
-                         'SERIAL_NUMBER': ';LASN{}\r'.format,  # ?
-                         'SPOT_MARKER_CONTROL': ';LASP{}\r'.format,  # ? or ### (000 - 255)
-                         # 'SHUTTER_ROTATION_CONTROL': ';LASR{}\r'.format,  # ? or T? or +/-##
-                         'SYSTEM_STATUS': ';LASS\r'.format,  # no input
-                         'STOP_FIRING': ';LAST\r'.format,  # no input
-                         'ACCESSORY_CONFIGURATION': ';LASV{}\r'.format,  # ?
-                         'PFN_VOLTAGE': ';LAVO{}\r'.format,  # ?  or ### (000 - 255)
-                         'VERSION_NUMBER': ';LAVN\r'.format,  # no input
-                         'LASER_WARM_UP_MODE': ';LAWU{}\r'.format,  # ? or ####
-                         # 'X_SHUTTER': ';X{}\r'.format,  # S? or T? or S###
-                         # 'Y_SHUTTER': ';Y{}\r'.format  # S? or T? or S###
-                         }
+            'MANUFACTURERS_DATE': ';LAMD{}\r'.format,  # ?
+            'ATTENUATION': ';LAAT{}\r'.format,  # ? or ### (000 - 255)
+            'BURST_COUNT': ';LABU{}\r'.format,  # ? or #### (0001 - 4000)
+            'ENABLE_Q-SWITCH': ';LADQ{}\r'.format,  # ? or # (0 (enable) or 1 (disable))
+            'ENABLE_COMMAND_ECHO': ';LAEC{}\r'.format,  # ? or # (0 (disable) or 1 (enable))
+            'FIRE': ';LAGO\r'.format,  # no input
+            'WAVELENGTH': ';LAHS{}\r'.format,  # ? or #? or #. #? returns filter configuration byte.
+            'LASER_STATUS': ';LAIS\r'.format,  # no input
+            'LASER_TYPE': ';LALT{}\r'.format,  # ?
+            'LASER_MODE': ';LAMO{}\r'.format,  # ? or # (0 is continuous, 1 is single shot, 2 is burst)
+            'MAXIMUM_REPETITION_RATE': ';LAMR{}\r'.format,  # ?
+            'NUMBER_HOLES': ';LANH{}\r'.format,  # ?
+            'LASER_OFF': ';LAOF\r'.format,  # no input
+            'LASER_ON': ';LAON\r'.format,  # no input
+            'PULSE_MODE': ';LAPM{}\r'.format,  # ? or # (1 enables long pulse, 0 disables it)
+            # 'ROTATING_POLARIZER': ';LARP{}\r'.format,  # ### (0 to max channel travel)
+            # 'ROTATING_POLARIZER_POSITION': ';LARP{}\r'.format,  # ? or xxx (measured in motor steps)
+            # 'ROTATING_POLARIZER_TRAVEL': ';LARPT{}\r'.format,  # ?
+            # 'ROTATING_POLARIZER_ZERO': ';LARPTZ{}\r'.format,  # ? or xxx!
+            'LASER_REPETITION_RATE': ';LARR{}\r'.format,  # ? or ###
+            'RESET': ';LARS\r'.format,  # no input
+            'LASER_SHOT_COUNT': ';LASC\r'.format,  # no input
+            'SERIAL_MODE': ';LASM{}\r'.format,  # ? or # (0 is off and 1 is on)
+            'SERIAL_NUMBER': ';LASN{}\r'.format,  # ?
+            'SPOT_MARKER_CONTROL': ';LASP{}\r'.format,  # ? or ### (000 - 255)
+            # 'SHUTTER_ROTATION_CONTROL': ';LASR{}\r'.format,  # ? or T? or +/-##
+            'SYSTEM_STATUS': ';LASS\r'.format,  # no input
+            'STOP_FIRING': ';LAST\r'.format,  # no input
+            'ACCESSORY_CONFIGURATION': ';LASV{}\r'.format,  # ?
+            'PFN_VOLTAGE': ';LAVO{}\r'.format,  # ?  or ### (000 - 255)
+            'VERSION_NUMBER': ';LAVN\r'.format,  # no input
+            'LASER_WARM_UP_MODE': ';LAWU{}\r'.format,  # ? or ####
+            # 'X_SHUTTER': ';X{}\r'.format,  # S? or T? or S###
+            # 'Y_SHUTTER': ';Y{}\r'.format  # S? or T? or S###
+        }
 
     def _read_buffer(self):
         response = self.serial.readlines()
@@ -77,7 +152,7 @@ class Laser:
 
     def _test_fire_check(self):
         st = 0
-        self._timer_count +=1
+        self._timer_count += 1
         if self._timer_count > 20:
             return
         self.check_status()
@@ -156,7 +231,8 @@ class Laser:
         # print('Unused Bit: {}'.format(response[6]))  # Bit at [6] is unused according to manufacturer documentation.
 
         is_not = '' if response[5] == 1 else 'not '
-        logging.info('\tThe laser is {}initializing the position of one or more motor-driven accessories.'.format(is_not))
+        logging.info(
+            '\tThe laser is {}initializing the position of one or more motor-driven accessories.'.format(is_not))
 
         is_not = '' if response[4] == 1 else 'not '
         logging.info('\tThe coolant level is {}low.'.format(is_not))
@@ -214,15 +290,17 @@ class Laser:
         try:
             int(value)
         except ValueError:
-            logging.error('VE:Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
+            logging.error('VE:Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value,
+                                                                                                        self._safety_pfn_limit))
             return False
 
         if len(str(value)) != 3 or 0 > int(value) or int(value) > self._safety_pfn_limit:
-            #Is there any reason for the != 3 here?
+            # Is there any reason for the != 3 here?
             # logging.info(len(str(value)) != 3)
             # logging.info(0 > int(value))
             # logging.info(int(value) > self._safety_pfn_limit)
-            logging.error('VL:Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value, self._safety_pfn_limit))
+            logging.error('VL:Invalid PFN value provided - {}. Must be integer between 0 and {}'.format(value,
+                                                                                                        self._safety_pfn_limit))
             return False
 
         with self.lock:
@@ -244,11 +322,13 @@ class Laser:
         try:
             int(value)
         except ValueError:
-            logging.error('VE:Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
+            logging.error(
+                'VE:Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
             return False
 
         if len(str(value)) != 3 or 0 > int(value) or int(value) > 255:
-            logging.error('VL:Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
+            logging.error(
+                'VL:Invalid Attenuation value provided - {}. Must be integer between 000 and 255'.format(value))
             return False
 
         with self.lock:
@@ -261,7 +341,6 @@ class Laser:
         else:
             logging.info('Successfully set attenuation to {}'.format(value))
             return True
-
 
     def set_burst(self, value):
         try:
@@ -351,7 +430,7 @@ class Laser:
         if not parameter_set:
             return False
 
-        return True                 
+        return True
 
     def start(self):
         with self.lock:
@@ -380,7 +459,8 @@ class Laser:
                 return False
 
             if response[0] == 1 or response[3] == 1 or response[4] == 1 or response[5] == 1 or response[7] == 1 or \
-                response[8] == 1 or response[17] == 1 or response[18] == 1 or response[20] == 1 or response[21] == 1 or\
+                    response[8] == 1 or response[17] == 1 or response[18] == 1 or response[20] == 1 or response[
+                21] == 1 or \
                     response[22] == 1 or response[23] == 1:
                 logging.error('Check system status for problems, could not start. Laser Response: {}'.format(response))
                 return False
@@ -437,5 +517,6 @@ class Laser:
             logging.info('Laser turned off.')
             return True
 
+
 if __name__ == "__main__":
-    logging.basicConfig(level = logging.INFO)
+    logging.basicConfig(level=logging.INFO)

@@ -9,6 +9,50 @@ class PressureControl:
     Solenoids are normally closed, so keeping them closed keeps the electronics cool.
     """
 
+    def __init__(self):
+        self.state=False
+
+    def open(self, *args):
+        """ Open the hardware resources for the pressure Control"""
+        return
+
+    def apply_rinse_pressure(self):
+        """ Apply the rinse pressure to the outlet"""
+        self.state=True
+
+    def apply_vacuum(self):
+        """ Applys a vacuum via the 3rd Solenoid"""
+        self.state=True
+
+    def stop_rinse_pressure(self):
+        """Stop the rinse pressure, also stops vacuum pressure"""
+        self.state=False
+
+    def open_valve(self):
+        """ Open all valves"""
+        self.state=True
+
+    def close_valve(self):
+        """
+        Only release valves if the pressure is off. This prevents build up of pressure inside the capilalry
+        :return:
+        """
+        if self.state:
+            return
+
+    def close(self):
+        """
+        Close the hardware resources for pressure control
+        :return:
+        """
+        return
+
+
+class ArduinoControl(PressureControl):
+    """Class to control the solenoid valves to deliver a rinse pressure to the outlet
+    Solenoids are normally closed, so keeping them closed keeps the electronics cool.
+    """
+
     def __init__(self, com="COM9", arduino=-1, lock=-1, home=True, *args):
         self.home = home
         self.com = com
@@ -44,7 +88,6 @@ class PressureControl:
             self.state = False
             self.state = self.arduino.removePressure()
             logging.info("Released Pressure")
-
 
     def open_valve(self):
         with self.lock:

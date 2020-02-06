@@ -1,5 +1,7 @@
+import sys
+import cwd
+from hardware import DAQControl
 
-import DAQControl
 
 class PowerSupply:
     """
@@ -27,7 +29,7 @@ class PowerSupply:
     def stop_voltage(self):
         for i in self.channels:
             self.set_electrode_voltage(i,0)
-        self.dac.load_changes()
+        self.apply_changes()
 
     @staticmethod
     def conversion(voltage):

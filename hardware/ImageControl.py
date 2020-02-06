@@ -67,6 +67,9 @@ class ImageControl:
     raw_img = np.array((100, 100))  # Full raw image
     is_live = threading.Event()
 
+    def __init__(self):
+        # Load in Raw Image
+
     def open(self):
         """Opens the camera resources"""
         pass

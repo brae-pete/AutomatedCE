@@ -83,6 +83,9 @@ class PriorController:
 class FilterWheelControl:
     """ Class to control the filter wheel"""
 
+    def __init__(self):
+        self.current_pos= 0
+
     def open(self):
         """User initializes whatever resources are required
          (open ports, create MMC + load config, etc...)
@@ -95,12 +98,10 @@ class FilterWheelControl:
 
     def set_state(self, channel):
         """ Sets the filter wheel to the corresponding channel (starting at zero) """
-        logging.warning("FilterWheelControl.set_state not implemented in hardware class")
-
+        self.current_pos=channel
     def get_state(self):
         """ Reads the filter wheel channel"""
-        logging.warning("FilterWheelControl.get_state not implemented in hardware class")
-
+        return self.current_pos
 
 class PriorControl(FilterWheelControl, PriorController):
     """ Class to control the filter wheel"""
@@ -184,6 +185,8 @@ class FilterMicroControl(FilterWheelControl):
 
 class ShutterControl:
     """ Class to control the Shutterl"""
+    def __init__(self):
+        self.shutter_state=False
 
     def open(self):
         """User initializes whatever resources are required
@@ -197,26 +200,27 @@ class ShutterControl:
 
     def open_shutter(self):
         """ Sets the filter wheel to the corresponding channel (starting at zero) """
-        logging.warning("ShutterControl.open_shutter not implemented in hardware class")
+        self.shutter_state=True
 
     def close_shutter(self):
         """ Reads the filter wheel channel"""
-        logging.warning("ShutterControl.close_chutter not implemented in hardware class")
+        self.shutter_state=False
 
     def get_shutter(self):
         """ Returns the current shutter state"""
-        logging.warning("ShutterControl.get_shutter not implmented in hardware class")
+        return self.shutter_state
 
 class ShutterMicroControl(ShutterControl):
 
     device = 'IntensiLightShutter'
 
-    def __init__(self, mmc=None, port = 5511, config_file='IntensiShutter.cfg', lock=threading.Lock()):
+    def __init__(self, mmc=None, port=5511, config_file='IntensiShutter.cfg', lock=threading.Lock()):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
         read/written two at multiple times.
         """
+        super().__init__()
         self.mmc = mmc
         self.lock = lock
         self.config = os.path.join(CONFIG_FOLDER, config_file)
@@ -254,6 +258,7 @@ class ShutterMicroControl(ShutterControl):
             response = self.mmc.read_response()
         msg = "Could not oPEN shutter"
         state = self.mmc.ok_check(response, msg)
+        self.shutter_state=state
         return state
 
     def close_shutter(self):
@@ -263,6 +268,8 @@ class ShutterMicroControl(ShutterControl):
         response = self.mmc.read_response()
         msg = "Could not CLOSE shutter"
         state = self.mmc.ok_check(response, msg)
+        if state:
+            self.shutter_state=False
         return state
 
     def get_shutter(self):
@@ -273,7 +280,6 @@ class ShutterMicroControl(ShutterControl):
         if type(response) is not bool:
             logging.warning("could not read Shutter channel")
             response = False
-
         return response
 
     def _check_open(self,msg):

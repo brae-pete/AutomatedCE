@@ -101,8 +101,41 @@ class NI_DAC(DAC, NIDAQ_USB):
             write_list = write_list[0]
         self.task.write(write_list)
 
+class ADC:
+    def __init__(self, channels=['ai1', 'ai2'], mode = 'finite', sampling =50000, samples =5000, dev =0):
+        self.channels=channels
+        self.mode = mode
+        self.sampling=sampling
+        self.samples=samples
+        self.dev=dev
 
-class NI_ADC(NIDAQ_USB):
+        # Create a data variable
+        self.data = np.zeros([len(channels), 0])
+
+    def start(self):
+        """
+        Start acquiring data. For the sample class we call read once, but read may
+        be an event or timer that repeatedly adds to the data.
+        :return:
+        """
+        self.read()
+
+    def read(self):
+        """
+        Generate some sample data. The read function should append to the
+        Data field along the columns (axis=1).
+        """
+        self.data = np.append(self.data, np.random.rand(3,100), axis=1)
+
+    def stop(self):
+        """
+        Stop acquiring data.
+        For our sample class this is not needed.
+        :return:
+        """
+        return
+
+class NI_ADC(ADC, NIDAQ_USB):
     """
     Basic Analog to Digital Converter. The user can specify the mode (continuous, finite).
     When Basic_ADC is initialized the user passes in the analog input channels they
@@ -124,20 +157,17 @@ class NI_ADC(NIDAQ_USB):
     def __init__(self, channels=['ai1', 'ai2', 'ai3'], mode='finite', sampling=5000, samples=5000, dev=0):
 
         # Create the task
+        super().__init__(channels, mode, sampling, samples, dev)
         self.task = nidaqmx.Task()
         self.ni_tasks['adc'] = self.task
-        # Create a data variable
-        self.data = np.zeros([len(channels), 0])
+
 
         # Add the channels
         for chan in channels:
             self.task.ai_channels.add_ai_voltage_chan('/' + self.devices[dev] + '/' + chan,
                                                       terminal_config=TerminalConfiguration.RSE)
-
         # Configure the Timing
-        self.mode = mode
-        self.samples = samples
-        mode = self.modes[mode]
+        self.mode = self.modes[mode]
         self.task.timing.cfg_samp_clk_timing(sampling, samps_per_chan=samples, sample_mode=mode)
 
     def start(self):
@@ -286,6 +316,50 @@ class PMOD_DAC(DAC):
         for i in range(16):
             in_data[0][1] = struct.unpack('f', byte_data[idx + i * 4:idx + (i * 4 + 4)])[0]
         return in_data
+
+
+class Data:
+    """ Data class to retrieve the correct data values"""
+
+    def __init__(self, adc_in=None):
+        if adc_in is None:
+            adc_in =ADC()
+        self.adc_in=adc_in
+
+    def get_last_value(self, chnl):
+        return self.adc_in.data[-1, chnl]
+
+    def get_column(self, chnl):
+        return self.adc_in.data[:, chnl]
+
+
+class Filter:
+    """ Filter class for the finished chromatogram"""
+
+    def __init__(self):
+        #Butter Filter
+        self.cutoff=2
+        self.sampling=10
+        self.order = 5
+        self.padlen=24
+        self.padtype='constant'
+
+    def filter_data(self, data):
+        if self.mode =='Butter':
+            return self.butter(data)
+        elif self.mode == 'Savgol':
+            return self.savgol(data)
+
+    def _butter_lowpass(self):
+        nyq = 0.5*self.sampling
+        normal_cutoff = self.cutoff/nyq
+        b,a = signal.butter(self.order, normal_cutoff, btype='low', analog=False)
+        return b,a
+
+    def butter(self, data):
+        b,a = self._butter_lowpass()
+        return signal.filtfilt(b,a, data, padlen=self.padlen, padtype=self.padtype)
+
 
 class DAQBoard:
     freq = 50000  # Sampling frequency for analog inputs

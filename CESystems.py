@@ -17,6 +17,7 @@ from hardware import LaserControl
 from hardware import PressureControl
 from hardware import LightControl
 from hardware import ScopeControl
+from hardware import PowerSupplyControl
 from hardware import MicroControlClient
 
 # Network Module
@@ -40,11 +41,26 @@ class BaseSystem:
     hasLaserControl = False
 
     def __init__(self):
+        #Laser Variables
         self.laser_max_time = None
+        self._laser_poll_flag = threading.Event()
+        self.laser_start_time =time.time()
+
+        # Hardware Class Objects: These are all (and should remain) the base classes
         self.xy_stage_control = XYControl.XYControl()
         self.z_stage_control = ZStageControl.ZStageControl()
         self.outlet_control = OutletControl.OutletControl()
         self.objective_control = ObjectiveControl.ObjectiveControl()
+        self.power_supply_control = PowerSupplyControl.PowerSupply()
+        self.adc_control = DAQControl.NI_DAC()
+        self.filter_control = DAQControl.Filter()
+        self.image_control = ImageControl.ImageControl()
+        self.laser_control = LaserControl.Laser()
+        self.pressure_control = PressureControl.PressureControl()
+        self.led_control = LightControl.LED()
+        self.shutter_control = ScopeControl.ShutterControl()
+        self.filter_control = ScopeControl.FilterWheelControl()
+
 
 
     def calibrate_system(self, permissions_gui):
@@ -55,9 +71,6 @@ class BaseSystem:
         """Puts the system into its functional state."""
         logging.error('start_system not implemented in hardware class.')
 
-    def close_system(self):
-        """Takes system out of its functional state."""
-        logging.error('close_system not implemented in hardware class.')
 
     def close_xy(self):
         """Removes immediate functionality of XY stage."""
@@ -203,56 +216,63 @@ class BaseSystem:
 
     def close_voltage(self):
         """Removes immediate functionality of the voltage source."""
-        logging.error('close_voltage not implemented in hardware class.')
+        self.power_supply_control.stop_voltage()
 
     def stop_voltage(self):
         """ Sets the voltage to Zero"""
-        logging.error("Stop voltage not implemented in hardware class")
+        self.power_supply_control.stop_voltage()
 
     def set_voltage(self, v=None):
         """Sets the current voltage of the voltage source."""
-        logging.error('set_voltage not implemented in hardware class.')
+        chnl = self.power_supply_control.channels[0]
+        self.power_supply_control.set_electrode_voltage(chnl, v)
+        self.power_supply_control.apply_changes()
 
     def get_voltage(self):
         """Gets the current voltage of the voltage source."""
-        logging.error('get_voltage not implemented in hardware class.')
-
-    def save_data(self, filepath):
-        """ Saves the data from the DAQ to the specified filepath"""
-        logging.error("save_data not implemented in hardware class")
+        return self.adc_control.data[-1,0]
 
     def get_voltage_data(self):
         """Gets a list of the voltages over time."""
-        logging.error('get_voltage_data not implemented in hardware class.')
+        return self.adc_control.data[:,0]
 
     def get_current_data(self):
         """Gets a list of the current over time."""
-        logging.error('get_current_data not implemented in hardware class.')
+        return self.adc_control.data[:,1]
 
     def get_rfu_data(self):
         """Gets a list of the RFU over time."""
-        logging.error('get_rfu_data not implemented in hardware class.')
+        data =  self.adc_control.data[:,2]
+        if len(data)>100:
+            data = self.filter_control.filter_data(data)
+        return data
 
     def close_image(self):
         """Removes the immediate functionality of the camera."""
-        logging.error('close_image not implemented in hardware class.')
+        self.image_control.close()
 
     def open_image(self):
         """Opens the camera Resources """
-        logging.error("open_image not implemented in hardware class")
+        self.image_control.open()
 
     def camera_state(self):
         """ Checks if camera resources are available"""
-        logging.error("camera_state is not implmented in hardware class")
+        return self.image_control.camera_state()
 
     def start_feed(self):
         """Sets camera to start gathering images. Does not return images."""
-        logging.error('start_feed not implemented in hardware class.')
+        if self.camera_state():
+            try:
+                self.image_control.start_video_feed()
+            except Exception as e:
+                logging.info("{}".format(e))
+                traceback.print_last()
+        return True
 
     def stop_feed(self):
         """Stops camera from gathering images."""
         # Only fill out stop_feed if you can fill out start_feed.
-        logging.error('stop_feed not implemented in hardware class.')
+        self.image_control.stop_video_feed()
 
     def save_buffer(self, folder, name, fps=5):
         """
@@ -262,99 +282,192 @@ class BaseSystem:
         :param fps: frames per second to store the video at, defaults to 5 fps irregardless of camera frame rate
         :return:
         """
-        logging.error('save_buffer for camera is not implemented in hardware class')
+        self.image_control.save_capture_sequence(folder, name, fps)
+        return True
 
     def get_image(self):
         """Returns the most recent image from the camera."""
-        logging.error('get_image not implemented in hardware class.')
+        image = self.image_control.get_recent_image()
+        if image is None:
+            return None
+        if not HOME:
+            self.image_control.save_image(image, "recentImg.png")
+        return image
+
+    def get_raw_image(self):
+        """ Get a raw image (no processing) from the image class"""
+        with self.image_control.lock:
+            img = self.image_control.raw_img.copy()
+            img = self.image_control.rotate_raw_img(img,270)
+        return img
+
+    def snap_image(self,filename=None):
+        """ Snap and return an image from the camera. Save file if requested"""
+        img = self.image_control.get_single_image()
+        if filename is not None:
+            self.image_control.save_raw_image(filename)
+        self.image_control.save_image(img, "recentImg.png")
+        return img
+
+    def save_raw_image(self, filename):
+        """ Save a raw image from teh image class """
+        self.image_control.save_raw_image(filename)
+
+    def set_exposure(self,exp):
+        """
+        Set the camera exposure
+        """
+        self.image_control.set_exposure(exp)
+        return
+
+    def get_exposure(self):
+        """
+        get the camera exposure
+        :return:
+        """
+        return self.image_control.get_exposure()
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         """Sets the parameters of the laser device."""
-        logging.error('set_laser_parameters not implemented in hardware class.')
+        self.laser_control.set_laser_parameters(pfn=pfn, att=att, energy=energy, mode=mode, burst=burst)
 
     def laser_standby(self):
         """Puts laser in a standby 'fire-ready' mode."""
-        logging.error('laser_standby not implemented in hardware class.')
+        self.laser_control.laser_standby()
 
     def laser_fire(self):
         """Fires the laser."""
-        logging.error('laser_fire not implemented in hardware class.')
+        self.laser_control.laser_fire()
 
     def laser_stop(self):
         """Stops current firing of the laser."""
-        logging.error('laser_stop not implemented in hardware class.')
+        self.laser_control.laser_stop()
 
     def laser_close(self):
         """Removes immediate functionality of the laser."""
-        logging.error('laser_close not implemented in hardware class.')
+        self.laser_control.close()
 
     def laser_check(self):
         """Logs status of laser system."""
-        logging.error('laser_check not implemented in hardware class.')
+        self.laser_control.laser_check()
+
+    def restart_laser_run_time(self):
+        """ Restarts the clock for the laser run time or restarts the laser
+        This is needed for the NewWave laser
+        """
+
+        if self._laser_poll_flag.is_set():
+            self.laser_start_time = time.time()
+            return True
+        else:
+            self.laser_standby()
+            return False
+
 
     def pressure_close(self):
-        """Removes immediate functionality of the pressure system."""
-        logging.error('pressure_close not implemented in hardware class.')
+        """Closes the pressure resources """
+        self.pressure_control.close()
 
     def pressure_rinse_start(self):
         """Starts rinsing pressure.."""
-        logging.error('pressure_rinse_start not implemented in hardware class.')
+        self.pressure_control.apply_rinse_pressure()
 
     def vacuum_rinse_start(self):
         """ Starts vacuum pressure..."""
-        logging.error("vacuum_rinse_start not implemented in hardware class")
+        self.pressure_control.apply_vacuum()
 
     def pressure_rinse_stop(self):
         """Stops rinsing pressure."""
-        logging.error('pressure_rinse_stop not implemented in hardware class.')
+        self.pressure_control.stop_rinse_pressure()
 
     def pressure_valve_open(self):
         """Opens pressure valve."""
-        logging.error('pressure_valve_open not implemented in hardware class.')
+        self.pressure_control.open_valve()
 
     def pressure_valve_close(self):
         """Closes pressure valve."""
-        logging.error('pressure_valve_close not implemented in hardware class.')
+        self.pressure_control.close_valve()
 
     def turn_on_led(self,channel='R'):
         """ Turns on the LED with the corresponding channel"""
-        logging.error("LED is not supported in hardware class")
+        self.led_control.start_led(channel)
 
     def turn_off_led(self, channel='R'):
         """ Turns off LED with corresponding channel"""
-        logging.error("LED is not supported in hardware class")
+        self.led_control.stop_led(channel)
 
     def turn_on_dance(self):
         """ Flashes RGB lights on and off """
-        logging.error("LED Dance is not supported in hardware class")
+        self.led_control.dance_party()
 
     def turn_off_dance(self):
         """ Turns off the flashing RGB """
-        logging.error("LED Dance is not supported in hardware class")
+        self.led_control.dance_stop.set()
 
     def shutter_open(self):
         """ Opens the shutter"""
-        logging.error(" Shutter Open is not supported in hardware class")
+        self.shutter_control.open_shutter()
 
     def shutter_close(self):
         """ Closes the shutter"""
-        logging.error(" Shutter Close is not supported in hardware class")
+        self.shutter_control.close_shutter()
 
     def shutter_get(self):
         """ Gets shutter state """
-        logging.error(" Shutter Get is not supported in hardware class ")
+        self.shutter_control.get_shutter()
 
     def filter_set(self, channel):
         """ Sets the filter cube channel"""
-        logging.error(" Filter Set is not supported in hardware class")
+        self.filter_control.set_state(channel)
 
     def filter_get(self):
         """ Returns the current filter channel"""
-        logging.error(" Filter Get is not supported in hardware class")
+        return self.filter_control.get_state()
+
+    def get_fl_image(self, exp, chnl, filepath=None):
+        """ Returns brightfield and fluorescent images"""
+        # Turn off the LED
+        old_leds = self.led_control.channel_states.copy()
+        for led in old_leds:
+            if old_leds[led]:
+                self.turn_off_led(led)
+        # Stop continuous image
+        self.stop_feed()
+        time.sleep(0.2)
+        # Adjust Exposure
+        old_exp = self.get_exposure()
+        self.set_exposure(exp)
+        # Adjust Filter
+        old_chnl = self.filter_get()
+        self.filter_set(chnl)
+        logging.info("Filter Set")
+        time.sleep(1)
+        # Adjust Shutter
+        self.shutter_open()
+        # Snap
+        time.sleep((exp / 1000) + 0.5)
+        # st = time.time()
+        img = self.snap_image()
+        if filepath:
+            self.save_raw_image(filepath)
+        # Close Shutter
+        self.shutter_close()
+        # Adjust Filter
+        self.filter_set(old_chnl)
+        # Start LED
+        for led in old_leds:
+            if old_leds[led]:
+                self.turn_on_led(led)
+        # Adjust Exposure
+        self.set_exposure(old_exp)
+        # Restart Live Feed
+        self.start_feed()
+        return self.get_raw_image()
 
     def get_bf_and_fl_images(self):
         """ Returns brightfield and fluorescent images"""
         logging.error("get bf and fl images is not supported in hardware class")
+
     def close_system(self):
         """ Closese all the associated objects"""
         try:
@@ -951,78 +1064,8 @@ class NikonEclipseTi(BaseSystem):
         self.image_control.save_image(img,filename)
         return
 
-    def get_raw_image(self):
-        with self.image_control.lock:
-            img = self.image_control.raw_img.copy()
-            img = self.image_control.rotate_raw_img(img,270)
-        return img
-
-    def get_image(self):
-
-        image = self.image_control.get_recent_image()
-        if image is None:
-            return None
-        if not HOME:
-            self.image_control.save_image(image, "recentImg.png")
-        return image
-
-    def close_image(self):
-        self.image_control.close()
-        #self.image_control._close_client()
-        return True
-
-    def open_image(self):
-        self.image_control.open()
-        return True
-
-    def snap_image(self,filename=None):
-
-        img = self.image_control.get_single_image()
-        if filename is not None:
-            self.image_control.save_raw_image(filename)
-        self.image_control.save_image(img, "recentImg.png")
-        return img
-
-    def save_raw_image(self, filename):
-        self.image_control.save_raw_image(filename)
-
     def _close_client(self):
         self.image_control._close_client()
-
-    def start_feed(self):
-        if self.camera_state():
-            try:
-                self.image_control.start_video_feed()
-            except Exception as e:
-                logging.info("{}".format(e))
-                traceback.print_last()
-        return True
-
-    def set_exposure(self,exp):
-        self.image_control.set_exposure(exp)
-        return
-
-    def get_exposure(self):
-        return self.image_control.get_exposure()
-
-    def stop_feed(self):
-        self.image_control.stop_video_feed()
-        return True
-
-    def save_buffer(self, folder, name, fps=5):
-        """
-        Saves the camera buffer to the folder as .avi file. Also copies sequence of images as reference.
-        :param folder: folder to store data
-        :param name: video file to save to, will overwrite existing files
-        :param fps: frames per second to store the video at, defaults to 5 fps irregardless of camera frame rate
-        :return: True
-        """
-        self.image_control.save_capture_sequence(folder, name, fps)
-        return True
-
-    def camera_state(self):
-        """ Checks if camera resources are available"""
-        return self.image_control.camera_state()
 
     def set_xy(self, xy=None, rel_xy=None):
         """Move the XY Stage"""
@@ -1596,61 +1639,6 @@ class NikonTE3000(BaseSystem):
 
             return True
 
-    def laser_fire(self):
-
-        #self.laser_control.fire()
-        return True
-
-    def laser_stop(self):
-        #self.laser_control.stop()
-        return True
-
-    def laser_close(self):
-        #self.laser_control.off()
-        return True
-
-    def laser_check(self):
-        #self.laser_control.check_status()
-        #self.laser_control.check_parameters()
-        return True
-
-    def restart_laser_run_time(self):
-        """ Restarts the clock for the laser run time or restarts the laser"""
-
-        if self._laser_poll_flag.is_set():
-            self.laser_start_time = time.time()
-            return True
-        else:
-            self.laser_standby()
-            return False
-
-
-
-
-    def pressure_close(self):
-        self.pressure_control.close()
-        return True
-
-    def pressure_rinse_start(self):
-        self.pressure_control.apply_rinse_pressure()
-        return True
-
-    def pressure_rinse_stop(self):
-        self.pressure_control.stop_rinse_pressure()
-        return True
-
-    def pressure_valve_open(self):
-        self.pressure_control.open_valve()
-        return True
-
-    def pressure_valve_close(self):
-        self.pressure_control.close_valve()
-        return True
-
-    def vacuum_rinse_start(self):
-        """ Starts vacuum pressure..."""
-        self.pressure_control.apply_vacuum()
-        return True
 
     def turn_on_led(self, channel='R'):
         self.led_control.start_led(channel)
