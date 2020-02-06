@@ -1,5 +1,6 @@
 from nidaqmx.constants import Edge
 import nidaqmx
+from nidaqmx.constants import TerminalConfiguration
 import numpy as np
 import logging
 import time
@@ -7,6 +8,7 @@ import threading
 from scipy import signal
 import shutil
 import os
+import serial
 import matplotlib.pyplot as plt
 
 DEV = "/Dev1/"
@@ -15,14 +17,284 @@ VOLTAGE_IN = "ai1"
 VOLTAGE_OUT = 'ao1'
 RFU = "ai3"
 
+
+class NIDAQ_USB:
+    model = 'USB-6211'
+    max_freq = 250000  # Sampling frequency
+    bit_depth = 16
+    devices = ['Dev1']
+    analog_inputs = ['ai0', 'ai1', 'ai2', 'ai3', 'ai4', 'ai5', 'ai6', 'ai7', 'ai8', 'ai10',
+                     'ai11', 'ai12', 'ai13', 'ai14', 'ai15']
+    analog_outputs = ['ao0', 'ao1']
+    digital_IO_ports = ['port0', 'port1']
+    digital_lines = ['line0:3']
+    counter_channel = ['ctr0', 'ctr1', 'freqout']
+    counter_mode = ['Pulse Train Generation', 'Edge Counting']
+    pulse_terminal = ['PFI4']
+    ni_tasks = {'ADC': nidaqmx.Task(), 'DAC': nidaqmx.Task()}
+
+class DAC:
+
+    def __inti__(self, channels):
+        self.voltages={}
+        for i in channels:
+            self.voltages[i]=[0,0]
+
+    def set_voltage(self, chnl, voltage):
+        self.voltages[chnl][1]=voltage
+
+    def load_changes(self):
+        """
+        Implement the changes in the DAC
+        :return:
+        """
+        for key in self.voltages:
+            self.voltages[key][0]=self.voltages[key][1]
+
+
+class NI_DAC(DAC, NIDAQ_USB):
+    """
+    Basic digital to analog converter. The user passes in the channels that need to be created.
+
+    >>> dac = NI_DAC(channels=['ao0'])
+    >>> dac.set_voltage(12,'ao0')
+    >>> dac.load_changes()
+
+    """
+
+    def __init__(self, channels=None, dev=0):
+        # Create the task
+        if channels is None:
+            channels = ['ao0', 'ao1']
+        self.task = nidaqmx.Task()
+        self.ni_tasks['adc'] = self.task
+        # Create a data variable
+        self.data = np.zeros([len(channels), 0])
+        self.voltages = {}
+        # Add the channels
+        for chan in channels:
+            self.task.ao_channels.add_ao_voltage_chan('/' + self.devices[dev] + '/' + chan)
+            self.voltages[chan] = [0, 0]  # current, set kV
+        # Configure the Timing
+        self.task.start()
+        self.load_changes()
+
+        # Voltage ramp (NI only)
+        self._voltage_ramp = 10  # kV/s
+
+    def set_voltage(self, chnl, voltage):
+        """Change the set voltage on the channel. Need to run load changes to see an effect """
+        self.voltages[chnl][1] = voltage
+        return True
+
+    def load_changes(self):
+        """
+        Load the changes into the DAC.
+        :return:
+        """
+        write_list = []
+        for chan in self.voltages:
+            current_v, set_v = self.voltages[chan]
+            write_list.append([set_v])
+            self.voltages[chan] = [set_v, set_v]
+        if len(write_list) == 1:
+            write_list = write_list[0]
+        self.task.write(write_list)
+
+
+class NI_ADC(NIDAQ_USB):
+    """
+    Basic Analog to Digital Converter. The user can specify the mode (continuous, finite).
+    When Basic_ADC is initialized the user passes in the analog input channels they
+    want to measure.
+
+    Be sure that both the nidaqmx python library and the NIDaqMX Base is installed. NiDaqMX base (version 15.1 or higher)
+    mustbe installed from national instruments website, it does not automatically install when the
+    USB-6211 or other daq card is plugged in.
+
+    >>>adc = Basic_ADC(channels = ['ai1', 'ai2'], mode = 'finite')
+    >>>adc.start()
+    >>> data = adc.read()
+    """
+    modes = {'continuous': nidaqmx.constants.AcquisitionType.CONTINUOUS,
+             'finite': nidaqmx.constants.AcquisitionType.FINITE}
+    output_data_count = 1  # for oversampling, output the r
+    data_lock = threading.RLock()
+
+    def __init__(self, channels=['ai1', 'ai2', 'ai3'], mode='finite', sampling=5000, samples=5000, dev=0):
+
+        # Create the task
+        self.task = nidaqmx.Task()
+        self.ni_tasks['adc'] = self.task
+        # Create a data variable
+        self.data = np.zeros([len(channels), 0])
+
+        # Add the channels
+        for chan in channels:
+            self.task.ai_channels.add_ai_voltage_chan('/' + self.devices[dev] + '/' + chan,
+                                                      terminal_config=TerminalConfiguration.RSE)
+
+        # Configure the Timing
+        self.mode = mode
+        self.samples = samples
+        mode = self.modes[mode]
+        self.task.timing.cfg_samp_clk_timing(sampling, samps_per_chan=samples, sample_mode=mode)
+
+    def start(self):
+        if self.mode == 'continuous':
+            self.task.register_every_n_samples_acquired_into_buffer_event(self.samples, self.read)
+        self.task.start()
+
+    def read(self, *args):
+        """ Read the data from the analog input channels and append it to the data array"""
+        try:
+            samples = np.asarray(self.task.read(number_of_samples_per_channel=self.samples))
+            self._samples = samples
+        except nidaqmx.errors.DaqError:
+            return 1
+
+        with self.data_lock:
+            interval = np.floor(samples.shape[1] / self.output_data_count)
+            for i in range(self.output_data_count):
+                avg_samples = np.mean(samples[:, int(interval * i):int(interval * (i + 1))], axis=1).reshape(
+                    self.data.shape[0], 1)
+                self._avg_samples = avg_samples
+                self.data = np.append(self.data, avg_samples, axis=1)
+
+        return 0
+
+    def stop(self):
+        """
+        Stop reading from the daq
+        :return:
+        """
+        self.task.stop()
+
+class PMOD_DAC(DAC):
+    """
+    Hardware Class for controlling the Bertran Power Supply via a PMOD DAC using an Arduino. This class keeps the monitor
+    channels from the Arduino ADC connected to the DAC channels
+
+    Pin 7 corresponds to the Bertan Enable PIN
+
+    """
+    _max_voltage = 2.5  # The absolute maximum voltage you can request
+    _index = 0
+    lock = threading.Lock()
+    run_data=None
+
+    def __init__(self, channels=None, port="COM1"):  # Brae, what is COM4????
+        """
+        This class communicates with the Arduino via Serial communication. We use the pyserial library for all of the
+        serial communication functions.
+        :param port: string. Which communication port on the PC corresponds to the Arduino. You can determine this using
+        the Arduino software or by inspecting the PORTS tree under device manager.
+        """
+        #Set up Serial Communication Port
+        if channels is None:
+            channels = [1, 2, 3]
+        self.ser = serial.Serial()  # Serial communication object thats responible for communicating with the arduino
+        self.ser.port = port
+        self.ser.baudrate = 1000000
+        self.ser.open()
+        self.ser.timout = 1
+
+        #Set up DAC information
+        self.voltages = {}
+        for i in channels:
+            self.voltages[i] = [0, 0]
+
+    def read_arduino(self):
+        with self.lock:
+            response = self.ser.read_until('\n'.encode())
+        return response.decode()
+
+    def load_changes(self):
+        """
+        Loads the changes from every channels input register to the DAC
+        :return:
+        """
+        with self.lock:
+            self.ser.write("U?00\n".encode())
+
+    def _load_channel_changes(self, chnl):
+        """
+        Loads changes from specific input channel to the DAC
+        :param chnl:
+        :return:
+        """
+        with self.lock:
+            self.ser.write("U{}00\n".format(chnl).encode())
+
+    def _power_down(self):
+        """
+        Disables the Bertan Enable pin. Resets all the DAC.
+        :return:
+        """
+        with self.lock:
+            self.ser.write("X000\n".encode())
+
+    def _power_on(self):
+        """
+        Turns on the Bertan Enable Pin.
+        :return:
+        """
+        with self.lock:
+            self.ser.write("E000\n".encode())
+
+    def set_voltage(self, channel, voltage):  # Channel refers to channel number on Bertan, from 1 to 6
+        """
+        Sets the voltage of the DAC pin for a corresponding channel
+        :param channel: int, 1-6 which Bertan channel you want to set the voltage
+        :param voltage: float, between 0 -5,000 volts
+        :return:
+        """
+        if -self._max_voltage > voltage > self._max_voltage:
+            logging.warning("Absolute voltage value must be less than {}} Volts".format(voltage))
+        # PMOD_DAC is between 0 and 2.5 V
+        if voltage > self._max_voltage:
+            logging.error("ERROR: Voltage set beyond DAC capability")
+            voltage = self._max_voltage
+        # Convert to 16 bit unisigned int
+        vout = int(voltage * 2 ** 12 / self._max_voltage)
+        msb, lsb = divmod(vout, 0x100)
+        with self.lock:
+            self.ser.write("S{}".format(channel).encode())
+            self.ser.write(bytearray([msb, lsb]))
+            self.ser.write("\n".encode())
+
+    @staticmethod
+    def _interpret_bytes(byte_data):
+        """
+        :param byte_data: From the Arduino, bytes object with a start byte 'S' or 83 that is 16 floats long (16*4).
+        :return: numpy array of floats corresponding to the voltage [index 0-7] and current [index 8-15] values for channels 0-8
+         of the PMOD DAC
+        """
+        idx = None
+        for i in range(len(byte_data)):
+            if byte_data[i] == 83:
+                idx = i + 1
+                break
+
+        in_data = np.zeros((1, 16))  # Numpy creates array with 1 row and 16 columns of all zeroes
+        # If we don't have a start index you will have to return a zeros array
+        if idx is None:
+            logging.warning("Did Not Find Start Character for Read Data")
+            return in_data
+
+        # Move through the bytes array and convert 4 bytes into a float for each of the 16 values in the numpy array
+        for i in range(16):
+            in_data[0][1] = struct.unpack('f', byte_data[idx + i * 4:idx + (i * 4 + 4)])[0]
+        return in_data
+
 class DAQBoard:
-    freq = 50000 # Sampling frequency for analog inputs
-    cutoff=4 # Cut off for digital filter
+    freq = 50000  # Sampling frequency for analog inputs
+    cutoff = 4  # Cut off for digital filter
     output_freq = 1000  # Frequency for sending voltage levels to the Power supply (Can be much higher than analog in)
     clock_channel = 'ctr0'  # Sampling Clock channel (don't really need to change)
     sample_terminal = "Ctr0InternalOutput"  # Make sure this route is allowed via NIMAX
     mode = nidaqmx.constants.AcquisitionType.CONTINUOUS  # Sampling mode
-    update_time = 1 # Time in seconds the DAQ should updat
+    update_time = 1  # Time in seconds the DAQ should updat
     samples_per_chain = 50000  # Samples per buffer channel / how often it will update is samples_per_chain/freq
     max_time = 60  # Total amount of time to wait before exiting.
     voltage_ramp = 10  # speed to ramp voltage in kV/s
@@ -34,17 +306,15 @@ class DAQBoard:
     data_lock = threading.Lock()
     ba = (None, None)
     sos = None
-    old_data=None
-    middle_data=None
-    downsampled_freq=8
+    old_data = None
+    middle_data = None
+    downsampled_freq = 8
 
     # Laser States
-    _pin3 = False # Set to High to enable Laser
-    _pin5 = True # Set to Lo to enable laser
+    _pin3 = False  # Set to High to enable Laser
+    _pin5 = True  # Set to Lo to enable laser
 
-
-
-    def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None, laser_fire = False):
+    def __init__(self, dev, voltage_read, current_read, rfu_read, voltage_control, stop=None, laser_fire=False):
         self.dev = dev
         self.voltage_control = voltage_control
         self.voltage_readout = voltage_read
@@ -59,14 +329,14 @@ class DAQBoard:
             self.start_laser_task()
 
         if stop is None:
-
             stop = threading.Event()
         self.stop = stop
 
     def _clear_data(self):
         with self.data_lock:
             self.data = {self.rfu_chan: [], self.current_readout: [],
-                         self.voltage_readout: [], 'raw':[], 'avg':[], 'dt':[]}  # RFU, Current and Voltage respectively
+                         self.voltage_readout: [], 'raw': [], 'avg': [],
+                         'dt': []}  # RFU, Current and Voltage respectively
             try:
                 os.remove(self.temp_file)
             except FileNotFoundError:
@@ -75,7 +345,6 @@ class DAQBoard:
 
     def close_tasks(self):
         self.laser_task.close()
-
 
     def callback(self, *args):
         """Add data to the data variable every so many samples
@@ -108,29 +377,29 @@ class DAQBoard:
         with self.data_lock:
             # Filter and down sample the RFU data
             decimated = self.decimate_data(samples[2])
-            self.downsampled_freq=len(decimated)
+            self.downsampled_freq = len(decimated)
             self.data[self.rfu_chan].extend(decimated)  # RFU
             # Voltage and current don't matter as much so we will just average those
-            self.data[self.voltage_readout].extend(self.average_data(samples[0], len(decimated), self.voltage_conversion))  # Voltage
-            self.data[self.current_readout].extend(self.average_data(samples[1], len(decimated), self.current_conversion)) # Current
+            self.data[self.voltage_readout].extend(
+                self.average_data(samples[0], len(decimated), self.voltage_conversion))  # Voltage
+            self.data[self.current_readout].extend(
+                self.average_data(samples[1], len(decimated), self.current_conversion))  # Current
 
-            #Get comparative chromatograms
-            self.data['raw'].extend(self.raw_data(samples[2],len(decimated)))
+            # Get comparative chromatograms
+            self.data['raw'].extend(self.raw_data(samples[2], len(decimated)))
             self.data['avg'].extend(self.average_data(samples[2], len(decimated)))
             self.old_data = self.middle_data
             self.middle_data = samples[2][:]
 
-            #dt_step = len(decimate)
-            #old_dt = self.data['dt'][-1] + (1 / dt_step)
-            #self.data['dt'].extend(np.arange(old_dt, old_dt+1, 1/dt_step).tolist())
-            with open(self.temp_file,'a') as temp:
-                [temp.write('{}\n'.format(x)) for x in self.average_data(samples[2], int(len(samples[2])/50))]
-
+            # dt_step = len(decimate)
+            # old_dt = self.data['dt'][-1] + (1 / dt_step)
+            # self.data['dt'].extend(np.arange(old_dt, old_dt+1, 1/dt_step).tolist())
+            with open(self.temp_file, 'a') as temp:
+                [temp.write('{}\n'.format(x)) for x in self.average_data(samples[2], int(len(samples[2]) / 50))]
 
             # Apply butter filter to the data
-            #self.data[self.rfu_chan] = self.filter_data(self.data[self.rfu_chan])
+            # self.data[self.rfu_chan] = self.filter_data(self.data[self.rfu_chan])
         return 0
-
 
     def sample_config(self, task):
         """We time the voltage in with a sample clock, here we set that up
@@ -146,8 +415,6 @@ class DAQBoard:
         task.ao_channels.add_ao_voltage_chan(voltage_chan)
         task.timing.cfg_samp_clk_timing(self.output_freq)
         return task
-
-
 
     def analog_in_config(self, task, chan='ai3'):
         """Set up the analog read channels here"""
@@ -208,11 +475,10 @@ class DAQBoard:
                 time.sleep(0.005)
 
     def start_laser_task(self):
-        self.laser_task.do_channels.add_do_chan('Dev1/port0/line0') # pin3, Computer Control Channel
-        self.laser_task.do_channels.add_do_chan('Dev1/port0/line1') # pin 5, Laser OnOFf Channel
-        self.laser_task.do_channels.add_do_chan('Dev1/port0/line5') # Pulse Command Channel
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line0')  # pin3, Computer Control Channel
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line1')  # pin 5, Laser OnOFf Channel
+        self.laser_task.do_channels.add_do_chan('Dev1/port0/line5')  # Pulse Command Channel
         self.laser_task.write([False, True, False])
-
 
     def laser_fire(self):
         """
@@ -221,11 +487,9 @@ class DAQBoard:
         :return:
         """
 
-        self.laser_task.write([True, True, True]) # Read the docs, good luck
+        self.laser_task.write([True, True, True])  # Read the docs, good luck
         time.sleep(0.05)
         self.laser_task.write([False, True, False])
-
-
 
     def change_voltage(self, voltage):
         """ voltage in kV, used to adjust analog output (divided voltage-conversion factor"""
@@ -255,7 +519,6 @@ class DAQBoard:
 
         return samples
 
-
     def save_data(self, filename):
         with open(filename, 'w') as f_in:
             f_in.write('time, rfu, kV, uA, avg, raw\n')
@@ -270,7 +533,7 @@ class DAQBoard:
                 try:
                     f_in.write('{:.3f},{},{:.3f},{:.3f},{},{}\n'.format(t_point, rfu, ua, kv, avg, raw))
                 except TypeError:
-                    f_in.write("{},{},{},{},{},{}\n".format(t_point, rfu, ua, kv,avg,raw))
+                    f_in.write("{},{},{},{},{},{}\n".format(t_point, rfu, ua, kv, avg, raw))
 
         destination = filename[:-4] + '_raw_data.csv'
         try:
@@ -278,25 +541,23 @@ class DAQBoard:
         except FileNotFoundError:
             logging.warning('Could not find {}'.format(self.temp_file))
 
-
     @staticmethod
     def raw_data(data, points):
         raws = []
         for i in range(points):
-            idx = int(len(data)/points)
-            raws.append(data[idx*i])
+            idx = int(len(data) / points)
+            raws.append(data[idx * i])
         return raws
 
-
     @staticmethod
-    def average_data(data, points,conversion=1):
+    def average_data(data, points, conversion=1):
         avgs = []
         for i in range(points):
-            idx = int(len(data)/points)
-            avgs.append(np.mean(data[idx*i:idx*i+idx])*conversion)
+            idx = int(len(data) / points)
+            avgs.append(np.mean(data[idx * i:idx * i + idx]) * conversion)
         return avgs
 
-    def decimate_data(self,data):
+    def decimate_data(self, data):
         """ Decimates the data by applying a LP filter and then down sampling by a factor of 10
         FIR filter is used since it will be more stable if the user changes things up slightly
         returns data that has been downsampled
@@ -317,12 +578,11 @@ class DAQBoard:
                 print(len(data))
                 break
 
-
-        data=data.tolist()
-        data=data[int(len(data)/3):-int(len(data)/3)]
+        data = data.tolist()
+        data = data[int(len(data) / 3):-int(len(data) / 3)]
         return data
 
-    def filter_data(self,data):
+    def filter_data(self, data):
         """ Applies a digital butter filter to the data """
         logging.debug("FilterData")
         if len(data) < 10:
@@ -344,6 +604,7 @@ class DAQBoard:
         """
         Sets up butter filter
         """
+
         def get_wn(desired, smpls):
             return desired / (smpls / 2)
 
@@ -359,9 +620,10 @@ class DAQBoard:
             self.sos = sos
 
 
-
-
-
 if __name__ == "__main__":
-    dq=DAQBoard(DEV,VOLTAGE_IN,CURRENT_OUT,RFU,VOLTAGE_OUT)
-    dq.start_read_task()
+    # adc = Basic_ADC(channels = ['ai1', 'ai2'], mode='continuous')
+    # adc.start()
+    # x = adc.read()
+    dac = NI_DAC(channels=['ao0', 'ao1'])
+    dac.set_voltage('ao0', 5.5)
+    dac.load_changes()
