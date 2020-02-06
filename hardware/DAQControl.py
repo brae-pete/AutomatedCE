@@ -208,9 +208,16 @@ class DAQBoard:
                 time.sleep(0.005)
 
     def start_laser_task(self):
-        self.laser_task.do_channels.add_do_chan('Dev1/port0/line0') # pin3, Computer Control Channel
-        self.laser_task.do_channels.add_do_chan('Dev1/port0/line1') # pin 5, Laser OnOFf Channel
-        self.laser_task.do_channels.add_do_chan('Dev1/port0/line5') # Pulse Command Channel
+        """
+        Start the laser task by adding channels to the DAQ.
+        line 0 : Computer control channel
+        line 1 : laser on/off channel
+        line 5 : fire pulse signal.
+        :return:
+        """
+        for i in ['Dev1/port0/line0', 'Dev1/port0/line1', 'Dev1/port0/line5']:
+            if i not in self.laser_task.channel_names:
+                self.laser_task.do_channels.add_do_chan(i) # pin3, Computer Control Channel
         self.laser_task.write([False, True, False])
 
 
@@ -359,9 +366,6 @@ class DAQBoard:
             self.sos = sos
 
 
-
-
-
 if __name__ == "__main__":
-    dq=DAQBoard(DEV,VOLTAGE_IN,CURRENT_OUT,RFU,VOLTAGE_OUT)
-    dq.start_read_task()
+    dq=DAQBoard(DEV,VOLTAGE_IN,CURRENT_OUT,RFU,VOLTAGE_OUT, laser_fire=True)
+    #dq.start_read_task()

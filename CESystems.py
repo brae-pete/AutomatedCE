@@ -824,17 +824,17 @@ class NikonEclipseTi(BaseSystem):
         super(NikonEclipseTi, self).__init__()
         self.laser_max_time = 600
 
-        self.hasCameraControl = True
+        self.hasCameraControl = False
         self.hasInletControl = True
-        self.hasLaserControl = True
-        self.hasObjectiveControl = True
+        self.hasLaserControl = False
+        self.hasObjectiveControl = False
         self.hasOutletControl = True
-        self.hasVoltageControl = True
+        self.hasVoltageControl = False
         self.hasPressureControl = True
-        self.hasXYControl = True
+        self.hasXYControl = False
         self.hasLEDControl=True
-        self.hasShutterControl = True
-        self.hasFilterControl = True
+        self.hasShutterControl = False
+        self.hasFilterControl = False
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -844,6 +844,7 @@ class NikonEclipseTi(BaseSystem):
         # Initialize all the motors independently
         zstage = threading.Thread(target=self._start_zstage)
         zstage.start()
+        return
         outlet=threading.Thread(target=self._start_outlet)
         outlet.start()
         # Wait for motors to finish homing
@@ -879,7 +880,7 @@ class NikonEclipseTi(BaseSystem):
         self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME, invt=1)
 
     def _start_zstage(self):
-        self.z_stage_control = ZStageControl.PowerStep(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME, invt=-1)
+        self.z_stage_control = ZStageControl.ThorLabZStage(lock=self._z_stage_lock)
 
     def close_system(self):
         try:
@@ -2017,6 +2018,8 @@ class OstrichSystem(BaseSystem):
     def pressure_valve_close(self):
         """Closes pressure valve."""
         pass
+
+
 
 def test():
     hardware = NikonEclipseTi()

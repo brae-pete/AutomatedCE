@@ -35,6 +35,7 @@ try:
 
 except Exception as e:
     logging.warning("Could not load thorlabs")
+    print(e)
 
 class ZStageControl:
     """Class to control Z-stage for capillary/optical train
@@ -339,7 +340,7 @@ class NikonZStage:
             with self.lock:
                 self.mmc.stop(self.stage_id)
 
-class ThorLabs(ZStageControl):
+class ThorLabZStage(ZStageControl):
     """ Class for controlling a ThorLabs Labjack usingn the Kinesis Library
     You will need to adjust the Kinesis file reference if you installed it outside of the default location
 
@@ -350,15 +351,16 @@ class ThorLabs(ZStageControl):
     min_z = 0
     max_z = 50
     offset = 0
-    def __init__(self, lock=threading.RLock() , serial =  '49125264'):
+    def __init__(self, lock=threading.RLock() , serial =  '49125264', home =False):
         self.lock = lock
         self.inversion = 1
         self.com = "COM3"
         self.pos = 0
-        self.serial = serial
+        self.serial = String(serial)
         self.lock = lock
         self.first_read = True
         self.open()
+        self.home=home
 
 
     @staticmethod
@@ -395,9 +397,16 @@ class ThorLabs(ZStageControl):
         vel_prms.set_MaxVelocity(Decimal(3.5))
         self.device.SetVelocityParams(vel_prms)
 
+    def read_z(self, *args):
+        """
+        Calls the read function for thorlabs.
+        *mistakenly called read_z, get_z.
+        :param args:
+        :return:
+        """
+        return self.get_z()
 
-
-    def        get_z(self, *args):
+    def get_z(self, *args):
         """ returns float of current position
         User requests to get current position of stage, returned in mm
         """
@@ -735,7 +744,8 @@ def threading_test():
 
 if __name__ == "__main__":
     import time
-    s = ThorLabs()
+    s = ThorLabZStage()
+    s.go_home()
 
 
 

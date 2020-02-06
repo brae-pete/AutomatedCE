@@ -1,19 +1,28 @@
+import sys
+import os
+path = os.getcwd()
+parent_path = path[:path.find('BarracudaQt')+11]
+if not parent_path in sys.path:
+    sys.path.append(parent_path)
 import threading
-
 import serial
 from hardware import ArduinoBase
 import logging
 import time
+
 
 class OutletControl:
     """Class to control Z-stage for capillary/optical train
     If switching controllers modify the function calls here
     Make sure that what you program matches the inputs and outputs
     This is called by the GUI and needs data types to match
+
+    outlet = OutletControl(com="COM4", arduino = -1)
+    outlet.
     """
     invert = -1
     default_pos = -4
-    def __init__(self, com="COM7", arduino=-1, lock=-1, home=True, invt=1):
+    def __init__(self, com="COM7", arduino=-1, lock=-1, home=True, invt=1, test=False):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -31,11 +40,13 @@ class OutletControl:
             self.arduino = ArduinoBase.ArduinoBase(self.com, self.home)
 
         if lock == -1:
-            lock = threading.Lock()
+            lock = threading.RLock()
+
 
         self.lock = lock
         time.sleep(0.25)
-        self.go_home()
+        if not test:
+            self.go_home()
         return
 
     def open(self):
@@ -116,11 +127,12 @@ class OutletControl:
                 invt = True
             else:
                 invt = False
-            self.arduino.go_home(invt)
+            self.set_z(+30)
             self.wait_for_move()
-            self.arduino.go_home(invt)
-            self.pos = self.wait_for_move()
-            self.offset = 0
+            self.set_z(-0.2)
+            self.wait_for_move()
+            self.set_z(0.2)
+            self.wait_for_move()
             self.set_z(self.default_pos)
             cz = self.wait_for_move()
 
@@ -144,3 +156,8 @@ class OutletControl:
             prev_pos = current_pos
             current_pos = self.read_z()
         return current_pos
+
+
+if __name__ == "__main__":
+    OC = OutletControl(com="COM4", home=False, invt=-1, test=True)
+

@@ -103,7 +103,7 @@ class ArduinoBase:
         """set the outlet position (mm) (precision to micron)"""
         if self.home:
             return
-        logging.warning("M0L{:+.3f}\n".format(pos))
+        #logging.warning("M0L{:+.3f}\n".format(pos))
         self.serial.write("M0L{:+.3f}\n".format(pos).encode())
         return
 

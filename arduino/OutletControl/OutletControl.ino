@@ -40,9 +40,9 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 // Set up variables for motors
 int outlet_div = 32;
 // Set variables for Pressure
-int SOLENOID2 = 25;
-int SOLENOID1 = 27;
-int SOLENOID3 = 29;
+int SOLENOID2 = 41; // Pressure Valve
+int SOLENOID1 = 39; // Vent Valve
+int SOLENOID3 = 43; // Vacuum Valve
 int LED_R = 31;
 int LED_G = 33;
 int LED_B = 35;
@@ -200,10 +200,10 @@ void moveMotor(){
   driver_2.hardStop();
   bool at_home = checkHome();
   if (at_home){
-        
         driver_2.releaseSw(B0,B1);
         releaseSW();
   }
+  
   driver_2.setSwitchMode(CONFIG_SW_HARD_STOP); // Set switch mode to hard stop. 
   int chnl = atoi(inputString[1]);
   String location = inputString.substring(3,13);

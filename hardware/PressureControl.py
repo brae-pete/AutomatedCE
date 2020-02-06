@@ -1,3 +1,9 @@
+import sys
+import os
+path = os.getcwd()
+parent_path = path[:path.find('BarracudaQt')+11]
+if not parent_path in sys.path:
+    sys.path.append(parent_path)
 import threading
 from hardware import ArduinoBase
 import time
@@ -64,3 +70,5 @@ class PressureControl:
         with self.lock:
             self.arduino.close()
 
+if __name__ == "__main__":
+    obj = PressureControl(com="COM4", home=False)

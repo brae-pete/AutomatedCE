@@ -419,7 +419,7 @@ class MicroControl(ImageControl):
     size = 0.5
     raw_img = np.ndarray((512,512))
 
-    def __init__(self, mmc=None, port = 6412, config_file='CoolSnap.cfg', lock = threading.Lock()):
+    def __init__(self, mmc=None, port = 6412, config_file='CoolSnap.cfg', lock = threading.RLock()):
         self.mmc = mmc
         self.lock = lock
         self.config = os.path.join(CONFIG_FOLDER, config_file)
