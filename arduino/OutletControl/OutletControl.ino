@@ -40,17 +40,18 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 // Set up variables for motors
 int outlet_div = 32;
 // Set variables for Pressure
-int SOLENOID2 = 25;
-int SOLENOID1 = 27;
-int SOLENOID3 = 29;
+int SOLENOID2 = 39;
+int SOLENOID1 = 41;
+int SOLENOID3 = 43;
 int LED_R = 31;
 int LED_G = 33;
 int LED_B = 35;
-
+byte dir = B0;
 //SERIAL 
 String inputString = "";   // a String to hold incoming data
 int inputCount = 0;
 bool stringComplete = false;  // whether the string is complete
+bool inversion = 0;
 
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
@@ -200,8 +201,7 @@ void moveMotor(){
   driver_2.hardStop();
   bool at_home = checkHome();
   if (at_home){
-        
-        driver_2.releaseSw(B0,B1);
+        driver_2.releaseSw(B0,inversion);
         releaseSW();
   }
   driver_2.setSwitchMode(CONFIG_SW_HARD_STOP); // Set switch mode to hard stop. 
@@ -230,7 +230,7 @@ void motorHomePosition(){
 
 
   // Move Motor until it hits the switch
-  char user_dir = inputString[3];
+  char user_dir = inputString[2];
   //Serial.println("Starting Move...");
   byte dir = B0;
   Serial.println(user_dir);
@@ -270,7 +270,7 @@ void motorTalk(){
     }
   }
   else if (inputString[2]=='G'){
-    motorHomePosition();
+    setHome();
   } else if (inputString[2]=='S'){
     setMotorSpeed();
   } else if (inputString[2]=='A'){
@@ -292,9 +292,16 @@ void getMotorPos(){
   Serial.println(return_steps,3);
 }
 
-
 void setHome(){
   int chnl = atoi(inputString[1]);
+  char user_dir = inputString[3];
+  //Serial.println("Starting Move...");
+  Serial.println(user_dir);
+  if (user_dir=='1'){
+   inversion = true;
+  } else{
+    inversion = false;
+  }
   //Serial.print("Setting Home Position for channel: ");
   Serial.println(chnl);
   driver_2.resetPos();

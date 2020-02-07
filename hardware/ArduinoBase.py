@@ -47,7 +47,7 @@ class ArduinoBase:
                 self.serial.open()
                 time.sleep(2)
             except serial.serialutil.SerialException:
-                logging.warning("ARDUINO ERROR: CLOSE ARDUINO")
+                logging.warning("ARDUINO ERROR: CLOSE ARDUINO PORT:{}".format(self.com))
 
     def close(self):
         if self.home:
@@ -126,11 +126,12 @@ class ArduinoBase:
     def go_home(self, invt):
         if self.home:
             return
-        if invt:
+        if invt or invt == 1:
             invt=0
         else:
             invt = 1
         self.serial.write("M0G{}{}\n".format(invt,invt).encode())
+        return
 
 
     def go_home_objective(self):

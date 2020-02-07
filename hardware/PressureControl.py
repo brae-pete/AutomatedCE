@@ -53,11 +53,11 @@ class ArduinoControl(PressureControl):
     Solenoids are normally closed, so keeping them closed keeps the electronics cool.
     """
 
-    def __init__(self, com="COM9", arduino=-1, lock=-1, home=True, *args):
+    def __init__(self, com="COM9", arduino=None, lock=-1, home=False, *args):
         self.home = home
         self.com = com
         self.state = False
-        if arduino == -1:
+        if arduino is None:
             self.check = False
             arduino = ArduinoBase.ArduinoBase(self.com, self.home)
         self.arduino = arduino

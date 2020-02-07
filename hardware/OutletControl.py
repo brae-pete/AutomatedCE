@@ -1,7 +1,12 @@
 import threading
-
+import sys
+import os
 import serial
-from hardware import ArduinoBase
+try:
+    from hardware import ArduinoBase
+except ModuleNotFoundError:
+    sys.path.append(os.path.relpath('..'))
+    from hardware import ArduinoBase
 import logging
 import time
 
@@ -107,6 +112,7 @@ class OutletControl:
             time.sleep(0.1)
             prev_pos = current_pos
             current_pos = self.read_z()
+            print(current_pos)
         return current_pos
 
 class ArduinoOutlet(OutletControl):
@@ -115,7 +121,7 @@ class ArduinoOutlet(OutletControl):
     Make sure that what you program matches the inputs and outputs
     This is called by the GUI and needs data types to match
     """
-    def __init__(self, com="COM7", arduino=-1, lock=-1, home=True, invt=1):
+    def __init__(self, com="COM7", arduino=None, lock=-1, home=False, invt=1, home_dir=0):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -126,10 +132,13 @@ class ArduinoOutlet(OutletControl):
         self.pos = 0
         self.have_arduino = True
         self.arduino = arduino
+        if self.arduino is None:
+            self.arduino=ArduinoBase.ArduinoBase(com=com, home= home)
+            self.open()
         self.invert = invt
+        self.home_dir = home_dir # Which direction the stepper should go when hitting the switch
         if lock == -1:
-            lock = threading.Lock()
-
+            lock = threading.RLock()
         self.lock = lock
         time.sleep(0.25)
         self.go_home()
@@ -190,3 +199,21 @@ class ArduinoOutlet(OutletControl):
         if self.home:
             return
         self.arduino.close()
+
+    def go_home(self):
+        """ Moves up or down until the stage hits the mechanical stop that specifices the 25 mm mark
+
+         """
+        with self.lock:
+            if self.home:
+                self.pos = 0
+                return
+            self.arduino.go_home(self.home_dir)
+            self.set_z(50)
+            self.wait_for_move()
+            self.set_rel_z(1)
+            self.pos = self.wait_for_move()
+
+
+if __name__ =="__main__":
+    ctl = ArduinoOutlet(com="COM5", invt=1, home_dir=True)

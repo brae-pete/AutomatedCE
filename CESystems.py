@@ -3,6 +3,7 @@ import threading
 import logging
 import time
 import ctypes
+import numpy as np
 
 # Custom Hardware Modules  fixme do a dynamic import so only those modules necessary are imported.
 import traceback
@@ -49,10 +50,10 @@ class BaseSystem:
     xy_stage_inversion = [1, 1]
 
     def __init__(self):
-        #Laser Variables
+        # Laser Variables
         self.laser_max_time = None
         self._laser_poll_flag = threading.Event()
-        self.laser_start_time =time.time()
+        self.laser_start_time = time.time()
 
         # Hardware Class Objects: These are all (and should remain) the base classes
         self.xy_stage_control = XYControl.XYControl()
@@ -73,7 +74,6 @@ class BaseSystem:
         # Start the processes needed
         self.adc_control.start()
 
-
     def calibrate_system(self, permissions_gui):
         """Calibrates the system."""
         logging.error('calibrate_system not implemented in hardware class.')
@@ -81,7 +81,6 @@ class BaseSystem:
     def start_system(self):
         """Puts the system into its functional state."""
         logging.error('start_system not implemented in hardware class.')
-
 
     def close_xy(self):
         """Removes immediate functionality of XY stage."""
@@ -194,6 +193,7 @@ class BaseSystem:
     def close_objective(self):
         """Removes immediate functionality of the objective stage/motor."""
         self.objective_control.close()
+
     def set_objective(self, h=None, rel_h=None):
         """Sets the position of the objective stage/motor. 'h' is absolute, 'rel_h' is relative to current."""
         if h is not None:
@@ -233,43 +233,44 @@ class BaseSystem:
         """ Sets the voltage to Zero"""
         self.power_supply_control.stop_voltage()
 
-    def set_voltage(self, v=None, chnl = 0):
+    def set_voltage(self, v=None, chnl=0):
         """Sets the current voltage of the voltage source."""
         chnl = self.power_supply_control.channels[chnl]
         self.power_supply_control.set_electrode_voltage(chnl, v)
         self.power_supply_control.apply_changes()
 
-    def get_voltage_setting(self, chnl = 0):
+    def get_voltage_setting(self, chnl=0):
         """ Returns the voltage setting for the DAC"""
         chnl = self.power_supply_control.channels[chnl]
         return self.power_supply_control.get_electrode_setting(chnl)
 
     def get_voltage(self):
         """Gets the current voltage of the voltage source."""
-        return self.adc_control.data[-1,0]
+        return self.adc_control.data[-1, 0]
 
     def get_voltage_data(self):
         """Gets a list of the voltages over time."""
-        return self.adc_control.data[0,:]
+        return self.adc_control.data[0, :]
 
     def get_current_data(self):
         """Gets a list of the current over time."""
-        return self.adc_control.data[1,:]
+        return self.adc_control.data[1, :]
 
     def get_rfu_data(self):
         """Gets a list of the RFU over time."""
-        data =  self.adc_control.data[2,:]
-        if len(data)>100:
+        data = self.adc_control.data[2, :]
+        if len(data) > 100:
             data = self.data_filter_control.filter_data(data)
         return data
+
     def get_data(self):
         """ Returns the data """
-
-        rfu = self.get_rfu_data()
-        volts = self.get_voltage_data()
-        current = self.get_current_data()
-        return {'rfu': rfu, 'volts': volts, 'current': current}
-
+        with self.adc_control.data_lock:
+            rfu = self.get_rfu_data()
+            volts = self.get_voltage_data()
+            current = self.get_current_data()
+        time_points = np.linspace(0, len(rfu)/self.adc_control.downsampled_freq, len(rfu))
+        return {'rfu': rfu, 'volts': volts, 'current': current, 'time':time_points}
 
     def close_image(self):
         """Removes the immediate functionality of the camera."""
@@ -326,10 +327,10 @@ class BaseSystem:
         """ Get a raw image (no processing) from the image class"""
         with self.image_control.lock:
             img = self.image_control.raw_img.copy()
-            img = self.image_control.rotate_raw_img(img,270)
+            img = self.image_control.rotate_raw_img(img, 270)
         return img
 
-    def snap_image(self,filename=None):
+    def snap_image(self, filename=None):
         """ Snap and return an image from the camera. Save file if requested"""
         img = self.image_control.get_single_image()
         if filename is not None:
@@ -341,7 +342,7 @@ class BaseSystem:
         """ Save a raw image from teh image class """
         self.image_control.save_raw_image(filename)
 
-    def set_exposure(self,exp):
+    def set_exposure(self, exp):
         """
         Set the camera exposure
         """
@@ -391,7 +392,6 @@ class BaseSystem:
             self.laser_standby()
             return False
 
-
     def pressure_close(self):
         """Closes the pressure resources """
         self.pressure_control.close()
@@ -416,7 +416,7 @@ class BaseSystem:
         """Closes pressure valve."""
         self.pressure_control.close_valve()
 
-    def turn_on_led(self,channel='R'):
+    def turn_on_led(self, channel='R'):
         """ Turns on the LED with the corresponding channel"""
         self.led_control.start_led(channel)
 
@@ -530,6 +530,7 @@ class BaseSystem:
             logging.warning("Did not close DAQ tasks")
         return True
 
+
 class BarracudaSystem(BaseSystem):
     system_id = 'BARRACUDA'
     _z_stage_com = "COM4"
@@ -543,7 +544,7 @@ class BarracudaSystem(BaseSystem):
     _daq_voltage_control = 'ao1'
     _daq_rfu = "ai3"
 
-    _z_stage_lock = threading.RLock() # Same thread can access the lock at multiple points, but not multiple threads
+    _z_stage_lock = threading.RLock()  # Same thread can access the lock at multiple points, but not multiple threads
     _outlet_lock = threading.RLock()
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
@@ -576,7 +577,7 @@ class BarracudaSystem(BaseSystem):
         self.hasVoltageControl = True
         self.hasPressureControl = True
         self.hasXYControl = True
-        self.hasLEDControl=True
+        self.hasLEDControl = True
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -605,7 +606,7 @@ class BarracudaSystem(BaseSystem):
         # Initialize all the motors independently
         zstage = threading.Thread(target=self._start_zstage)
         zstage.start()
-        outlet=threading.Thread(target=self._start_outlet)
+        outlet = threading.Thread(target=self._start_outlet)
         outlet.start()
         objective = threading.Thread(target=self._start_objective)
         objective.start()
@@ -613,14 +614,15 @@ class BarracudaSystem(BaseSystem):
         zstage.join()
         outlet.join()
         objective.join()
-        self.image_control = ImageControl.PVCamImageControl(lock = self._camera_lock)
+        self.image_control = ImageControl.PVCamImageControl(lock=self._camera_lock)
         self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock)
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
                                                      voltage_control=self._daq_voltage_control)
         self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
 
-        self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
+        self.led_control = LightControl.CapillaryLED(com='COM9', arduino=self.outlet_control.arduino,
+                                                     lock=self._led_lock)
         self._start_daq()
 
         self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
@@ -671,7 +673,6 @@ class BarracudaSystem(BaseSystem):
             if image is None:
                 return None
             if not HOME:
-
                 self.image_control.save_image(image, "recentImg.png")
 
         return image
@@ -870,11 +871,10 @@ class BarracudaSystem(BaseSystem):
             rfu = self.daq_board_control.data['avg']
             volts = self.daq_board_control.data[self._daq_voltage_readout]
             current = self.daq_board_control.data[self._daq_current_readout]
-        return {'rfu':rfu, 'volts':volts, 'current':current}
+        return {'rfu': rfu, 'volts': volts, 'current': current}
 
     def stop_voltage(self):
         self.daq_board_control.change_voltage(0)
-
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         if pfn:
@@ -933,9 +933,6 @@ class BarracudaSystem(BaseSystem):
             self.laser_standby()
             return False
 
-
-
-
     def pressure_close(self):
         self.pressure_control.close()
         return True
@@ -963,11 +960,10 @@ class BarracudaSystem(BaseSystem):
         self.led_control.stop_led(channel)
 
     def turn_on_dance(self):
-        threading.Thread(target = self.led_control.dance_party).start()
+        threading.Thread(target=self.led_control.dance_party).start()
 
     def turn_off_dance(self):
         self.led_control.dance_stop.set()
-
 
 
 class NikonEclipseTi(BaseSystem):
@@ -989,8 +985,8 @@ class NikonEclipseTi(BaseSystem):
     _led_lock = _outlet_lock
 
     xy_stage_inversion = [1, -1]
-    xy_stage_size =[50000,50000]
-    xy_stage_offset= [0,0]
+    xy_stage_size = [50000, 50000]
+    xy_stage_offset = [0, 0]
 
     def __init__(self):
         super(NikonEclipseTi, self).__init__()
@@ -1004,7 +1000,7 @@ class NikonEclipseTi(BaseSystem):
         self.hasVoltageControl = True
         self.hasPressureControl = True
         self.hasXYControl = True
-        self.hasLEDControl=True
+        self.hasLEDControl = True
         self.hasShutterControl = True
         self.hasFilterControl = True
 
@@ -1016,18 +1012,18 @@ class NikonEclipseTi(BaseSystem):
         # Initialize all the motors independently
         zstage = threading.Thread(target=self._start_zstage)
         zstage.start()
-        outlet=threading.Thread(target=self._start_outlet)
+        outlet = threading.Thread(target=self._start_outlet)
         outlet.start()
         # Wait for motors to finish homing
         zstage.join()
         outlet.join()
 
         # Image Control uses separate MMC
-        self.image_control = ImageControl.MicroControl(port = 7813, lock = self._camera_lock)
+        self.image_control = ImageControl.MicroControl(port=7813, lock=self._camera_lock)
 
-        #Nikon Scope shares a MMC
-        self.objective_control = ObjectiveControl.MicroControl(port = 7812, lock = self._scope_lock) # Use Presets
-        self.xy_stage_control = XYControl.MicroControl(mmc=self.objective_control.mmc, lock = self._scope_lock)
+        # Nikon Scope shares a MMC
+        self.objective_control = ObjectiveControl.MicroControl(port=7812, lock=self._scope_lock)  # Use Presets
+        self.xy_stage_control = XYControl.MicroControl(mmc=self.objective_control.mmc, lock=self._scope_lock)
         self.filter_control = ScopeControl.FilterMicroControl(mmc=self.objective_control.mmc,
                                                               lock=self._scope_lock)
         # Shutter is on its own MMC
@@ -1036,22 +1032,24 @@ class NikonEclipseTi(BaseSystem):
         # Set up and start DAQ
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
-                                                     voltage_control=self._daq_voltage_control, laser_fire=True )
+                                                     voltage_control=self._daq_voltage_control, laser_fire=True)
         # No Laser Control Will  need to be on DAQ
         self._start_daq()
 
-        #Pressure Runs on Outlet ARduino
-        self.led_control = LightControl.CapillaryLED(arduino = self.outlet_control.arduino, lock = self._led_lock)
+        # Pressure Runs on Outlet ARduino
+        self.led_control = LightControl.CapillaryLED(arduino=self.outlet_control.arduino, lock=self._led_lock)
         self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._outlet_lock,
                                                                 arduino=self.outlet_control.arduino, home=HOME)
 
         pass
 
     def _start_outlet(self):
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME, invt=1)
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME,
+                                                          invt=1)
 
     def _start_zstage(self):
-        self.z_stage_control = ZStageControl.PowerStep(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME, invt=-1)
+        self.z_stage_control = ZStageControl.PowerStep(com=self._z_stage_com, lock=self._z_stage_lock, home=HOME,
+                                                       invt=-1)
 
     def close_system(self):
         try:
@@ -1089,7 +1087,7 @@ class NikonEclipseTi(BaseSystem):
 
     def record_image(self, filename):
         img = self.get_image()
-        self.image_control.save_image(img,filename)
+        self.image_control.save_image(img, filename)
         return
 
     def _close_client(self):
@@ -1229,8 +1227,6 @@ class NikonEclipseTi(BaseSystem):
         self.objective_control.set_origin()
         return True
 
-
-
     def home_objective(self):
         """Goes to the current position marked as home. Return False if device has no 'home' capability."""
         self.objective_control.go_home()
@@ -1269,7 +1265,7 @@ class NikonEclipseTi(BaseSystem):
             rfu = self.daq_board_control.data['avg']
             volts = self.daq_board_control.data[self._daq_voltage_readout]
             current = self.daq_board_control.data[self._daq_current_readout]
-        return {'rfu':rfu, 'volts':volts, 'current':current}
+        return {'rfu': rfu, 'volts': volts, 'current': current}
 
     def stop_voltage(self):
         self.daq_board_control.change_voltage(0)
@@ -1317,7 +1313,7 @@ class NikonEclipseTi(BaseSystem):
         self.led_control.stop_led(channel)
 
     def turn_on_dance(self):
-        threading.Thread(target = self.led_control.dance_party).start()
+        threading.Thread(target=self.led_control.dance_party).start()
 
     def turn_off_dance(self):
         self.led_control.dance_stop.set()
@@ -1328,7 +1324,7 @@ class NikonEclipseTi(BaseSystem):
 
     def laser_fire(self):
         """Fires the laser."""
-        threading.Thread(target = self.daq_board_control.laser_fire).start()
+        threading.Thread(target=self.daq_board_control.laser_fire).start()
 
     def laser_stop(self):
         """Stops current firing of the laser."""
@@ -1354,7 +1350,6 @@ class NikonEclipseTi(BaseSystem):
         """ Shutsdown the Shutter client and mmc"""
         self.shutter_control.close()
         self.shutter_control._close_client()
-
 
     def filter_set(self, channel):
         """ Sets the filter cube channel"""
@@ -1404,6 +1399,7 @@ class NikonEclipseTi(BaseSystem):
         self.start_feed()
         return self.get_raw_image()
 
+
 class NikonTE3000(BaseSystem):
     system_id = 'NikonTE3000'
     _z_stage_com = "COM4"
@@ -1417,7 +1413,7 @@ class NikonTE3000(BaseSystem):
     _daq_voltage_control = 'ao1'
     _daq_rfu = "ai3"
 
-    _z_stage_lock = threading.RLock() # Same thread can access the lock at multiple points, but not multiple threads
+    _z_stage_lock = threading.RLock()  # Same thread can access the lock at multiple points, but not multiple threads
     _outlet_lock = threading.RLock()
     _objective_lock = threading.Lock()
     _xy_stage_lock = threading.Lock()
@@ -1450,7 +1446,7 @@ class NikonTE3000(BaseSystem):
         self.hasVoltageControl = True
         self.hasPressureControl = True
         self.hasXYControl = True
-        self.hasLEDControl=True
+        self.hasLEDControl = True
 
     def _start_daq(self):
         self.daq_board_control.max_time = 600000
@@ -1478,39 +1474,38 @@ class NikonTE3000(BaseSystem):
     def start_system(self):
         # Initialize all the motors independently
         zstage_thread = threading.Thread(target=self._start_zstage).start()
-        outlet=threading.Thread(target=self._start_outlet)
+        outlet = threading.Thread(target=self._start_outlet)
         outlet.start()
         objective = threading.Thread(target=self._start_objective)
         objective.start()
         # Wait for motors to finish homing
-        #zstage.join()
+        # zstage.join()
         outlet.join()
         objective.join()
-        self.image_control = ImageControl.MicroControl(port = 3121, lock = self._camera_lock)
-        self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock, com = 'COM4')
+        self.image_control = ImageControl.MicroControl(port=3121, lock=self._camera_lock)
+        self.xy_stage_control = XYControl.PriorControl(lock=self._xy_stage_lock, com='COM4')
         self.daq_board_control = DAQControl.DAQBoard(dev=self._daq_dev, voltage_read=self._daq_voltage_readout,
                                                      current_read=self._daq_current_readout, rfu_read=self._daq_rfu,
                                                      voltage_control=self._daq_voltage_control)
-        #self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
+        # self.laser_control = LaserControl.Laser(com=self._laser_com, lock=self._laser_lock, home=HOME)
 
-        self.led_control = LightControl.CapillaryLED(com = 'COM9', arduino = self.outlet_control.arduino, lock = self._led_lock)
+        self.led_control = LightControl.CapillaryLED(com='COM9', arduino=self.outlet_control.arduino,
+                                                     lock=self._led_lock)
         self._start_daq()
 
         self.pressure_control = PressureControl.PressureControl(com=self._pressure_com, lock=self._pressure_lock,
                                                                 arduino=self.outlet_control.arduino, home=HOME)
 
-
-
     def _start_outlet(self):
-        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME,invt=1)
-
+        self.outlet_control = OutletControl.OutletControl(com=self._outlet_com, lock=self._outlet_lock, home=HOME,
+                                                          invt=1)
 
     def _start_zstage(self):
         self.z_stage_control = ZStageControl.ThorLabs(lock=self._z_stage_lock)
 
     def _start_objective(self):
         self.objective_control = ObjectiveControl.ArduinoControl(com=self._objective_com, lock=self._objective_lock,
-                                                                   home=HOME)
+                                                                 home=HOME)
 
     def close_system(self):
         self.close_image()
@@ -1538,7 +1533,7 @@ class NikonTE3000(BaseSystem):
         with self._camera_lock:
             self.image_control.record_recent_image(filename)
 
-    def set_exposure(self,exp):
+    def set_exposure(self, exp):
         with self._camera_lock:
             self.image_control.set_exposure(exp)
         return
@@ -1631,11 +1626,10 @@ class NikonTE3000(BaseSystem):
             rfu = self.daq_board_control.data['avg']
             volts = self.daq_board_control.data[self._daq_voltage_readout]
             current = self.daq_board_control.data[self._daq_current_readout]
-        return {'rfu':rfu, 'volts':volts, 'current':current}
+        return {'rfu': rfu, 'volts': volts, 'current': current}
 
     def stop_voltage(self):
         self.daq_board_control.change_voltage(0)
-
 
     def set_laser_parameters(self, pfn=None, att=None, energy=None, mode=None, burst=None):
         if pfn:
@@ -1667,7 +1661,6 @@ class NikonTE3000(BaseSystem):
 
             return True
 
-
     def turn_on_led(self, channel='R'):
         self.led_control.start_led(channel)
 
@@ -1675,11 +1668,10 @@ class NikonTE3000(BaseSystem):
         self.led_control.stop_led(channel)
 
     def turn_on_dance(self):
-        threading.Thread(target = self.led_control.dance_party).start()
+        threading.Thread(target=self.led_control.dance_party).start()
 
     def turn_off_dance(self):
         self.led_control.dance_stop.set()
-
 
 
 # NEEDS:
@@ -1931,36 +1923,144 @@ class OstrichSystem(BaseSystem):
     def pressure_valve_close(self):
         """Closes pressure valve."""
         pass
-class TiEclipseSeattle(BaseSystem):
+
+
+class CE_TiEclipseSeattle(BaseSystem):
     def __init__(self):
         super().__init__()
 
         # Hardware Class Objects: These are all (and should remain) the base classes
         self.xy_stage_control = XYControl.MicroControl()
 
-        self.z_stage_control = ZStageControl.ZStageControl()
-        self.outlet_control = OutletControl.OutletControl()
+        self.z_stage_control = ZStageControl.PowerStep(com="COM4", invt=-1, home_dir=False)
+        self.outlet_control = OutletControl.ArduinoOutlet(com="COM5", invt=1, home_dir=True)
         self.objective_control = ObjectiveControl.MicroControl(mmc=self.xy_stage_control.mmc)
-        self.power_supply_control = PowerSupplyControl.PowerSupply()
-        self.adc_control = DAQControl.NI_ADC(mode="continuous", sampling=50000, samples=5000)
+        self.power_supply_control = PowerSupplyControl.BertanSupply(channels=[0])
+        configs = {'ai0': 'diff', 'ai1': "RSE", 'ai5': 'RSE'}
+        self.adc_control = DAQControl.NI_ADC(mode="continuous", channels=['ai0', 'ai1', 'ai5'], configs=configs,
+                                             sampling=80000, samples=10000)
+
+        self._voltage_data=1
+        self._current_data=2
+        self._rfu_data=0
+        self._voltage_conversion = 1/2.5*5000
+        self._current_conversion = 1/2.5*(100*10**-6)
+
         self.daq_board_control = self.adc_control
         self.data_filter_control = DAQControl.Filter()
-        self.image_control = ImageControl.MicroControl(mmc=None,config_file=r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\config\hammatsu.cfg")
+        self.image_control = ImageControl.MicroControl(mmc=None,
+                                                       config_file=r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\config\hammatsu.cfg")
         self.laser_control = LaserControl.Laser()
-        self.pressure_control = PressureControl.PressureControl()
-        self.led_control = LightControl.LED()
+        # These are shared resources for the outlet arduino
+        arduino_1=self.outlet_control.arduino
+        arduino_1_lock = self.outlet_control.lock
+        self.pressure_control = PressureControl.ArduinoControl(arduino = arduino_1, lock=arduino_1_lock)
+        self.led_control = LightControl.CapillaryLED(arduino=arduino_1, lock = arduino_1_lock)
         self.shutter_control = ScopeControl.ShutterControl()
         self.filter_control = ScopeControl.FilterMicroControl(mmc=self.xy_stage_control.mmc)
 
         # Start the processes needed
         self.adc_control.start()
 
+    def get_voltage_data(self):
+        """
+        For the CE system we want to return the voltage column separately .
+
+        """
+        with self.adc_control.data_lock:
+            data = self.adc_control.data[self._voltage_data].copy()
+        data = data * self._voltage_conversion
+        return data
+
+    def get_current_data(self):
+        """
+        For the CE system we want to return the current column seperately
+        """
+        with self.adc_control.data_lock:
+            data = self.adc_control.data[self._current_data].copy()
+        data = data * self._current_conversion
+        return data
+
+    def get_rfu_data(self):
+        """
+        For the CE System we want to return the RFU column seperately
+        :return:
+        """
+        with self.adc_control.data_lock:
+            data = self.adc_control.data[self._rfu_data].copy()
+        return data
+
+
+
+class Chip_TiEclipseSeattle(BaseSystem):
+
+    def __init__(self):
+        super().__init__()
+
+        #Setup Hardware The Microchip Will need to use:
+        self.xy_stage_control = XYControl.MicroControl()
+        self.objective_control = ObjectiveControl.MicroControl(mmc=self.xy_stage_control.mmc)
+        self.filter_control = ScopeControl.FilterMicroControl(mmc=self.xy_stage_control.mmc)
+        self.image_control = ImageControl.MicroControl(mmc=None,
+                                                       config_file=r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\config\hammatsu.cfg")
+
+        # ------------------------------- Power Supply setup --------------------------------
+        # Power supply channels. Once inside the PowerSupply class we only care about
+        # their order in this list. 0->index 0 2->index 1 4-> index 2 and 6-> index 3
+        # Remember: Their order determines the channel.
+        bertan_channels = [0, 2, 4, 6]  # Inside the powersupply, we care only about their index in this list
+        self.power_supply_control = PowerSupplyControl.BertanSupply(channels=bertan_channels)
+        configs = {'ai0': 'diff', 'ai14': "RSE", 'ai15': 'RSE'}
+
+        # Setup ADC
+        adc_channels = ['ai1', 'ai2', 'ai3', 'ai4', 'ai5', 'ai6', 'ai7', 'ai15']
+        self.adc_control = DAQControl.NI_ADC(mode="continuous", channels=adc_channels,
+                                             sampling=20000, samples=10000, output_data=100)
+
+        # Create Dictionary to Help keep track of everything, only used to double check wiring:
+        _wiring = {2: [0, 'ai1', 'ai5'],  # Electrode Channel 2
+                   3: [2, 'ai2', 'ai6'],  # Electrode Channel 3
+                   4: [4, 'ai3', 'ai7'],  # Electrode Channel 4
+                   5: [6, 'ai4', 'ai15']}  # Electrode Channel 5
+
+        self._voltage_chnls = [0, 4]
+        self._voltage_conversion = 1 / 2.5 * 5000
+        self._current_chnls = [4, 8]
+        self._current_conversion = 1 / 2.5 * (100 * 10 ** -6)
+        self.daq_board_control = self.adc_control
+        self.data_filter_control = DAQControl.Filter()
+        self.adc_control.start()
+
+
+
+    def get_voltage(self):
+        """
+        For the microchip system we want to return the entire array of voltages and currents together.
+
+        """
+        with self.adc_control.data_lock:
+            st, end = self._voltage_chnls
+            data = self.adc_control.data[st:end].copy()
+        data = data * self._voltage_conversion
+        return data
+
+    def get_current(self):
+        """
+        For the microchip system we want to return the entire array of voltages and currents together.
+        """
+        with self.adc_control.data_lock:
+            st, end = self._current_chnls
+            data = self.adc_control.data[st:end].copy()
+        data = data * self._current_conversion
+        return data
 
 
 def test():
-    hardware = TiEclipseSeattle()
-    hardware.start_system()
+    hardware = CE_TiEclipseSeattle()
     return hardware
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+
     hardware = test()

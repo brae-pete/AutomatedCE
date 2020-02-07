@@ -6,6 +6,7 @@ import os
 import pickle
 import numpy as np
 import time
+
 try:
     from hardware import ArduinoBase
     from hardware.ScopeControl import PriorController
@@ -44,6 +45,7 @@ class ZStageControl:
     Make sure that what you program matches the inputs and outputs
     This is called by the GUI and needs data types to match
     """
+    default_pos = 24.5
 
     def __init__(self, com="COM3", lock=-1, home=False,invt=1):
         """com = Port, lock = threading.Lock, args = [home]
@@ -85,6 +87,10 @@ class ZStageControl:
                 if len(args) > 0:
                     self.pos = args[0]
                 return self.pos
+            self.get_z()
+        return self.pos
+
+    def get_z(self):
         return self.pos
 
     def set_z(self, set_z=0, *args):
@@ -155,6 +161,7 @@ class ZStageControl:
             time.sleep(0.25)
             prev_pos = current_pos
             current_pos = self.read_z()
+            print(current_pos)
         return current_pos
 
 
@@ -513,14 +520,14 @@ class ThorLabs(ZStageControl):
 
 class PowerStep(ZStageControl):
     min_z = 0
-    max_z = 25.1
+    max_z = 26
     offset = 25
-    def __init__(self, lock, com = "COM3", arduino = -1, home=False,invt=1 ):
+    def __init__(self, com = "COM3", arduino = -1, home=False,invt=1, home_dir = False,lock=threading.RLock()):
         self.lock = lock
         self.home = home
         self.inversion = invt
         self.invert = invt
-        self.com = "COM3"
+        self.com = com
         self.pos = 0
         self.have_arduino = True
         self.arduino = arduino
@@ -531,22 +538,8 @@ class PowerStep(ZStageControl):
             lock = threading.RLock()
         self.lock = lock
         self.first_read = True
+        self.home_dir=home_dir
         self.go_home()
-
-    def wait_for_move(self,clearance=0.0):
-        """
-        returns the final position of the motor after it has stopped moving.
-
-        :return: current_pos, float in mm of where the stage is at
-        """
-        prev_pos = self.get_z()
-        current_pos = prev_pos + 1
-        # Update position while moving
-        while np.abs(prev_pos-current_pos) > clearance:
-            time.sleep(0.1)
-            prev_pos = current_pos
-            current_pos = self.get_z()
-        return current_pos
 
 
     def open(self):
@@ -605,19 +598,14 @@ class PowerStep(ZStageControl):
             if self.home:
                 self.pos = 0
                 return
-            if self.invert == -1:
-                invt = True
-            else:
-                invt = False
-            self.arduino.go_home(invt)
+            self.arduino.go_home(self.home_dir)
+            self.max_z+=25
+            self.set_z(50)
             self.wait_for_move()
-            self.arduino.go_home(invt)
+            self.set_rel_z(0.1)
             self.pos = self.wait_for_move()
-            logging.info("{} is pos 0, {} is stage 0".format(self.pos, self.arduino.pos))
-            self.set_z(24)
-            cz=self.wait_for_move()
-            logging.info("{} is current z".format(cz))
-
+            self.max_z-=25
+            self.set_z(self.default_pos)
 
     def set_z(self, set_z):
         """ set_z (absolute position in mm)
@@ -703,10 +691,13 @@ def threading_test():
     print("We are Locked")
     # ser2 = ZStageControl()
 
+def test():
+    ctl= PowerStep(com="COM4", invt=-1)
+    #ctl.set_z(-2)
+    return ctl
 if __name__ == "__main__":
     import time
-    s = ThorLabs()
-
+    ctl=test()
 
 
 

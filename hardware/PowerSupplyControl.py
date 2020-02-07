@@ -48,10 +48,11 @@ class BertanSupply(PowerSupply):
     Bertan Power Supply. Please enter voltages in kiloVolts (1 for 1kV)
 
     """
-    def __init__(self, channels=None):
+    def __init__(self, channels=None, port="COM3"):
+
         if channels is None:
             channels = [1, 2, 3, 4]
-        self.dac=DAQControl.PMOD_DAC(channels=channels)
+        self.dac=DAQControl.PMOD_DAC(channels=channels, port=port)
         self.channels=channels
 
     @staticmethod

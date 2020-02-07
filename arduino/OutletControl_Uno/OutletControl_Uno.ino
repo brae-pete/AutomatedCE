@@ -270,7 +270,7 @@ void motorTalk(){
     }
   }
   else if (inputString[2]=='G'){
-    motorHomePosition();
+    setHome();
   } else if (inputString[2]=='S'){
     setMotorSpeed();
   } else if (inputString[2]=='A'){
