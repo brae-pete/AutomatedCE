@@ -25,6 +25,7 @@ class Application(tk.Frame):
     def __init__(self, master=None, controller=None, default='Simple UI'):
         super().__init__(master)
         self.master = master
+        self.root = tk.Tk()
         self.pack()
         self.create_widgets(default)
         self.controller = controller
@@ -36,21 +37,27 @@ class Application(tk.Frame):
 
         self.message.insert(tk.INSERT, self.message_header + msg)
         self.message.pack()
+
         self.input = tk.Entry(self)
         self.input.pack()
+
         self.send_button = tk.Button(self)
         self.send_button['command'] = self.send_command
         self.send_button['text'] = 'Send Command'
+        self.master.bind('<Return>', self.send_command)
+
         self.send_button.pack()
 
-    def send_command(self):
+
+    def send_command(self, *args):
         self.controller.send_command(self.input.get())
+        self.input.delete(0, 'end')
 
 
 class Controller:
 
     def __init__(self):
-        self.root = tk.Tk()
+        self.root=tk.Tk()
         self.model = Model(controller=self)
         self.view = Application(master=self.root, controller=self, default=self.model.default_text)
 
@@ -251,7 +258,7 @@ class Model:
         filt = self.hardware.filter_get()
         exp = self.hardware.get_exposure()
         obj = 1 #todo need to iplment objective info class
-        img_name = "{}_F{}_O{}_E{:d}_{:04d}.tiff".format(str_time, filt, obj, exp, self.im_num)
+        img_name = "{}_F{}_O{}_E{:.0f}_{:04d}.tiff".format(str_time, filt, obj, exp, self.im_num)
         file_path = os.path.join(self.save_dir, img_name)
         self.hardware.save_raw_image(file_path)
         self.log_data(img_name)
@@ -338,7 +345,7 @@ def save_image_data(save_dir, imgs, raw_imgs, times, raw_vid=False, adj_folder=F
     video_flags=[raw_vid, True]
     dir_flags = [True, adj_folder]
 
-    for lbl, dataset, vid_flag, dir_flag in zip(labels, [raw_imgs, imgs], video_flags, dir_flags)
+    for lbl, dataset, vid_flag, dir_flag in zip(labels, [raw_imgs, imgs], video_flags, dir_flags):
 
         if vid_flag:
             video_file = os.path.join(save_dir, lbl + str_now + '.avi')

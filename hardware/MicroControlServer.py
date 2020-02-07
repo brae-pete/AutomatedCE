@@ -15,11 +15,12 @@ import pickle
 from multiprocessing.connection import Listener
 import logging
 import os
+sys.path.append(os.path.relpath(".."))
 cwd = os.getcwd()
 cwd = cwd.split('\\')
 USER = cwd[2]
 def log_output(msg, port, mode = 'a'):
-    with open(r'C:\Users\{}\Documents\Barracuda\BarracudaQt\py2_log-{}.txt'.format(USER,port), mode) as fout:
+    with open(r'py2_log-{}.txt'.format(USER,port), mode) as fout:
         fout.write("{}-{}\n".format(datetime.datetime.now().strftime('%m/%d/%y %H:%M:%S'), msg))
 
 
@@ -214,7 +215,9 @@ class MicroControl:
 
     def get_xy_position(self, args):
         """ Returns the XY position in um as a list of floats [x,y]"""
-        return self.mmc.getXYPosition()
+        x = self.mmc.getXPosition()
+        y = self.mmc.getYPosition()
+        return [x,y]
 
     def set_xy_position(self, args):
         """ Set the xy stage position. args[2]=x, args[3]=y in microns"""
@@ -299,11 +302,10 @@ class MicroControl:
             response = 'Error: ' + str(e)
         return response
 
-
 def main(args):
     logging.warning("Python 2 Subprocess started...")
 
-    with open(r'C:\Users\{}\Documents\Barracuda\BarracudaQt\py2_log.txt'.format(USER), 'a') as fout:
+    with open(r'py2_log.txt'.format(USER), 'a') as fout:
         fout.write("Python 2 started {}\n".format(args))
 
     if len(args) > 1:

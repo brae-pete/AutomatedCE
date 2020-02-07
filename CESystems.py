@@ -31,6 +31,7 @@ class BaseSystem:
     system_id = None
 
     # Supported hardware checks for the program controllers
+    """Artifacts of old system prior to example base classes"""
     hasCameraControl = True
     hasXYControl = True
     hasInletControl = True
@@ -61,7 +62,7 @@ class BaseSystem:
         self.power_supply_control = PowerSupplyControl.PowerSupply()
         self.adc_control = DAQControl.ADC()
         self.daq_board_control = self.adc_control
-        self.filter_control = DAQControl.Filter()
+        self.data_filter_control = DAQControl.Filter()
         self.image_control = ImageControl.ImageControl()
         self.laser_control = LaserControl.Laser()
         self.pressure_control = PressureControl.PressureControl()
@@ -249,17 +250,17 @@ class BaseSystem:
 
     def get_voltage_data(self):
         """Gets a list of the voltages over time."""
-        return self.adc_control.data[:,0]
+        return self.adc_control.data[0,:]
 
     def get_current_data(self):
         """Gets a list of the current over time."""
-        return self.adc_control.data[:,1]
+        return self.adc_control.data[1,:]
 
     def get_rfu_data(self):
         """Gets a list of the RFU over time."""
-        data =  self.adc_control.data[:,2]
+        data =  self.adc_control.data[2,:]
         if len(data)>100:
-            data = self.filter_control.filter_data(data)
+            data = self.data_filter_control.filter_data(data)
         return data
     def get_data(self):
         """ Returns the data """
@@ -1930,9 +1931,34 @@ class OstrichSystem(BaseSystem):
     def pressure_valve_close(self):
         """Closes pressure valve."""
         pass
+class TiEclipseSeattle(BaseSystem):
+    def __init__(self):
+        super().__init__()
+
+        # Hardware Class Objects: These are all (and should remain) the base classes
+        self.xy_stage_control = XYControl.MicroControl()
+
+        self.z_stage_control = ZStageControl.ZStageControl()
+        self.outlet_control = OutletControl.OutletControl()
+        self.objective_control = ObjectiveControl.MicroControl(mmc=self.xy_stage_control.mmc)
+        self.power_supply_control = PowerSupplyControl.PowerSupply()
+        self.adc_control = DAQControl.NI_ADC(mode="continuous", sampling=50000, samples=5000)
+        self.daq_board_control = self.adc_control
+        self.data_filter_control = DAQControl.Filter()
+        self.image_control = ImageControl.MicroControl(mmc=None,config_file=r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\config\hammatsu.cfg")
+        self.laser_control = LaserControl.Laser()
+        self.pressure_control = PressureControl.PressureControl()
+        self.led_control = LightControl.LED()
+        self.shutter_control = ScopeControl.ShutterControl()
+        self.filter_control = ScopeControl.FilterMicroControl(mmc=self.xy_stage_control.mmc)
+
+        # Start the processes needed
+        self.adc_control.start()
+
+
 
 def test():
-    hardware = BaseSystem()
+    hardware = TiEclipseSeattle()
     hardware.start_system()
     return hardware
 

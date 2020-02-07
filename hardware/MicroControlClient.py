@@ -6,13 +6,13 @@ import logging
 import time
 import os
 
-#Thhis should be the path to the python.exe file in the CEpy27 environment set up by conda.
+#This should be the path to the python.exe file in the CEpy27 environment set up by conda.
 WAIT_TIME = 0.075 # Time in seconds to wait between server calls.
 cwd = os.getcwd()
 cwd = cwd.split('\\')
 USER = cwd[2]
-PYTHON2_PATH = r"C:\Users\{}\Miniconda3\envs\CEpy27\python.exe".format(USER)
-SERVER_FILE = r'C:\Users\{}\Documents\Barracuda\BarracudaQt\hardware\MicroControlServer.py'.format(USER)
+PYTHON2_PATH = r"C:\Users\{}\Anaconda3\envs\CEpy27\python.exe".format(USER)
+SERVER_FILE = r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\hardware\MicroControlServer.py"
 class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object

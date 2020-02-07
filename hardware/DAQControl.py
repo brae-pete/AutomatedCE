@@ -151,7 +151,7 @@ class NI_ADC(ADC, NIDAQ_USB):
     want to measure.
 
     Be sure that both the nidaqmx python library and the NIDaqMX Base is installed. NiDaqMX base (version 15.1 or higher)
-    mustbe installed from national instruments website, it does not automatically install when the
+    must be installed from national instruments website, it does not automatically install when the
     USB-6211 or other daq card is plugged in.
 
     >>>adc = Basic_ADC(channels = ['ai1', 'ai2'], mode = 'finite')
@@ -175,10 +175,10 @@ class NI_ADC(ADC, NIDAQ_USB):
                                                       terminal_config=TerminalConfiguration.RSE)
         # Configure the Timing
         self.mode = self.modes[mode]
-        self.task.timing.cfg_samp_clk_timing(sampling, samps_per_chan=samples, sample_mode=mode)
+        self.task.timing.cfg_samp_clk_timing(sampling, samps_per_chan=samples, sample_mode=self.mode)
 
     def start(self):
-        if self.mode == 'continuous':
+        if self.mode == self.modes['continuous']:
             self.task.register_every_n_samples_acquired_into_buffer_event(self.samples, self.read)
         self.task.start()
 
@@ -350,6 +350,7 @@ class Filter:
         self.order = 5
         self.padlen=24
         self.padtype='constant'
+        self.mode="Butter"
 
     def filter_data(self, data):
         if self.mode =='Butter':
