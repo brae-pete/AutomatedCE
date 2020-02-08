@@ -2,8 +2,11 @@ import datetime
 import logging
 import os
 import pickle
+import sys
 import threading
 import time
+import traceback
+
 import numpy as np
 import pandas as  pd
 
@@ -40,7 +43,7 @@ class RunMethod:
     collection_well = -1
     injection_wait = 6  # How long to wait after an injection for repeatable spontaneous fluid displacement
     sequence_id = round(time.time())  # Time in s from epoch, that links a repetitions in a sequence
-
+    running=threading.Event() # ONLY ONE METHOD SHALL RUN (at a time) ALL OTHERS MUST WAIT THEIR TURN!!!
     def __init__(self, hardware, methods, repetitions, methods_id,
                  flags, insert, folder, cap_control, cell_finders):
         """
@@ -78,14 +81,39 @@ class RunMethod:
         self.current_fc = None
 
     def start_run(self):
-        for self.method, self.method_id in zip(self.methods, self.methods_id):
-            run_state = self.logic()
-            if not run_state:
-                logging.info('Run stopped.')
-                self._stop_thread_flag.clear()
-                return False
-        logging.info('Sequence Completed.')
-        return True
+        """
+        The start of any sequence or run begins here.
+        self.running is an event that keeps track if a method is currently running.
+        Starting a new method, while one is currently running will likely make the
+        Micromanager fail (as well as cause confusion on where to move the vial).
+        All methods also terminate or finish here so the running flag is cleared
+        in this function.
+
+        All the methods in the sequence are iterated through, so the first method
+        will be run for as many repetitions specified before moving onto the next
+        method.
+
+        self.logic() is the call for the actual run logic. If you are looking to speed
+        things up or change how the steps of a run are played out you will want to adjust
+        the self.logic function.
+
+        :return:
+        """
+        # Check if a method is already running, if so give the user a warning
+        if not self.running.is_set():
+            self.running.set()
+            for self.method, self.method_id in zip(self.methods, self.methods_id):
+                run_state = self.logic()
+                if not run_state:
+                    logging.info('Run stopped at main...')
+                    self._stop_thread_flag.clear()
+                    self.running.clear()
+                    return False
+            logging.info('Sequence Completed.')
+            self.running.clear()
+            return True
+        else:
+            logging.warning("Method already running, Status:{}".format(self.running.is_set()))
 
     def check_flags(self):
         """ Check if the user has requested the program to stop, or if we should continue"""
@@ -395,6 +423,8 @@ class RunMethod:
             return state
         except Exception as e:
             logging.info("Error with Auto Cell: {}".format(e))
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            traceback.print_exception(exc_type, exc_value, exc_traceback, limit=10)
             return False
 
     def semi_auto_cell(self):
@@ -545,6 +575,7 @@ class RunMethod:
             self._inject_flag.clear()
             self.sequence_id = round(time.time())
             for self.step_id, self.step in enumerate(self.method.steps):
+                self.hardware.clear_data()
                 if 'Type' in self.step.keys():
                     logging.info('{} Step: {}'.format(self.step['Type'], self.step['Summary']))
                     state = self.check_flags()

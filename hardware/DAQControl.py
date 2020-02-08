@@ -134,7 +134,8 @@ class ADC:
         Generate some sample data. The read function should append to the
         Data field along the columns (axis=1).
         """
-        self.data = np.append(self.data, np.random.rand(len(self.channels),100), axis=1)
+        with self.data_lock:
+            self.data = np.append(self.data, np.random.rand(len(self.channels),100), axis=1)
 
     def stop(self):
         """
@@ -144,6 +145,9 @@ class ADC:
         """
         return
 
+    def reset_data(self):
+        with self.data_lock:
+            self.data = np.zeros([len(self.channels), 0])
 class NI_ADC(ADC, NIDAQ_USB):
     """
     Basic Analog to Digital Converter. The user can specify the mode (continuous, finite).
@@ -183,7 +187,7 @@ class NI_ADC(ADC, NIDAQ_USB):
 
             self.task.ai_channels.add_ai_voltage_chan('/' + self.devices[dev] + '/' + chan,
                                                       terminal_config=config)
-            print("SET")
+
         # Configure the Timing
         self.mode = self.modes[mode]
         self.task.timing.cfg_samp_clk_timing(sampling, samps_per_chan=samples, sample_mode=self.mode)

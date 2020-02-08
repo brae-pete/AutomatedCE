@@ -57,7 +57,8 @@ class ProgramController:
             pass
         elif user == 'Base':
             self.hardware= CESystems.BaseSystem()
-        self.hardware.start_system()
+        if user == 'CE_TiEclipse':
+            self.hardware = CESystems.CE_TiEclipseSeattle()
 
         app = QtWidgets.QApplication(sys.argv)
         self.program_window = CEGraphic.MainWindow(self)
@@ -1239,22 +1240,24 @@ class RunScreenController:
         self.screen.save_output.released.connect(lambda: self.save_output_window())
 
     def hardware_update(self, positions):
-        if not self.screen.xy_x_value.hasFocus() and not self.screen.xy_y_value.hasFocus():
-            value = positions[0]
-            self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
-            self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
+        if positions[0] is not None:
 
-        if not self.screen.z_value.hasFocus():
-            value = positions[1]
-            self.screen.z_value.setText("{:.3f}".format(float(value)))
+            if not self.screen.xy_x_value.hasFocus() and not self.screen.xy_y_value.hasFocus():
+                value = positions[0]
+                self.screen.xy_x_value.setText("{:.3f}".format(float(value[0])))
+                self.screen.xy_y_value.setText("{:.3f}".format(float(value[1])))
 
-        if not self.screen.objective_value.hasFocus():
-            value = positions[2]
-            self.screen.objective_value.setText("{:.3f}".format(float(value)))
+            if not self.screen.z_value.hasFocus():
+                value = positions[1]
+                self.screen.z_value.setText("{:.3f}".format(float(value)))
 
-        if not self.screen.outlet_value.hasFocus():
-            value = positions[3]
-            self.screen.outlet_value.setText("{:.3f}".format(float(value)))
+            if not self.screen.objective_value.hasFocus():
+                value = positions[2]
+                self.screen.objective_value.setText("{:.3f}".format(float(value)))
+
+            if not self.screen.outlet_value.hasFocus():
+                value = positions[3]
+                self.screen.outlet_value.setText("{:.3f}".format(float(value)))
         time.sleep(self._update_delay)
         # Update the thread again
         self.update_stage_thread.start()
@@ -1441,7 +1444,7 @@ class RunScreenController:
         self.hardware.save_data(open_file_path[0])
 
     def reset_plot(self):
-        self.hardware.daq_board_control._clear_data()
+        self.hardware.clear_data()
 
     def view_plot(self):
         check = self.screen.view_plot.isChecked()
@@ -2517,6 +2520,7 @@ class UpdateHardware(QtCore.QThread):
             self.signal.emit([xy, z , obj, outlet])
         except Exception as e:
             logging.error("{}".format(e))
+            self.signal.emit([None, None, None, None])
 class UpdatePlots(QtCore.QThread):
     signal = QtCore.pyqtSignal('PyQt_PyObject')
     plot_data = True

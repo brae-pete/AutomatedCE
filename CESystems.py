@@ -95,6 +95,9 @@ class BaseSystem:
 
     def get_xy(self):
         """Gets the current position of the XY stage."""
+        xy= self.xy_stage_control.read_xy()
+        if xy is None:
+            return self.xy_stage_control.pos
         return self.xy_stage_control.read_xy()
 
     def stop_xy(self):
@@ -122,7 +125,7 @@ class BaseSystem:
         if z is not None:
             self.z_stage_control.set_z(z)
         elif rel_z is not None:
-            self.z_stage_control.jog(z)
+            self.z_stage_control.jog(rel_z)
         else:
             return False
         return True
@@ -229,6 +232,10 @@ class BaseSystem:
         """Removes immediate functionality of the voltage source."""
         self.power_supply_control.stop_voltage()
 
+    def clear_data(self):
+        """ Resets the data """
+        self.adc_control.reset_data()
+
     def stop_voltage(self):
         """ Sets the voltage to Zero"""
         self.power_supply_control.stop_voltage()
@@ -271,6 +278,23 @@ class BaseSystem:
             current = self.get_current_data()
         time_points = np.linspace(0, len(rfu)/self.adc_control.downsampled_freq, len(rfu))
         return {'rfu': rfu, 'volts': volts, 'current': current, 'time':time_points}
+
+    def save_data(self, filename):
+        """ Save the data to a file """
+        data = self.get_data()
+        with open(filename, 'w') as f_in:
+            f_in.write('time, rfu, kV, uA\n')
+            for i in range(len(data['rfu'])):
+                t_point = data['time'][i]
+                rfu = data['rfu'][i]
+                ua = data['current'][i]
+                kv = data['volts'][i]
+                try:
+                    f_in.write('{:.3f},{},{:.3f},{:.3f}\n'.format(t_point, rfu, kv, ua))
+                except TypeError:
+                    f_in.write("{},{},{},{}\n".format(t_point, rfu, kv, ua))
+
+        return True
 
     def close_image(self):
         """Removes the immediate functionality of the camera."""
@@ -1930,11 +1954,11 @@ class CE_TiEclipseSeattle(BaseSystem):
         super().__init__()
 
         # Hardware Class Objects: These are all (and should remain) the base classes
-        self.xy_stage_control = XYControl.MicroControl()
-
+        self._nikon_lock = threading.RLock()
+        self.xy_stage_control = XYControl.MicroControl(lock=self._nikon_lock)
         self.z_stage_control = ZStageControl.PowerStep(com="COM4", invt=-1, home_dir=False)
         self.outlet_control = OutletControl.ArduinoOutlet(com="COM5", invt=1, home_dir=True)
-        self.objective_control = ObjectiveControl.MicroControl(mmc=self.xy_stage_control.mmc)
+        self.objective_control = ObjectiveControl.MicroControl(mmc=self.xy_stage_control.mmc, lock=self._nikon_lock)
         self.power_supply_control = PowerSupplyControl.BertanSupply(channels=[0])
         configs = {'ai0': 'diff', 'ai1': "RSE", 'ai5': 'RSE'}
         self.adc_control = DAQControl.NI_ADC(mode="continuous", channels=['ai0', 'ai1', 'ai5'], configs=configs,
@@ -1957,7 +1981,7 @@ class CE_TiEclipseSeattle(BaseSystem):
         self.pressure_control = PressureControl.ArduinoControl(arduino = arduino_1, lock=arduino_1_lock)
         self.led_control = LightControl.CapillaryLED(arduino=arduino_1, lock = arduino_1_lock)
         self.shutter_control = ScopeControl.ShutterControl()
-        self.filter_control = ScopeControl.FilterMicroControl(mmc=self.xy_stage_control.mmc)
+        self.filter_control = ScopeControl.FilterMicroControl(mmc=self.xy_stage_control.mmc, lock=self._nikon_lock)
 
         # Start the processes needed
         self.adc_control.start()
@@ -2030,7 +2054,6 @@ class Chip_TiEclipseSeattle(BaseSystem):
         self.daq_board_control = self.adc_control
         self.data_filter_control = DAQControl.Filter()
         self.adc_control.start()
-
 
 
     def get_voltage(self):

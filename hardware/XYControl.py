@@ -7,9 +7,14 @@ import serial
 from numpy import abs
 import time
 import sys
+try:
 
-from hardware import MicroControlClient
-from hardware.ScopeControl import PriorController
+    from hardware import MicroControlClient
+    from hardware.ScopeControl import PriorController
+except ModuleNotFoundError:
+    sys.path.append(os.path.relpath('..'))
+    from hardware import MicroControlClient
+    from hardware.ScopeControl import PriorController
 # Locate the directory of config files
 cwd = os.getcwd()
 contents = os.listdir(cwd)
@@ -182,11 +187,14 @@ class MicroControl(XYControl):
         with self.lock:
             self.mmc.send_command('xy,get_position\n')
             um = self.mmc.read_response()
+        if type(um) is not list:
+            return None
         if type(um[0]) is not float and type(um[0]) is not int:
             logging.warning("Did not read XY Stage position: {}".format(um))
         um = [x / self.scale for x in um]
         um[0] *= self.x_inversion
         um[1] *= self.y_inversion
+        self.pos = um
         return um
 
     def set_xy(self, xy):

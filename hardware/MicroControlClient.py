@@ -1,4 +1,5 @@
 import socket
+import threading
 from multiprocessing.connection import Client
 import subprocess
 import pickle
@@ -7,7 +8,7 @@ import time
 import os
 
 #This should be the path to the python.exe file in the CEpy27 environment set up by conda.
-WAIT_TIME = 0.075 # Time in seconds to wait between server calls.
+WAIT_TIME = 0.1 # Time in seconds to wait between server calls.
 cwd = os.getcwd()
 cwd = cwd.split('\\')
 USER = cwd[2]
@@ -17,36 +18,43 @@ class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object
     conn = None
+    lock = threading.Lock()
     def __init__(self, port=5030):
         self.address = ('localhost', port)
         #self.start_server()
 
     def start_connection(self):
-        self.conn = Client(self.address, authkey=b'barracuda')
+        with self.lock:
+            self.conn = Client(self.address, authkey=b'barracuda')
 
     def send_command(self, cmd):
-        self.conn.send_bytes(pickle.dumps(cmd, 2))
-        time.sleep(WAIT_TIME)
+        with self.lock:
+            self.conn.send_bytes(pickle.dumps(cmd, 2))
+
 
     def read_response(self):
-        response = self.conn.recv_bytes()
-        response = pickle.loads(response, encoding='bytes')
-        time.sleep(WAIT_TIME)
+        with self.lock:
+            time.sleep(WAIT_TIME)
+            response = self.conn.recv_bytes()
+            response = pickle.loads(response, encoding='bytes')
+            time.sleep(WAIT_TIME)
         return response
 
     def close_server(self):
-        self.conn.send_bytes(pickle.dumps('close',2))
-        self.conn.close()
-        self.server.terminate()
+        with self.lock:
+            self.conn.send_bytes(pickle.dumps('close',2))
+            self.conn.close()
+            self.server.terminate()
 
     def start_server(self):
         """
         Opens the python2 subprocess that will run the server and micromanager code.
         :return:
         """
-        self.server = subprocess.Popen([PYTHON2_PATH,
-                                        SERVER_FILE, '{}'.format(self.address[1])], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-        time.sleep(1)
+        with self.lock:
+            self.server = subprocess.Popen([PYTHON2_PATH,
+                                            SERVER_FILE, '{}'.format(self.address[1])], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+            time.sleep(1)
     def open(self):
         """ Opens the Python 2 server and starts the connection"""
         if self.conn is None:

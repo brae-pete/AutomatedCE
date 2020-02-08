@@ -69,7 +69,10 @@ class ImageControl:
 
     def __init__(self):
         # Load in Raw Image
-        self.img = io.imread('recentImg.png')
+        try:
+            self.img = io.imread('recentImg.png')
+        except:
+            self.img=np.zeros((512,412))
         self.raw_img = self.img.copy()
         self.exposure = 100
 
