@@ -10,9 +10,9 @@ Open the Anaconda Prompt. Create the barracuda environment by downloading the th
 ~~~
 cd \path\to\env\txtfile\
 
-conda create --name CEpy37 --file \path\to\env\txtfile\barracuda-env.txt
+conda create --name CEpy37 --file barracuda-env.txt
 conda activate CEpy37
-python -m pip install opencv_python nidaqmx onnx onnx_tf
+python -m pip install opencv_python nidaqmx onnx onnx_tf pythonnnet
 conda deactivate
 ~~~
 
@@ -48,6 +48,10 @@ Under Hardware>>MicroControlClient.py change the PYTHON2_PATH variable to the py
 For example a common location will be: "C:\Users\UserName\Miniconda3\envs\CEPy27\python"
 
 Also in the same file you will need to update the filepath for the MicroControlServer.py file. This probably could be fixed in the future to where it found it automatically
+
+### Thorlabs Kinesis
+
+Download Thorlabs Kinesis from their website and restart the computer. Load the software and check the labjack can be accessed by kinesis. If the labjack is new you will need to make sure the correct Serial number is recorded in the Thorlabs Labjack Class. 
 
 ### Hardware Functionality
 
