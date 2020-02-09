@@ -132,9 +132,11 @@ class FilterMicroControl(FilterWheelControl):
         """
         self.mmc = mmc
         self.lock = lock
-        self.config = os.path.join(CONFIG_FOLDER, config_file)
-        self._open_client(port)
-        self.open()
+        if mmc is None:
+
+            self.config = os.path.join(CONFIG_FOLDER, config_file)
+            self._open_client(port)
+            self.open()
 
         return
 
@@ -159,7 +161,7 @@ class FilterMicroControl(FilterWheelControl):
         with self.lock:
             self.mmc.send_command('core,load_config,{}'.format(self.config))
             response = self.mmc.read_response()
-        msg = "Could not open Objective"
+        msg = "Could not open Filter Control"
         state = self.mmc.ok_check(response, msg)
         return state
 
@@ -224,9 +226,13 @@ class ShutterMicroControl(ShutterControl):
         self.mmc = mmc
         self.lock = lock
         self.config = os.path.join(CONFIG_FOLDER, config_file)
-        self.port = port
-        self._open_client()
-        self.open()
+        if mmc is None:
+            self.port = port
+            self._open_client()
+            self.open()
+
+
+
         return
 
     def _open_client(self):

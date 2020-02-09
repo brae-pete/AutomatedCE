@@ -302,6 +302,7 @@ class PMOD_DAC(DAC):
         :param voltage: float, between 0 -5,000 volts
         :return:
         """
+        self.voltages[channel][1]=voltage
         if -self._max_voltage > voltage > self._max_voltage:
             logging.warning("Absolute voltage value must be less than {}} Volts".format(voltage))
         # PMOD_DAC is between 0 and 2.5 V

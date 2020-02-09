@@ -397,18 +397,21 @@ class MicroControl(ObjectiveControl):
     """
     inversion = -1
 
-    def __init__(self, mmc=None, port = 5511, config_file='NikonEclipseTi-NoLight.cfg', lock=threading.Lock()):
+    def __init__(self, mmc=None, port = 5511, config_file='PIckleNuts-NoLight.cfg', lock=threading.Lock()):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
         read/written two at multiple times.
         """
         self.pos = 0
-        self.mmc = mmc
         self.lock = lock
-        self.config = os.path.join(CONFIG_FOLDER, config_file)
-        self._open_client(port)
-        self.open()
+
+        if mmc is None:
+            self.config = os.path.join(CONFIG_FOLDER, config_file)
+            print("OBjective opening:{}".format(mmc))
+            self._open_client(port)
+            self.open()
+        self.mmc = mmc
 
         return
 
@@ -430,8 +433,8 @@ class MicroControl(ObjectiveControl):
         with self.lock:
             self.mmc.send_command('core,load_config,{}'.format(self.config))
             response = self.mmc.read_response()
-        msg = "Could not open Objective"
-        state = self.mmc.ok_check(response, msg)
+            msg = "Could not open Objective"
+            state = self.mmc.ok_check(response, msg)
         return state
 
     def read_z(self, *args):
@@ -474,5 +477,3 @@ def main():
     return oc
 
 
-if __name__ == "__main__":
-    oc = main()

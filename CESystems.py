@@ -3,6 +3,8 @@ import threading
 import logging
 import time
 import ctypes
+from collections import OrderedDict
+
 import numpy as np
 
 # Custom Hardware Modules  fixme do a dynamic import so only those modules necessary are imported.
@@ -74,6 +76,12 @@ class BaseSystem:
         # Start the processes needed
         self.adc_control.start()
 
+        #Voltage stuff
+        self._voltage_chnls = [0, 1]
+        self._voltage_conversion = 1 / 2.5 * 5000  # units = V
+        self._current_chnls = [1, 2]
+        self._current_conversion = 1 / 2.5 * (100 * 10 ** -6)  # units = Amps
+
     def calibrate_system(self, permissions_gui):
         """Calibrates the system."""
         logging.error('calibrate_system not implemented in hardware class.')
@@ -95,7 +103,7 @@ class BaseSystem:
 
     def get_xy(self):
         """Gets the current position of the XY stage."""
-        xy= self.xy_stage_control.read_xy()
+        xy = self.xy_stage_control.read_xy()
         if xy is None:
             return self.xy_stage_control.pos
         return self.xy_stage_control.read_xy()
@@ -249,7 +257,8 @@ class BaseSystem:
     def get_voltage_setting(self, chnl=0):
         """ Returns the voltage setting for the DAC"""
         chnl = self.power_supply_control.channels[chnl]
-        return self.power_supply_control.get_electrode_setting(chnl)
+        print(self.power_supply_control.dac.voltages)
+        return self.power_supply_control.get_electrode_setting(chnl)*self._voltage_conversion
 
     def get_voltage(self):
         """Gets the current voltage of the voltage source."""
@@ -276,8 +285,8 @@ class BaseSystem:
             rfu = self.get_rfu_data()
             volts = self.get_voltage_data()
             current = self.get_current_data()
-        time_points = np.linspace(0, len(rfu)/self.adc_control.downsampled_freq, len(rfu))
-        return {'rfu': rfu, 'volts': volts, 'current': current, 'time':time_points}
+        time_points = np.linspace(0, len(rfu) / self.adc_control.downsampled_freq, len(rfu))
+        return {'rfu': rfu, 'volts': volts, 'current': current, 'time': time_points}
 
     def save_data(self, filename):
         """ Save the data to a file """
@@ -1964,11 +1973,11 @@ class CE_TiEclipseSeattle(BaseSystem):
         self.adc_control = DAQControl.NI_ADC(mode="continuous", channels=['ai0', 'ai1', 'ai5'], configs=configs,
                                              sampling=80000, samples=10000)
 
-        self._voltage_data=1
-        self._current_data=2
-        self._rfu_data=0
-        self._voltage_conversion = 1/2.5*5000
-        self._current_conversion = 1/2.5*(100*10**-6)
+        self._voltage_data = 1
+        self._current_data = 2
+        self._rfu_data = 0
+        self._voltage_conversion = 1 / 2.5 * 5000
+        self._current_conversion = 1 / 2.5 * (100 * 10 ** -6)
 
         self.daq_board_control = self.adc_control
         self.data_filter_control = DAQControl.Filter()
@@ -1976,10 +1985,10 @@ class CE_TiEclipseSeattle(BaseSystem):
                                                        config_file=r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\config\hammatsu.cfg")
         self.laser_control = LaserControl.Laser()
         # These are shared resources for the outlet arduino
-        arduino_1=self.outlet_control.arduino
+        arduino_1 = self.outlet_control.arduino
         arduino_1_lock = self.outlet_control.lock
-        self.pressure_control = PressureControl.ArduinoControl(arduino = arduino_1, lock=arduino_1_lock)
-        self.led_control = LightControl.CapillaryLED(arduino=arduino_1, lock = arduino_1_lock)
+        self.pressure_control = PressureControl.ArduinoControl(arduino=arduino_1, lock=arduino_1_lock)
+        self.led_control = LightControl.CapillaryLED(arduino=arduino_1, lock=arduino_1_lock)
         self.shutter_control = ScopeControl.ShutterControl()
         self.filter_control = ScopeControl.FilterMicroControl(mmc=self.xy_stage_control.mmc, lock=self._nikon_lock)
 
@@ -2015,18 +2024,19 @@ class CE_TiEclipseSeattle(BaseSystem):
         return data
 
 
-
 class Chip_TiEclipseSeattle(BaseSystem):
 
     def __init__(self):
         super().__init__()
 
-        #Setup Hardware The Microchip Will need to use:
-        self.xy_stage_control = XYControl.MicroControl()
+        # Setup Hardware The Microchip Will need to use:
+        self.xy_stage_control = XYControl.MicroControl(
+            config_file=r'C:\Users\Luke\Desktop\Barracuda\BarracudaQt\config\NikonEclipseTi-NoLight.cfg')
         self.objective_control = ObjectiveControl.MicroControl(mmc=self.xy_stage_control.mmc)
         self.filter_control = ScopeControl.FilterMicroControl(mmc=self.xy_stage_control.mmc)
-        self.image_control = ImageControl.MicroControl(mmc=None,
-                                                       config_file=r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\config\hammatsu.cfg")
+
+        self.image_control = ImageControl.MicroControl(
+            config_file=r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\config\hammatsu.cfg")
 
         # ------------------------------- Power Supply setup --------------------------------
         # Power supply channels. Once inside the PowerSupply class we only care about
@@ -2042,21 +2052,20 @@ class Chip_TiEclipseSeattle(BaseSystem):
                                              sampling=20000, samples=10000, output_data=100)
 
         # Create Dictionary to Help keep track of everything, only used to double check wiring:
-        _wiring = {2: [0, 'ai1', 'ai5'],  # Electrode Channel 2
+        _wiring = {2: [0, 'ai1', 'ai5'],
+                   # Electrode Channel 2 on Bertan uses channel 0 on PMOD, ai1 is voltage, ai5 is current
                    3: [2, 'ai2', 'ai6'],  # Electrode Channel 3
                    4: [4, 'ai3', 'ai7'],  # Electrode Channel 4
                    5: [6, 'ai4', 'ai15']}  # Electrode Channel 5
 
         self._voltage_chnls = [0, 4]
-        self._voltage_conversion = 1 / 2.5 * 5000
+        self._voltage_conversion = 1 / 2.5 * 5000  # units = V
         self._current_chnls = [4, 8]
-        self._current_conversion = 1 / 2.5 * (100 * 10 ** -6)
+        self._current_conversion = 1 / 2.5 * (100 * 10 ** -6)  # units = Amps
         self.daq_board_control = self.adc_control
-        self.data_filter_control = DAQControl.Filter()
         self.adc_control.start()
 
-
-    def get_voltage(self):
+    def get_voltage_data(self):
         """
         For the microchip system we want to return the entire array of voltages and currents together.
 
@@ -2067,7 +2076,7 @@ class Chip_TiEclipseSeattle(BaseSystem):
         data = data * self._voltage_conversion
         return data
 
-    def get_current(self):
+    def get_current_data(self):
         """
         For the microchip system we want to return the entire array of voltages and currents together.
         """
@@ -2077,9 +2086,40 @@ class Chip_TiEclipseSeattle(BaseSystem):
         data = data * self._current_conversion
         return data
 
+    def get_data(self):
+        with self.adc_control.data_lock:
+            volts = self.get_voltage_data()
+            current = self.get_current_data()
+        time_points = np.linspace(0, (volts.shape[1] - 1) / self.adc_control.downsampled_freq, volts.shape[1])
+        x = OrderedDict()
+        x['time'] = time_points
+        for i in range(volts.shape[0]):
+            x['E{}_voltage'.format(i)] = volts[i, :]
+        for i in range(current.shape[0]):
+            x['E{}_current'.format(i)] = current[i, :]
+        return x
+
+    def save_data(self, filename):
+        """ Save the data to a file """
+        data = self.get_data()
+        with open(filename, 'w') as f_in:
+            headers = ""
+            for key in data:
+                headers += '{},'.format(key)
+            headers = headers[:-1] + '\n'
+            f_in.write(headers)
+            for i in range(len(data[key])):
+                data_line = ''
+                for key in data:
+                    data_line += '{},'.format(data[key][i])
+                data_line = data_line[:-1] + '\n'
+                f_in.write(data_line)
+
+        return True
+
 
 def test():
-    hardware = CE_TiEclipseSeattle()
+    hardware = Chip_TiEclipseSeattle()
     return hardware
 
 

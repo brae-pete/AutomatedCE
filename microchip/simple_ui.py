@@ -7,11 +7,13 @@ import cv2
 
 try:
     from hardware import ImageControl
+    import CESystems
 except:
     sys.path.append(os.path.relpath('..'))
     from hardware import ImageControl
+    import CESystems
 
-import CESystems
+
 
 import threading
 from tkinter import filedialog
@@ -114,7 +116,7 @@ class Model:
 
 
         self.controller = controller
-        self.hardware = CESystems.BaseSystem()
+        self.hardware = CESystems.Chip_TiEclipseSeattle()
 
         # Menu Variables
         self.menu_choice = 'Main'
@@ -226,8 +228,8 @@ class Model:
 
     def electrode_menu_options(self, text):
         voltage = float(text)
-        self.hardware.set_voltage(voltage, self.electrode_choice)
         pre_msg = "\n Electrode {} set to {:.1f}".format(self.electrode_choice, voltage)
+        self.hardware.set_voltage(voltage/1000, self.electrode_choice)
         self.menu_choice= 'Main'
         return pre_msg + self.main_menu
 
@@ -254,7 +256,7 @@ class Model:
             self.save_dir = filedialog.askdirectory()
         # Create the image name
         now = datetime.now()
-        str_time = now.strftime("%H%M")
+        str_time = now.strftime("%H%M%S")
         filt = self.hardware.filter_get()
         exp = self.hardware.get_exposure()
         obj = 1 #todo need to iplment objective info class
@@ -297,7 +299,7 @@ class Model:
         """
 
         # Set up the ADC channels for getting data, Start reading ADC
-        self.hardware.adc_control.start()
+
         # Make sure the camera is acquiring
         self.hardware.start_feed()
         # We will use the exposure to get our timing
@@ -309,6 +311,7 @@ class Model:
         times = []
 
         #Create a reference timepoint
+        self.hardware.clear_data()
         start_time = time.time()
         target_time = start_time + exposure / 1000
         self.hardware.power_supply_control.apply_changes()
@@ -320,11 +323,17 @@ class Model:
             times.append(time.time()-start_time)
             # Sleep for a little bit
             target_time = better_sleep(target_time, exposure / 1000)
+            print('Snap')
 
         # Save the data
-
+        self._old_data=[raw_imgs, adjusted_imgs]
         self.hardware.power_supply_control.stop_voltage()
-        self.hardware.adc_control.stop()
+        if self.save_dir is None:
+            self.save_dir = filedialog.askdirectory()
+        now = datetime.now()
+        save_image_data(self.save_dir, adjusted_imgs, raw_imgs, times, now, raw_vid=False, adj_folder=False)
+        csv_data = '{}_voltage_current.csv'.format(now.strftime("%H%M%S"))
+        self.hardware.save_data(os.path.join(self.save_dir, csv_data))
 
     def run_update(self):
         self._remaining_time -= 1
@@ -337,19 +346,27 @@ class Model:
             pre_message = '\n Run finished. \n'
             self.controller.send_response(pre_message + self.main_menu)
 
+def save_image_data(save_dir, imgs, raw_imgs, times, now, raw_vid=False, adj_folder=False):
+    """
 
-def save_image_data(save_dir, imgs, raw_imgs, times, raw_vid=False, adj_folder=False):
-    now = datetime.now()
+    :param save_dir:
+    :param imgs:
+    :param raw_imgs:
+    :param times:
+    :param raw_vid:
+    :param adj_folder:
+    :return:
+    """
+
     str_now = now.strftime("%H%M%S")
-    labels = ['raw_','adjusted_']
-    video_flags=[raw_vid, True]
+    labels = ['raw_', 'adjusted_']
+    video_flags = [raw_vid, True]
     dir_flags = [True, adj_folder]
 
     for lbl, dataset, vid_flag, dir_flag in zip(labels, [raw_imgs, imgs], video_flags, dir_flags):
-
         if vid_flag:
             video_file = os.path.join(save_dir, lbl + str_now + '.avi')
-            width, height = dataset[0].shape
+            width, height = dataset[-1].shape
             # output the data to a video
             video = cv2.VideoWriter(video_file, 0, 5, (width, height))
             for frame in dataset:
@@ -358,27 +375,27 @@ def save_image_data(save_dir, imgs, raw_imgs, times, raw_vid=False, adj_folder=F
         if dir_flag:
             capture_folder = os.path.join(save_dir, lbl + str_now)
             os.mkdir(capture_folder)
-            for idx,frame,time_point in enumerate(zip(dataset, times)):
-                time_point = time_point*1000 #Convert to milliseconds
-                fname = os.path.join(capture_folder, lbl+"{:d}_{:05}.tiff".format(time_point, lbl))
-                io.imsave(fname, frame)
+            idx=0
+            with open(os.path.join(save_dir,'times'+lbl+str_now+'.csv'), 'a') as fout:
+                fout.write('time(ms), file_name\n')
+                for frame,time_point in zip(dataset, times):
+                    time_point = int(time_point*1000) # Convert to milliseconds
+                    fname = os.path.join(capture_folder, lbl+"{:d}_{:05d}.tiff".format(time_point, idx))
+                    io.imsave(fname, frame)
+                    fout.write('{},{}\n'.format(time_point, fname))
+                    idx+=1
 
-    os.mkdir(os.path.join(save_dir, str_now))
 
-
-def better_sleep(target, SAMPLE_FREQ):
+def better_sleep(target, sample_time):
     """
     This is a more accurate sleep call, it takes into account time that has elapsed while gathering data
     :param moment: a object from time.time(), the last time better_sleep was run.
     :param SAMPLE_FREQ: The sampling frequency you wish to sample at
     :return:
     """
-    while time.time() < target+(1/SAMPLE_FREQ):
+    while time.time() < target+(sample_time):
         #Sleep 1 milliseconds and check again
         time.sleep(0.01)
-    return target + 1/SAMPLE_FREQ
-
-
-
+    return target + sample_time
 
 ctl = Controller()
