@@ -38,7 +38,7 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 
 
 // Set up variables for motors
-int outlet_div = 32;
+int outlet_div = 64;
 // Set variables for Pressure
 int SOLENOID1 = 4;
 int SOLENOID2 = 6;
@@ -52,6 +52,7 @@ int LED_B = 5;
 String inputString = "";   // a String to hold incoming data
 int inputCount = 0;
 bool stringComplete = false;  // whether the string is complete
+bool inversion = 0;
 
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
@@ -104,7 +105,7 @@ void setup()
   driver_2.configSyncPin(BUSY_PIN, 0); // use SYNC/nBUSY pin as nBUSY, 
                                      // thus syncSteps (2nd paramater) does nothing
                                      
-  driver_2.configStepMode(STEP_FS_32); // 1/128 microstepping, full steps = STEP_FS,
+  driver_2.configStepMode(STEP_FS_64); // 1/128 microstepping, full steps = STEP_FS,
                                 // options: 1, 1/2, 1/4, 1/8, 1/16, 1/32, 1/64, 1/128
 
                                 
@@ -146,10 +147,10 @@ void setup()
   // use a value between 0-255 where 0 = no power, 255 = full power.
   // Start low and monitor the motor temperature until you find a safe balance
   // between power and temperature. Only use what you need
-  driver_2.setRunKVAL(128);
-  driver_2.setAccKVAL(128);
-  driver_2.setDecKVAL(128);
-  driver_2.setHoldKVAL(32);
+  driver_2.setRunKVAL(64);
+  driver_2.setAccKVAL(64);
+  driver_2.setDecKVAL(64);
+  driver_2.setHoldKVAL(16);
 
   driver_2.setParam(ALARM_EN, 0xCF); // disable ADC UVLO (divider not populated),
                                    // disable stall detection (not configured),
@@ -201,8 +202,7 @@ void moveMotor(){
   driver_2.hardStop();
   bool at_home = checkHome();
   if (at_home){
-        
-        driver_2.releaseSw(B0,B1);
+        driver_2.releaseSw(B0,inversion);
         releaseSW();
   }
   driver_2.setSwitchMode(CONFIG_SW_HARD_STOP); // Set switch mode to hard stop. 
@@ -231,7 +231,7 @@ void motorHomePosition(){
 
 
   // Move Motor until it hits the switch
-  char user_dir = inputString[3];
+  char user_dir = inputString[2];
   //Serial.println("Starting Move...");
   byte dir = B0;
   Serial.println(user_dir);
@@ -241,11 +241,12 @@ void motorHomePosition(){
   }
   if (sw_val == 4){
     Serial.println("Go Down");
-    
-    if (dir == true){
-      dir = false;
+    if (dir){
+      dir = 0;
     }
-    Serial.println(dir);
+    else{
+      dir=1;
+    }
     driver_2.releaseSw(B0,dir);
   }else{
   driver_2.goUntil(B0,dir,400);
@@ -292,9 +293,16 @@ void getMotorPos(){
   Serial.println(return_steps,3);
 }
 
-
 void setHome(){
   int chnl = atoi(inputString[1]);
+  char user_dir = inputString[3];
+  //Serial.println("Starting Move...");
+  Serial.println(user_dir);
+  if (user_dir=='1'){
+   inversion = true;
+  } else{
+    inversion = false;
+  }
   //Serial.print("Setting Home Position for channel: ");
   Serial.println(chnl);
   driver_2.resetPos();
@@ -327,24 +335,22 @@ void pressureTalk(){
   //Serial.println(inputString[2]);
   if (inputString[2]=='R'){
     Serial.println("ON");
-    digitalWrite(SOLENOID2,LOW);  
-    digitalWrite(SOLENOID1,HIGH);
-    digitalWrite(SOLENOID3,LOW);
-  } else if(inputString[2]=='S'){
-    digitalWrite(SOLENOID2,HIGH);
+    digitalWrite(SOLENOID2,HIGH);  
     digitalWrite(SOLENOID1,LOW);
-    digitalWrite(SOLENOID3,LOW);
-    Serial.println("OFF");
+    digitalWrite(SOLENOID3, LOW);
+  } else if(inputString[2]=='S'){
+    digitalWrite(SOLENOID2,LOW);
+    digitalWrite(SOLENOID1,HIGH);
+    digitalWrite(SOLENOID3, LOW);
   } else if(inputString[2]=='X'){
     digitalWrite(SOLENOID1,HIGH);
     digitalWrite(SOLENOID2,HIGH);
-    digitalWrite(SOLENOID3,LOW);
+    digitalWrite(SOLENOID3, LOW);
     Serial.println("All OPEN");
   } else if (inputString[2]=='C'){
     digitalWrite(SOLENOID1, LOW);
     digitalWrite(SOLENOID2, LOW);
-    digitalWrite(SOLENOID3,LOW);
-    Serial.println("All CLOSED");
+    digitalWrite(SOLENOID3, LOW);
   } else if (inputString[2]=='V'){
     digitalWrite(SOLENOID1, LOW);
     digitalWrite(SOLENOID2, LOW);

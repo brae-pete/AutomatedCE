@@ -244,9 +244,13 @@ class PriorControl(XYControl, PriorController):
     y_inversion = 1
 
     def __init__(self, com="COM5", lock=threading.RLock()):
+
         self.lock = lock
         self.port = com
         self.open()
+
+    def open(self):
+        self.prior_open()
 
     def _read_lines(self):
         """
@@ -270,15 +274,22 @@ class PriorControl(XYControl, PriorController):
         """ Reads the current XY position of the stage, sets XYControl.position and returns list [X, Y]  """
         # Get XY from Stage
         with self.lock:
-            pos = [0, 0]
-            self.ser.write("P \r".encode())
-            resp = self._read_line().split(',')
-            pos[0] = eval(resp[0])
-            pos[1] = eval(resp[1])
-            pos = [x / self.scale for x in pos]
-            pos[0] *= self.x_inversion
-            pos[1] *= self.y_inversion
-
+            try:
+                pos = [0, 0]
+                self.ser.write("P \r".encode())
+                resp = self._read_line().split(',')
+                if len(resp) < 2:
+                    return self.pos
+                pos[0] = eval(resp[0])
+                pos[1] = eval(resp[1])
+                pos = [x / self.scale for x in pos]
+                pos[0] *= self.x_inversion
+                pos[1] *= self.y_inversion
+            except:
+                print(pos)
+                print("STOPPING")
+                return [0,0]
+        self.pos = pos
         return pos
 
     def set_xy(self, xy):

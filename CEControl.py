@@ -59,6 +59,8 @@ class ProgramController:
             self.hardware= CESystems.BaseSystem()
         if user == 'CE_TiEclipse':
             self.hardware = CESystems.CE_TiEclipseSeattle()
+        if user == 'CE_TE300Seattle':
+            self.hardware = CESystems.CE_TE300Seattle()
 
         app = QtWidgets.QApplication(sys.argv)
         self.program_window = CEGraphic.MainWindow(self)

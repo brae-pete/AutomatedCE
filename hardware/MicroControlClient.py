@@ -12,8 +12,17 @@ WAIT_TIME = 0.1 # Time in seconds to wait between server calls.
 cwd = os.getcwd()
 cwd = cwd.split('\\')
 USER = cwd[2]
-PYTHON2_PATH = r"C:\Users\{}\Anaconda3\envs\CEpy27\python.exe".format(USER)
-SERVER_FILE = r"C:\Users\Luke\Desktop\Barracuda\BarracudaQt\hardware\MicroControlServer.py"
+PYTHON2_PATH = r"C:\Users\{}\Miniconda3\envs\CEpy27\python.exe".format(USER)
+if not os.path.isfile(PYTHON2_PATH):
+    PYTHON2_PATH = r"C:\Users\{}\Anaconda3\envs\CEpy27\python.exe".format(USER)
+
+try:
+    import hardware
+    SERVER_FILE = os.path.join(os.path.abspath('.'))+r"\hardware\MicroControlServer.py"
+except ModuleNotFoundError:
+    SERVER_FILE = os.path.join(os.path.abspath('..'))+r"\hardware\MicroControlServer.py"
+
+
 class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object

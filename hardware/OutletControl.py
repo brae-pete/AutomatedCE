@@ -210,9 +210,12 @@ class ArduinoOutlet(OutletControl):
                 return
             self.arduino.go_home(self.home_dir)
             self.set_z(50)
-            self.wait_for_move()
-            self.set_rel_z(1)
             self.pos = self.wait_for_move()
+            #self.set_rel_z(0.05)
+            #self.pos = self.wait_for_move()
+            self.arduino.go_home(self.home_dir)
+
+            self.set_z(self.default_pos)
 
 
 if __name__ =="__main__":

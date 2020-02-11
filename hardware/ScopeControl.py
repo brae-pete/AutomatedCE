@@ -44,6 +44,8 @@ class PriorController:
     ser = serial.Serial() # Only one serial object for several classes
     open_controller = False # this will be shared across classes
     port = None
+    lock = threading.RLock()
+    first_read=False
 
     def read_lines(self):
         """
@@ -55,10 +57,12 @@ class PriorController:
             lines.append(self._read_line())
         return lines
 
-    def open(self):
+    def prior_open(self):
         """ Opens serial communication port"""
-        if not self.open_controller:
-            assert self.ser.is_open(), "ERROR: Prior controller is already open. COM={}".format(self.port)
+
+        if not self.open_controller and not self.ser.is_open:
+            self.ser.port=self.port
+            #assert self.ser.is_open(), "ERROR: Prior controller is already open. COM={}".format(self.port)
             self.ser.open()
             self.open_controller=True
 

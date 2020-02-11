@@ -1948,6 +1948,70 @@ class OstrichSystem(BaseSystem):
         """Closes pressure valve."""
         pass
 
+class CE_TE300Seattle(BaseSystem):
+    def __init__(self):
+        super().__init__()
+
+        # Hardware Class Objects: These are all (and should remain) the base classes
+        self.xy_stage_control = XYControl.PriorControl(com="COM9")
+        self.z_stage_control = ZStageControl.ThorLabs()
+        self.outlet_control = OutletControl.ArduinoOutlet(com="COM8", invt=-1, home_dir=False)
+        # These are shared resources for the outlet arduino
+        arduino_1=self.outlet_control.arduino
+        arduino_1_lock = self.outlet_control.lock
+        self.objective_control = ObjectiveControl.PriorControl(com="COM9", lock=self.xy_stage_control.lock)
+        self.power_supply_control = PowerSupplyControl.SpellmanSupply(channels=['ao0','ao1'])
+
+        self._voltage_data=1
+        self._current_data=2
+        self._rfu_data=0
+        self._voltage_conversion = 1/2.5*5000
+        self._current_conversion = 1/2.5*(100*10**-6)
+        channels = ['ai5', 'ai1', 'ai2']
+        configs = {'ai5': 'diff', 'ai1': "RSE", 'ai2': 'RSE'}
+        self.adc_control = DAQControl.NI_ADC(mode="continuous", channels=channels, configs=configs,
+                                             sampling=80000, samples=10000, output_data=1)
+        self.adc_control.start()
+        self.laser_control = LaserControl.Uniphase()
+        self.daq_board_control = self.adc_control
+        self.data_filter_control = DAQControl.Filter()
+        self.image_control = ImageControl.MicroControl(config_file=r"C:\Users\NikonTE300CE\Desktop\Barracuda\BarracudaQt\config\CoolSnap.cfg")
+        self.pressure_control = PressureControl.ArduinoControl(arduino=arduino_1, lock=arduino_1_lock)
+        self.led_control = LightControl.CapillaryLED(arduino=arduino_1, lock=arduino_1_lock)
+        self.shutter_control = ScopeControl.ShutterControl()
+        self.filter_control = ScopeControl.FilterWheelControl()
+
+
+
+
+    def get_voltage_data(self):
+        """
+        For the CE system we want to return the voltage column separately .
+
+        """
+        with self.adc_control.data_lock:
+            data = self.adc_control.data[self._voltage_data].copy()
+        data = data * self._voltage_conversion
+        return data
+
+    def get_current_data(self):
+        """
+        For the CE system we want to return the current column seperately
+        """
+        with self.adc_control.data_lock:
+            data = self.adc_control.data[self._current_data].copy()
+        data = data * self._current_conversion
+        return data
+
+    def get_rfu_data(self):
+        """
+        For the CE System we want to return the RFU column seperately
+        :return:
+        """
+        with self.adc_control.data_lock:
+            data = self.adc_control.data[self._rfu_data].copy()
+        return data
+
 
 class CE_TiEclipseSeattle(BaseSystem):
     def __init__(self):
@@ -2079,7 +2143,7 @@ class Chip_TiEclipseSeattle(BaseSystem):
 
 
 def test():
-    hardware = CE_TiEclipseSeattle()
+    hardware = CE_TE300Seattle()
     return hardware
 
 

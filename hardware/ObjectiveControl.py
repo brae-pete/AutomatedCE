@@ -1,8 +1,15 @@
+import sys
 import threading
-from hardware import ArduinoBase
 import pickle
 import logging
 import time
+import os
+try:
+    import hardware
+except ModuleNotFoundError:
+    sys.path.append(os.path.relpath('..'))
+
+from hardware import ArduinoBase
 from hardware import MicroControlClient
 from hardware.ScopeControl import PriorController
 import os
@@ -141,7 +148,7 @@ class ObjectiveControl:
 
 
 class PriorControl(ObjectiveControl, PriorController):
-    def __init__(self, com="COM9", lock=threading.RLock(), home=True):
+    def __init__(self, com="COM9", lock=threading.RLock(), home=False):
         """com = Port, lock = threading.Lock, args = [home]
         com should specify the port where resources are located,
         lock is a threading.lock object that will prevent the resource from being
@@ -153,8 +160,21 @@ class PriorControl(ObjectiveControl, PriorController):
         self.offset = 0
         self.open()
         self.lock = lock
-        self.first_read = True
+        self._set_speed(75)
         return
+
+
+    def open(self):
+        self.prior_open()
+        self.read_lines()
+
+    def _set_speed(self, speed):
+        """ Sets the speed for the controller. Enter a value between 1 and 100"""
+        if 1<=speed<=100:
+            speed = int(speed)
+            self.ser.write("SMZ {}\r".format(speed).encode())
+            self._read_line()
+
 
     def read_z(self, *args):
         """ returns float of current position
@@ -162,25 +182,19 @@ class PriorControl(ObjectiveControl, PriorController):
         """
         # Lock the resources we are going to use
         with self.lock:
-            if self.home:
-                if len(args) > 0:
-                    self.pos = args[0]
+            try:
+                self.ser.write("PZ \r".encode())
+                pos = self._read_line().strip('\r')
+                if pos == 'R':
+                    pos = self._read_line().strip('\r')
+                pos = pos.split(',')[-1]
+                pos = float(pos)/10
+            except IndexError:
+                logging.warning("Could not read the objective-> PriorControl.Read_z")
                 return self.pos
-
-            self.ser.write("PZ \r".encode())
-            pos = self._read_line()
         self.pos = pos * self.inversion
-        return self.pos
 
-    def set_origin(self):
-        """ sets the current position to home or zero pos, resets the offset """
-        with self.lock:
-            if self.home:
-                self.pos = 0
-                return
-            self.arduino.set_objective_origin()
-            self.pos = 0
-            self.offset = 0
+        return self.pos
 
     def set_z(self, set_z):
         """ set_z (absolute position in mm)
@@ -190,9 +204,10 @@ class PriorControl(ObjectiveControl, PriorController):
             if self.home:
                 self.pos = set_z
                 return
-            go_to = self.inversion * set_z
+            go_to = self.inversion * set_z *10
             self.ser.write("GZ {} \r".format(go_to).encode())
-            self._read_line()
+            self.read_lines()
+
         return True
 
     def stop_z(self):
@@ -470,9 +485,23 @@ class MicroControl(ObjectiveControl):
 
 
 def main():
-    oc = MicroControl()
+    oc = PriorControl()
     return oc
 
 
 if __name__ == "__main__":
     oc = main()
+    ser=oc.ser
+    ser.write("C 100\r".encode())
+
+    ser.write("UPR Z\r".encode())
+    print(oc._read_line())
+
+    ser.write("SMZ 85\r".encode())
+    print(oc._read_line())
+
+    ser.write("OF \r".encode())
+    print(oc._read_line())
+
+    ser.write("PZ \r".encode())
+    print(oc._read_line())

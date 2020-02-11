@@ -40,12 +40,13 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 // Set up variables for motors
 int outlet_div = 32;
 // Set variables for Pressure
-int SOLENOID2 = 39;
-int SOLENOID1 = 41;
-int SOLENOID3 = 43;
-int LED_R = 31;
-int LED_G = 33;
-int LED_B = 35;
+int SOLENOID1 = 4;
+int SOLENOID2 = 6;
+int SOLENOID3 = 7;
+
+int LED_R = 5;
+int LED_G = 5;
+int LED_B = 5;
 byte dir = B0;
 //SERIAL 
 String inputString = "";   // a String to hold incoming data

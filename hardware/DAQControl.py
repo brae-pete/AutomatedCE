@@ -169,7 +169,7 @@ class NI_ADC(ADC, NIDAQ_USB):
                      'RSE':TerminalConfiguration.RSE,
                      'NRSE':TerminalConfiguration.NRSE}
 
-    def __init__(self, channels=['ai1', 'ai2', 'ai3'],configs={}, mode='finite', sampling=100000, samples=10000, dev=0,
+    def __init__(self, channels=['ai1', 'ai2', 'ai3'],configs={}, mode='finite', sampling=10000, samples=10000, dev=0,
                  output_data=1):
 
         # Create the task
@@ -203,7 +203,8 @@ class NI_ADC(ADC, NIDAQ_USB):
         try:
             samples = np.asarray(self.task.read(number_of_samples_per_channel=self.samples))
             self._samples = samples
-        except nidaqmx.errors.DaqError:
+        except nidaqmx.errors.DaqError as e:
+            logging.error(e)
             return 1
 
         with self.data_lock:
@@ -390,5 +391,7 @@ class DAQBoard:
 
 
 if __name__ == "__main__":
-    adc = NI_ADC(channels = ['ai0', 'ai14', 'ai15'],configs={'ai0':'diff'}, mode='continuous', sampling = 80000, samples=10000)
-    adc.start()
+    channels = ['ai5', 'ai1', 'ai2']
+    configs = {'ai5': 'diff', 'ai1': "RSE", 'ai2': 'RSE'}
+    adc = NI_ADC(mode="continuous", channels=channels, configs=configs,
+                                         sampling=8000, samples=1000, output_data=1)

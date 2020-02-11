@@ -46,6 +46,7 @@ class ZStageControl:
     This is called by the GUI and needs data types to match
     """
     default_pos = 24.5
+    home=False
 
     def __init__(self, com="COM3", lock=-1, home=False,invt=1):
         """com = Port, lock = threading.Lock, args = [home]
@@ -342,7 +343,7 @@ class ThorLabs(ZStageControl):
     def initialize_device(serial):
         """ Loads the thorlabs lab jack
         Requires to first build a list of devices,
-        then create a device using the Labjack serial numbe
+        then create a device using the Labjack serial number
         In general, this order cannot be changed
         """
         device_list_result = DeviceManagerCLI.BuildDeviceList()
