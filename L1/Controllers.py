@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from threading import Lock
 from serial import Serial
+from L1 import MicroControlClient
+
 
 class ControllerAbstraction(ABC):
     """ A controller class abstraction. The abstractmethod functions will be used and need be defined for each
@@ -82,7 +84,7 @@ class ArduinoController(ControllerAbstraction):
     Controller class to control Arduino microcontroller. Only one controller class should be created for
     each microcontroller being used.
     """
-    id = 'Arduino'
+    id = 'arduino'
 
     def __init__(self, port):
         super().__init__(port)
@@ -95,7 +97,7 @@ class ArduinoController(ControllerAbstraction):
         Arduinos use a serial port to communicate, open the port if not alread done
         :return:
         """
-        if not self._serial.is_open:
+        if not self._serial.is_open():
             self._serial.port = self.port
             self._serial.open()
 
@@ -112,8 +114,9 @@ class ArduinoController(ControllerAbstraction):
         Resets the serial port
         :return:
         """
-        self.open()
+
         self.close()
+        self.open()
 
     def send_command(self, command):
         """
@@ -130,3 +133,100 @@ class ArduinoController(ControllerAbstraction):
         # todo output to logger when there is no response
         return response[-1]
 
+
+class MicroManagerController(ControllerAbstraction):
+    """
+    Controller class to control devices using the MicroManager software. This utilizes some adapter code written to send
+    commands to a Python2 subprocess that is actually running Micromanager (this is because we could not find an easy
+    and reliable way to get micromanager to run off of python 3). See the MicroControlClient and MicroControlServer
+    files for more information on how the command structure works.
+    """
+
+    def __init__(self, port=0, config=r'D:\Scripts\AutomatedCE\config\DemoCam.cfg'):
+        #todo default config using relative path
+        super().__init__(port)
+        self.id = "micromanager"
+        self._config = config
+        self._mmc = MicroControlClient.MicroControlClient()
+
+    def open(self):
+        """
+        Initializes a python2 subprocess and loads the provided config file
+        :return state: bool (true/false if config loaded correctly)
+        """
+        self._mmc.open()
+        command = 'core,load_config,{}'.format(self._config)
+        response = self.send_command(command)
+        msg = "Could not open XYStage"
+        state = self._mmc.ok_check(response, msg)
+        return state
+
+    def close(self):
+        self._mmc.close()
+
+    def reset(self):
+        self.close()
+        self.open()
+
+    def send_command(self, command):
+        """Sends a command to the micromanager subprocess. All commands should be sent using this command
+        A lock is used to provide some thread safety, preventing multiple commands from being sent to the mmc at one
+        time.
+
+        :param command: str #one of the acceptable commands provided in the MicroControlServer.py file
+        """
+        with self.lock:
+            self._mmc.send_command(command)
+            response = self._mmc.read_response()
+        return response
+class PriorController(ControllerAbstraction):
+    """
+    Controller class to control devices using a Prior microcontroller. Prior commands are reported in the user manual
+    for a given microcontroller.
+    """
+
+    def __init__(self, port):
+        super().__init__(port)
+        self.id = "prior"
+        self._serial = Serial()
+        self._serial._baudrate = 9600
+        self._serial.timeout = 0.5
+
+    def open(self):
+        if not self._serial.is_open():
+            self._serial.port = self.port
+            self._serial.open()
+
+    def close(self):
+        """
+        close the serial port
+        :return:
+        """
+        self._serial.close()
+
+    def reset(self):
+        """
+        Resets the serial port
+        :return:
+        """
+        self.close()
+        self.open()
+
+    def send_command(self, command):
+        """ Send the command and read the prior controller response"""
+        with self.lock:
+            self._serial.write("{}".format(command).encode())
+            response = self._read_line()
+        return response
+
+    def _read_lines(self):
+        lines = []
+        while self._serial.in_waiting > 0:
+            lines.append(self._read_line())
+        return lines
+
+    def _read_line(self):
+        return self._serial.read_until('\r'.encode()).decode()
+
+if __name__ == "__main__":
+    mmc = MicroManagerController(port = 0, config = r'D:\Scripts\AutomatedCE\config\DemoCam.cfg')

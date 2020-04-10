@@ -1,11 +1,16 @@
 from abc import ABC, abstractmethod
 from L1 import Controllers
-from L2 import PressureControl
+from L2 import PressureControl, XYControl
 
 
 class Director(ABC):
     """
-    Directs the construction of the utilities object for the Systems class
+    Directs the construction of the controllers and utilities object for the Systems class.
+    Aside from construction contains two get functions to get the controllers and utilities object.
+    These objects are like dictionaries that contain a key (either the type of utility or controller id) and
+    the corresponding L2 or L1 class object.
+
+    Google "Director Builder design pattern python" to get somewhat of an idea of how this was organized.
     """
 
     def __init__(self):
@@ -17,13 +22,16 @@ class Director(ABC):
     def construct(self, config_file):
         pass
 
-    def get_constructed_object(self):
-        return self._utility_builder.constructed_object()
+    def get_utilities(self):
+        return self._utility_builder.constructed_object
+
+    def get_controllers(self):
+        return self._controller_builder.constructed_object
 
 
 class Builder(ABC):
     """
-    Our constructed object will be
+    Basic Builder Pattern
     """
 
     def __init__(self, constructed_object):
@@ -34,6 +42,15 @@ class Builder(ABC):
 
 
 class SystemsObject(object):
+    """
+    This contains a dictionary holding either the L1 or L2 objects.
+    Set and get have defined so that you can treat treat this object like a dictionary
+
+    For example:
+    sys_obj = SystemsObject()
+    sys_obj['new_item']=object() # Set a key equal to an object
+    print(sys_obj['new_item']) # Retrieve the object for inspection
+    """
 
     def __init__(self):
         self.fields = {}
@@ -46,6 +63,11 @@ class SystemsObject(object):
 
 
 class ControllerBuilder(Builder):
+    """
+    Builds the controller Systems object. A separate add_<controller-type> function should be included for each
+    controller listed in L1.Controllers. The add_* functions will create the controller object using the settings passed
+    from a config file line. This object will be added to the constructed_object or the systems object.
+    """
 
     def __init__(self):
         super().__init__(SystemsObject())
@@ -56,20 +78,38 @@ class ControllerBuilder(Builder):
     def add_simulated(self, settings):
         self.constructed_object.fields[settings[1]] = Controllers.SimulatedController(settings[3])
 
+    def add_micromanager(self, settings):
+        if len(settings) < 4:
+            raise ValueError('No Config file was provided: {}'.format(settings))
+        self.constructed_object.fields[settings[1]] = Controllers.MicroManagerController(settings[3], settings[4])
+
+    def add_prior(self, settings):
+        self.constructed_object.fields[settings[1]] = Controllers.PriorController(settings[3])
+
+
 
 class UtilityBuilder(Builder):
+    """
+    Builds the utilities Systems object. A separate add_<utility-type> function should be included for each type of
+    utility listed in L2. The corresponding factory for the utility should be used passing the controller that will be
+    used for that utility. The add_* functions will create the utility object using the settings passed
+    from a config file line. This object will be added to the constructed_object or the systems object.
+    """
 
     def __init__(self):
         super().__init__(SystemsObject())
         self._pressure_factory = PressureControl.PressureControlFactory()
+        self._xy_factory = XYControl.XYControlFactory()
 
     def add_pressure(self, controller, settings):
         self.constructed_object.fields['pressure'] = self._pressure_factory.build_object(controller)
 
+    def add_xy(self, controller, settings):
+        self.constructed_object.fields['xy'] = self._xy_factory.build_object(controller)
+
 
 class ConcreteDirector(Director):
     """ Builds the object that composes the Systems object in layer 3 of automation """
-
     def __init__(self):
         super().__init__()
         # Create the builders and set the interpreter
@@ -105,6 +145,11 @@ class ConcreteDirector(Director):
         return
 
     def _build_controllers(self, controller_list):
+        """
+        Determine which controller to add according to the config file.
+        :param controller_list:
+        :return:
+        """
         for controller in controller_list:
             settings = controller.split(',')
             control_type = settings[2].lower()
@@ -112,8 +157,12 @@ class ConcreteDirector(Director):
                 self._controller_builder.add_arduino(settings)
             elif control_type == 'simulated':
                 self._controller_builder.add_simulated(settings)
+            elif control_type == 'micromanager':
+                self._controller_builder.add_micromanager(settings)
+            elif control_type == 'prior':
+                self._controller_builder.add_prior(settings)
             else:
-                raise ValueError('Controller options are: "arduino", "simulated"')
+                raise ValueError('Controller options are: "arduino", "simulated", "micromanager", "prior"')
         return self._controller_builder.get_object()
 
     def _build_utilities(self, utility_list, controllers):
@@ -129,6 +178,8 @@ class ConcreteDirector(Director):
             controller = controllers[settings[2]]
             if utility_type == 'pressure':
                 self._utility_builder.add_pressure(controller, settings)
+            elif utility_type == 'xy':
+                self._utility_builder.add_xy(controller, settings)
             else:
                 raise ValueError('Utility options are: "pressure"')
 
@@ -146,7 +197,7 @@ class Interpreter(ABC):
         pass
 
 
-class TextInterpreter():
+class TextInterpreter:
     """ Interprets a text config file according to the following rules:
 
     Define the controllers in the lines following "CONTROLLERS", specifying the type of controller and the port
@@ -178,13 +229,13 @@ class TextInterpreter():
 
     @classmethod
     def _get_controllers(cls, cfg_list):
-        "Returns a list of controller settings"
+        """Returns a list of controller settings"""
         controllers = cfg_list[cfg_list.index('CONTROLLERS') + 1:cfg_list.index("UTILITIES")]
         return cls._remove_comments(controllers)
 
     @classmethod
     def _get_utilities(cls, cfg_list):
-        "Returns a list of utility settings"
+        """Returns a list of utility settings"""
         utilities = cfg_list[cfg_list.index("UTILITIES") + 1:]
         return cls._remove_comments(utilities)
 
