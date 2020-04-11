@@ -115,7 +115,9 @@ class MicroControl:
                               'unload_device': self.unload_device,
                               'init_device': self.init_device,
                               'load_config': self.load_config,
-                              'get_xy_name':self.get_xy_name}
+                              'get_xy_name':self.get_xy_name,
+                              'get_filterwheel_name':self.get_filterwheel_name,
+                              'get_shutter_name':self.get_shutter_name}
 
         self.filter_commands = {'set': self.set_filter_channel,
                                 'get': self.get_filter_channel}
@@ -170,6 +172,27 @@ class MicroControl:
                 return name
         else:
             return 'ERR: XY not found {}'.format(devices)
+
+    def get_filterwheel_name(self, args):
+        """ Finds the appropiate filter wheel"""
+        devices = self.mmc.getLoadedDevices()
+        possible_wheels_strings = ['filter', 'dichroic']
+        for name in devices:
+            for wheel in possible_wheels_strings:
+                if wheel in name.lower():
+                    return name
+        else:
+            return 'ERR: Filter Wheel not found {}'.format(devices)
+
+    def get_shutter_name(self, args):
+        """Returns the corresponding shutter name"""
+        devices = self.mmc.getLoadedDevices()
+        possible_shutter_strings = ['shutter']
+        for name in devices:
+            for shutter in possible_shutter_strings:
+                if shutter in name.lower():
+                    return name
+        return 'ERR: shutter not found in device list: {}'.format(devices)
 
     def get_camera_name(self, args):
         """ Returns the camera device name"""

@@ -340,7 +340,7 @@ class ThorLabs(ZStageControl):
 
     @staticmethod
     def initialize_device(serial):
-        """ Loads the thorlabs lab jack
+        """ Loads the thorlabs lab jackD
         Requires to first build a list of devices,
         then create a device using the Labjack serial numbe
         In general, this order cannot be changed
@@ -374,7 +374,7 @@ class ThorLabs(ZStageControl):
 
 
 
-    def        get_z(self, *args):
+    def  get_z(self, *args):
         """ returns float of current position
         User requests to get current position of stage, returned in mm
         """

@@ -27,6 +27,7 @@ class MicroControlClient:
         #self.start_server()
 
     def start_connection(self):
+        time.sleep(1)
         with self.lock:
             self.conn = Client(self.address, authkey=b'barracuda')
 
@@ -75,7 +76,6 @@ class MicroControlClient:
     @staticmethod
     def ok_check(response,msg):
         """ Checks the response if it was recieved OK."""
-
         if str(response.decode())!= 'Ok':
             logging.error('{}. Recieved: {}'.format(msg,response))
             return False
