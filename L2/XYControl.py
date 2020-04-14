@@ -27,7 +27,7 @@ class XYAbstraction(ABC):
         self._scale = 1
         self._x_inversion = 1
         self._y_inversion = 1
-        self.pos = [0,0]
+        self.pos = [0, 0]
 
     def _scale_values(self, xy):
         xy = [x / self._scale for x in xy]
@@ -45,14 +45,13 @@ class XYAbstraction(ABC):
     def read_xy(self):
         pass
 
-
     @abstractmethod
     def set_xy(self, xy):
         pass
 
     def set_x(self, x):
         xy = self.read_xy()
-        xy[0]=x
+        xy[0] = x
         return self.set_xy(xy)
 
     def set_y(self, y):
@@ -65,10 +64,10 @@ class XYAbstraction(ABC):
         pass
 
     def set_rel_x(self, rel_x):
-        return self.set_rel_xy([rel_x,0])
+        return self.set_rel_xy([rel_x, 0])
 
     def set_rel_y(self, rel_y):
-        return self.set_rel_xy([0,rel_y])
+        return self.set_rel_xy([0, rel_y])
 
     def set_home(self):
         self.home = self.read_xy()
@@ -77,22 +76,22 @@ class XYAbstraction(ABC):
         return self.set_xy(self.home)
 
     def stop(self):
-        return self.set_rel_xy(0,0)
+        return self.set_rel_xy(0, 0)
 
     def get_status(self):
         """Get the position of the XY stage, satisfies the utility control get_status command"""
-        return {'xy':self.pos}
+        return {'xy': self.pos}
 
-    def wait_for_move(self, tolerance = 10):
+    def wait_for_move(self, tolerance=10):
         """ Waits for the stage to stop moving
         tolerance is the acceptable distance from the target is it okay to consider the stage stopped
         returns the current position
         """
         time.sleep(0.1)
         prev_pos = self.read_xy()
-        current_pos = [prev_pos[0]+1,prev_pos[1]]
+        current_pos = [prev_pos[0] + 1, prev_pos[1]]
         # Update position while moving
-        while abs(prev_pos[0]-current_pos[0]) > tolerance or abs(prev_pos[1]- current_pos[1]) > tolerance:
+        while abs(prev_pos[0] - current_pos[0]) > tolerance or abs(prev_pos[1] - current_pos[1]) > tolerance:
             time.sleep(0.05)
             prev_pos = current_pos
             current_pos = self.read_xy()
@@ -113,16 +112,16 @@ class MicroManagerXY(XYAbstraction, UtilityControl):
         """
         if self._dev_name == "N/A":
             self._dev_name = self.controller.send_command('core,get_xy_name').decode()
-            if self._dev_name[0:4]=='ERR:':
+            if self._dev_name[0:4] == 'ERR:':
                 self._dev_name = "N/A"
                 raise ValueError('XY device name is not found in the micromanager device list')
         return self._dev_name
 
     @staticmethod
-    def _ok_check(response,msg):
+    def _ok_check(response, msg):
         """ Checks the response if it was recieved OK."""
-        if str(response.decode())!= 'Ok':
-            logging.error('{}. Recieved: {}'.format(msg,response))
+        if str(response.decode()) != 'Ok':
+            logging.error('{}. Recieved: {}'.format(msg, response))
             return False
         return True
 
@@ -150,15 +149,17 @@ class MicroManagerXY(XYAbstraction, UtilityControl):
 
     def set_xy(self, xy):
         raw_xy = self._invert_scale(xy)
-        rsp = self.controller.send_command('xy,set_position,{},{},{}\n'.format(self._get_xy_device(), raw_xy[0], raw_xy[1]))
+        rsp = self.controller.send_command(
+            'xy,set_position,{},{},{}\n'.format(self._get_xy_device(), raw_xy[0], raw_xy[1]))
         msg = "Did not set XY Stage"
-        return self._ok_check(rsp,msg)
+        return self._ok_check(rsp, msg)
 
     def set_rel_xy(self, rel_xy):
         rel_xy = self._invert_scale(rel_xy)
-        rsp = self.controller.send_command('xy,rel_position,{},{},{}\n'.format(self._get_xy_device(), rel_xy[0], rel_xy[1]))
+        rsp = self.controller.send_command(
+            'xy,rel_position,{},{},{}\n'.format(self._get_xy_device(), rel_xy[0], rel_xy[1]))
         msg = "Did not set XY stage"
-        return self._ok_check(rsp,msg)
+        return self._ok_check(rsp, msg)
 
 
 class PriorXY(XYAbstraction, UtilityControl):
@@ -199,7 +200,7 @@ class PriorXY(XYAbstraction, UtilityControl):
 
     def go_home(self):
         """ Sends the stage to the home position"""
-        self.set_xy([0,0])
+        self.set_xy([0, 0])
 
 
 class XYControlFactory(UtilityFactory):
@@ -213,14 +214,15 @@ class XYControlFactory(UtilityFactory):
         else:
             return None
 
+
 if __name__ == "__main__":
     from L1.Controllers import MicroManagerController
+
     ctl = MicroManagerController()
     ctl.open()
     xy = MicroManagerXY(ctl)
     xy.read_xy()
-    xy.set_xy([444,222])
+    xy.set_xy([444, 222])
     xy.set_home()
-    xy.set_rel_xy([500,500])
+    xy.set_rel_xy([500, 500])
     xy.go_home()
-
