@@ -53,6 +53,9 @@ Also in the same file you will need to update the filepath for the MicroControlS
 
 Download Thorlabs Kinesis from their website and restart the computer. Load the software and check the labjack can be accessed by kinesis. If the labjack is new you will need to make sure the correct Serial number is recorded in the Thorlabs Labjack Class. 
 
+### Digilent Waveforms
+Download Digilent Waveforms from the digilent inc. website. Install waveforms to your computer and verify you can access the Analog Discovery or desired device from the waveforms software. 
+
 ### Hardware Functionality
 
 Create a new CESystems class or use a pre-defined class. Make sure that every function in the class works ( or at least the functions you require).
