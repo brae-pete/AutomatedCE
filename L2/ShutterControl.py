@@ -92,7 +92,7 @@ class MicroManagerShutter(ShutterAbstraction, UtilityControl):
 
 
 class ShutterControlFactory(UtilityFactory):
-    """ Determines the type of xy utility object to return according to the controller id"""
+    """ Determines the type of xy utility object to return according to the daqcontroller id"""
 
     def build_object(self, controller):
         if controller.id == 'micromanager':

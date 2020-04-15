@@ -36,8 +36,8 @@ except:
 
 class PriorController:
     """
-    Controller class for any prior instrumentation. There can be only one prior controller for a given system.
-    Prior controller is responsible for opening a serial connection and reading data from the controller.
+    Controller class for any prior instrumentation. There can be only one prior daqcontroller for a given system.
+    Prior daqcontroller is responsible for opening a serial connection and reading data from the daqcontroller.
 
     """
 
@@ -58,7 +58,7 @@ class PriorController:
     def open(self):
         """ Opens serial communication port"""
         if not self.open_controller:
-            assert self.ser.is_open(), "ERROR: Prior controller is already open. COM={}".format(self.port)
+            assert self.ser.is_open(), "ERROR: Prior daqcontroller is already open. COM={}".format(self.port)
             self.ser.open()
             self.open_controller=True
 

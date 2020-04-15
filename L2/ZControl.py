@@ -374,7 +374,7 @@ class KinesisZ(ZAbstraction, UtilityControl):
 
 
 class ZControlFactory(UtilityFactory):
-    """ Determines the type of xy utility object to return according to the controller id"""
+    """ Determines the type of xy utility object to return according to the daqcontroller id"""
 
     def build_object(self, controller, role):
         if controller.id == 'micromanager':

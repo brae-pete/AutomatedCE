@@ -235,7 +235,7 @@ class PriorControl(XYControl, PriorController):
     """ Basic XY Control class. If you switch hardware so that it no longer uses MMC. You only need
     to maintain the outputs for each method.
 
-    This uses the proscan controller III from prior.
+    This uses the proscan daqcontroller III from prior.
     see commands at https://www.prior.com/wp-content/uploads/2017/06/ProScanIII-v1.12.pdf
 
     """

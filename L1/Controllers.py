@@ -5,8 +5,8 @@ from L1 import MicroControlClient
 
 
 class ControllerAbstraction(ABC):
-    """ A controller class abstraction. The abstractmethod functions will be used and need be defined for each
-    subclass. The controller class is responsible for communicating with the hardware microcontrollers. This class
+    """ A daqcontroller class abstraction. The abstractmethod functions will be used and need be defined for each
+    subclass. The daqcontroller class is responsible for communicating with the hardware microcontrollers. This class
     is contains the basic communication functions needed including opening, closing, and resetting resources as well
     as sending a command and recieving a response.
     """
@@ -23,20 +23,20 @@ class ControllerAbstraction(ABC):
 
     @abstractmethod
     def open(self):
-        """ How is communication to the controller opened? Initialize any serial ports, subprocesses, etc... here
+        """ How is communication to the daqcontroller opened? Initialize any serial ports, subprocesses, etc... here
          """
         pass
 
     @abstractmethod
     def close(self):
-        """ How is communication to the controller closed? Shut down and close any serial ports, subprocesses,
+        """ How is communication to the daqcontroller closed? Shut down and close any serial ports, subprocesses,
          etc... here
          """
         pass
 
     @abstractmethod
     def reset(self):
-        """ In the unfortunate case where something has gone wrong, how is the controller reset. Probably should
+        """ In the unfortunate case where something has gone wrong, how is the daqcontroller reset. Probably should
         consider some Raise error or other notification if the hardware requires a manual shutdown.
         """
         pass
@@ -44,7 +44,7 @@ class ControllerAbstraction(ABC):
     @abstractmethod
     def send_command(self, command):
         """
-        The mechanism for sending a command to the controller is given here. This is the function that will likely be
+        The mechanism for sending a command to the daqcontroller is given here. This is the function that will likely be
         called by the classes in Layer 2 (hardware utility layer).
         :param command:
         :return:
@@ -54,7 +54,7 @@ class ControllerAbstraction(ABC):
 
 class SimulatedController(ControllerAbstraction):
     """
-    Simulated controller class to test controller functionality from home.
+    Simulated daqcontroller class to test daqcontroller functionality from home.
     """
     id = 'Simulated'
 
@@ -81,7 +81,7 @@ class SimulatedController(ControllerAbstraction):
 
 class ArduinoController(ControllerAbstraction):
     """
-    Controller class to control Arduino microcontroller. Only one controller class should be created for
+    Controller class to control Arduino microcontroller. Only one daqcontroller class should be created for
     each microcontroller being used.
     """
     id = 'arduino'
@@ -213,7 +213,7 @@ class PriorController(ControllerAbstraction):
         self.open()
 
     def send_command(self, command):
-        """ Send the command and read the prior controller response"""
+        """ Send the command and read the prior daqcontroller response"""
         with self.lock:
             self._serial.write("{}".format(command).encode())
             response = self._read_line()

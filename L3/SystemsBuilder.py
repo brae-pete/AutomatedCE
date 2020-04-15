@@ -7,7 +7,7 @@ class Director(ABC):
     """
     Directs the construction of the controllers and utilities object for the Systems class.
     Aside from construction contains two get functions to get the controllers and utilities object.
-    These objects are like dictionaries that contain a key (either the type of utility or controller id) and
+    These objects are like dictionaries that contain a key (either the type of utility or daqcontroller id) and
     the corresponding L2 or L1 class object.
 
     Google "Director Builder design pattern python" to get somewhat of an idea of how this was organized.
@@ -64,8 +64,8 @@ class SystemsObject(object):
 
 class ControllerBuilder(Builder):
     """
-    Builds the controller Systems object. A separate add_<controller-type> function should be included for each
-    controller listed in L1.Controllers. The add_* functions will create the controller object using the settings passed
+    Builds the daqcontroller Systems object. A separate add_<daqcontroller-type> function should be included for each
+    daqcontroller listed in L1.Controllers. The add_* functions will create the daqcontroller object using the settings passed
     from a config file line. This object will be added to the constructed_object or the systems object.
     """
 
@@ -91,7 +91,7 @@ class ControllerBuilder(Builder):
 class UtilityBuilder(Builder):
     """
     Builds the utilities Systems object. A separate add_<utility-type> function should be included for each type of
-    utility listed in L2. The corresponding factory for the utility should be used passing the controller that will be
+    utility listed in L2. The corresponding factory for the utility should be used passing the daqcontroller that will be
     used for that utility. The add_* functions will create the utility object using the settings passed
     from a config file line. This object will be added to the constructed_object or the systems object.
     """
@@ -131,7 +131,7 @@ class ConcreteDirector(Director):
     def construct(self, config_file):
         """
         Build the CE systems object using a config file. Config file type should match the interpreter settings (ie
-        if using a text based config file use the 'text' interpreter). First build and create the controller objects
+        if using a text based config file use the 'text' interpreter). First build and create the daqcontroller objects
         then build and create utility objects.
 
         Returns the Utilities object
@@ -146,7 +146,7 @@ class ConcreteDirector(Director):
 
     def _build_controllers(self, controller_list):
         """
-        Determine which controller to add according to the config file.
+        Determine which daqcontroller to add according to the config file.
         :param controller_list:
         :return:
         """
@@ -192,7 +192,7 @@ class Interpreter(ABC):
         """
         Returns a tuple containing a list of controllers and utilities to build
         :param filepath:
-        :return: (['controller...'], ['utility...'])
+        :return: (['daqcontroller...'], ['utility...'])
         """
         pass
 
@@ -200,23 +200,23 @@ class Interpreter(ABC):
 class TextInterpreter:
     """ Interprets a text config file according to the following rules:
 
-    Define the controllers in the lines following "CONTROLLERS", specifying the type of controller and the port
-    Format for controllers are: controller,<ID-Name>,<Controller-Type>,<Port>
+    Define the controllers in the lines following "CONTROLLERS", specifying the type of daqcontroller and the port
+    Format for controllers are: daqcontroller,<ID-Name>,<Controller-Type>,<Port>
     ID-name should be string identifier and should start with a alpha-numeric character
-    Acceptable controller-types are: arduino, simulated
+    Acceptable daqcontroller-types are: arduino, simulated
 
     Define the hardware utilities (individual hardware components) in the lines following "UTILITIES"
-    Utility definitions follow the format utility,<utility-type>, <controller-id>, <arg1, arg2, arg3,...>
+    Utility definitions follow the format utility,<utility-type>, <daqcontroller-id>, <arg1, arg2, arg3,...>
     Utility-type are:
            pressure            |   provides pressure control for the outlet
            xystage             |   provides XY stage control for a motorized microscope staage
-     controller-id should match an ID specified under CONTROLLERS
+     daqcontroller-id should match an ID specified under CONTROLLERS
 
     """
 
     def read_config(self, filepath):
         """
-        Read and return the controller and utility settings from a text file specified by filepath
+        Read and return the daqcontroller and utility settings from a text file specified by filepath
         :param filepath: string (filepath to the config file)
         :return : tuple ( [controllers...], [utilities...] )
         """
@@ -229,7 +229,7 @@ class TextInterpreter:
 
     @classmethod
     def _get_controllers(cls, cfg_list):
-        """Returns a list of controller settings"""
+        """Returns a list of daqcontroller settings"""
         controllers = cfg_list[cfg_list.index('CONTROLLERS') + 1:cfg_list.index("UTILITIES")]
         return cls._remove_comments(controllers)
 

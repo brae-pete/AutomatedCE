@@ -48,7 +48,7 @@ class BaseSystem:
     image_size = 0.5
     objective_focus = 0
     xy_stage_size = [112792, 64340]  # Rough size in mm
-    xy_stage_offset = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_offset = [0, 0]  # Reading on stage daqcontroller when all the way to left and up (towards wall)
     xy_stage_inversion = [1, 1]
 
     def __init__(self):
@@ -592,7 +592,7 @@ class BarracudaSystem(BaseSystem):
     image_size = 0.5
     objective_focus = 0
     xy_stage_size = [112792, 64340]  # Rough size in mm
-    xy_stage_offset = [112739, 0]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_offset = [112739, 0]  # Reading on stage daqcontroller when all the way to left and up (towards wall)
     xy_stage_inversion = [1, -1]
 
     _focus_network = CENetworks.BarracudaFocusClassifier()
@@ -1461,7 +1461,7 @@ class NikonTE3000(BaseSystem):
     image_size = 0.5
     objective_focus = 0
     xy_stage_size = [112792, 64340]  # Rough size in mm
-    xy_stage_offset = [0, 0]  # Reading on stage controller when all the way to left and up (towards wall)
+    xy_stage_offset = [0, 0]  # Reading on stage daqcontroller when all the way to left and up (towards wall)
     xy_stage_inversion = [1, 1]
 
     _focus_network = CENetworks.BarracudaFocusClassifier()

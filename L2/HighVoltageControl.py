@@ -1,11 +1,8 @@
 # Implement a Factory for the pressure control.
 import threading
 from abc import ABC, abstractmethod
-from queue import LifoQueue, Empty
-
 from L2.Utility import UtilityControl, UtilityFactory
 from L1 import DAQControllers
-import numpy as np
 
 
 class HighVoltageAbstraction(ABC):
@@ -21,7 +18,7 @@ class HighVoltageAbstraction(ABC):
     """
 
     def __init__(self, controller):
-        self.controller = controller
+        self.daqcontroller = controller
         self._set_voltages = {}
         self._voltages = {}
         self._current = {}
@@ -57,22 +54,26 @@ class HighVoltageAbstraction(ABC):
         pass
 
 
-class NiSpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
+class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
     """
     National instrument control over a high Spellman 1000CZR Powersupply
 
     It also incorporates the UtilityControl class for basic utility functions (shutdown, startup, get status, etc...)
     """
 
-    def __init__(self, controller, adc:DAQControllers.NiAnalogIn, dac:DAQControllers.NiAnalogOut, hv_ao='ao0',
-                 hv_ai='ai3', ua_ai='ai1'):
+    def __init__(self, controller:DAQControllers.DaqAbstraction, hv_ao='ao0',
+                 hv_ai='na', ua_ai='ai1'):
         super().__init__(controller)
-        self.adc = adc
         self._hv_channel = hv_ao
-        self.dac = dac
-        self.adc.add_channels([hv_ai, ua_ai])
-        self.dac.add_channels([hv_ao])
-        self.adc.add_callback_function(self._read_data, [hv_ai, ua_ai], 'RMS')
+        self.daqcontroller.add_analog_output(hv_ao)
+
+        inputs = []
+        for channel in [hv_ai, ua_ai]:
+            if channel != "NA":
+                self.daqcontroller.add_analog_input(channel)
+                inputs.append(channel)
+
+        self.daqcontroller.add_callback(self._read_data, inputs, 'RMS', ())
         self._data_lock = threading.Lock()
         self._voltage_scalar = 1 / 30 * 5 # kV setting / 30 kV * 5 V
         self._current_scalar = 1 / 100 * 5 # uA / 100 uA * 5 V
@@ -96,13 +97,14 @@ class NiSpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
         Applies the voltages
         :return:
         """
-        self.dac.start_voltage()
+        self.daqcontroller.start_voltage()
+        self.daqcontroller.start_measurement()
 
     def stop(self):
         """Stop the voltage only (let the ADC keep acquiring)"""
-        self.dac.stop_voltage()
+        self.daqcontroller.stop_voltage()
 
-    def set_voltage(self, voltage = 0 , channel = 'default'):
+    def set_voltage(self, voltage = 0, channel='default'):
         """
         Changes the voltage settings for the given channel. Set channel to 'default' for a single channel system.
         voltage is the kilovoltage value as a float, channel is the channel identifier as a string
@@ -113,8 +115,7 @@ class NiSpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
         if channel.lower() == 'default':
             channel = self._hv_channel
         voltage = voltage * self._voltage_scalar
-        self.dac.set_channel_voltage(channel, voltage)
-
+        self.daqcontroller.set_channel_voltage( voltage, channel)
 
     def get_current(self):
         """
@@ -147,72 +148,26 @@ class NiSpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
             self._voltages = samples[0]/self._voltage_scalar
 
 
-class SimulatedPressure( UtilityControl):
-    """
-    Simulated pressure class. Uses the same ArduinoPressure class which should function as a simulated class
-    when a SimulatedController object is used.
-    """
-
-    def __init__(self, controller):
-        super().__init__(controller)
-        # some private properties for the simulation
-        self._pressure_valve = False
-        self._vacuum_valve = False
-        self._release_valve = False
-
-    def _default_state(self):
-        """ To get to default state, shut all valves then open the release valve"""
-        self.seal()
-        self.release()
-
-    def startup(self):
-        """ Sets valves to default state """
-        self._default_state()
-
-    def shutdown(self):
-        """ Returns valves to default state """
-        self._default_state()
-
-    def get_status(self):
-        """ Returns the status of the three solenoid valves"""
-        return "Pressure: {}, Vacuum: {}, Release: {}".format(self._pressure_valve,
-                                                              self._vacuum_valve,
-                                                              self._release_valve)
-
-    def rinse_pressure(self):
-        """ Open the rinse pressure solenoid"""
-        self._pressure_valve = True
-
-    def rinse_vacuum(self):
-        """ Open the vacuum pressure solenoid"""
-        self._vacuum_valve = True
-
-    def release(self):
-        """ Open the release solenoid"""
-        self._release_valve= True
-
-    def seal(self):
-        """Close all solenoid valves """
-        self._release_valve = False
-        self._vacuum_valve = False
-        self._pressure_valve = False
-
-class PressureControlFactory(UtilityFactory):
-    """ Determines the type of pressure utility object to return according to the controller id"""
+class HighVoltageFactory(UtilityFactory):
+    """ Determines the type of pressure utility object to return according to the daqcontroller id"""
 
     def build_object(self, controller):
-        if controller.id == 'arduino':
-            return ArduinoPressure(controller)
-        elif controller.id == 'simulator':
-            return SimulatedPressure(controller)
+        if controller.id == 'spellman':
+            return SpellmanPowerSupply(controller)
         else:
             return None
 
 
 if __name__ == "__main__":
-    from L1.Controllers import SimulatedController
-    controller = SimulatedController()
-    pressure = SimulatedPressure(controller)
+    import time
+    from L1.DAQControllers import DigilentDaq
+    controller = DigilentDaq()
+    power = SpellmanPowerSupply(controller, hv_ao=0, hv_ai=0, ua_ai=1 )
+    power.set_voltage(1000)
+    power.start()
+    time.sleep(1.5)
+    power.get_voltage()
+
 
 
 

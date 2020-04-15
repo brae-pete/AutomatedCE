@@ -138,7 +138,7 @@ class SimulatedPressure(PressureAbstraction, UtilityControl):
         self._pressure_valve = False
 
 class PressureControlFactory(UtilityFactory):
-    """ Determines the type of pressure utility object to return according to the controller id"""
+    """ Determines the type of pressure utility object to return according to the daqcontroller id"""
 
     def build_object(self, controller):
         if controller.id == 'arduino':

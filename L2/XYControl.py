@@ -204,7 +204,7 @@ class PriorXY(XYAbstraction, UtilityControl):
 
 
 class XYControlFactory(UtilityFactory):
-    """ Determines the type of xy utility object to return according to the controller id"""
+    """ Determines the type of xy utility object to return according to the daqcontroller id"""
 
     def build_object(self, controller):
         if controller.id == 'micromanager':

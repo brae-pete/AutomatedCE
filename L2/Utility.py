@@ -29,14 +29,14 @@ class UtilityControl(ABC):
 class UtilityFactory(ABC):
 
     """
-    Each hardware factory will implement a build_object functionality that reads the controller ID
+    Each hardware factory will implement a build_object functionality that reads the daqcontroller ID
     then determines what type of UtilityControl class to use.
     """
 
     @abstractmethod
     def build_object(self, controller):
-        """Use the controller ID to determine what type of controller will be used for the utility. Then select the
-        appropriate UtilityControl class that matches that controller and return the object
+        """Use the daqcontroller ID to determine what type of daqcontroller will be used for the utility. Then select the
+        appropriate UtilityControl class that matches that daqcontroller and return the object
         """
         pass
 

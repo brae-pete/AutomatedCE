@@ -1460,7 +1460,7 @@ class GraphicsScene(QtWidgets.QGraphicsScene):
                     self._current_ellipse_item.setRect(r)
                     self._current_ellipse_item.setZValue(200)
                     self._current_ellipse_item = None
-                    # self.controller.add_row([x, y])
+                    # self.daqcontroller.add_row([x, y])
                     logging.info('adding shape with {}'.format([x, y]))
                     y += dy
                 y = marked_area[1]

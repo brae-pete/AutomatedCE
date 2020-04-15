@@ -17,7 +17,7 @@ import sys
 # Digilent Modules
 DIGILENT_LOAD = True
 try:
-    import dwfconstants
+    from L1 import dwfconstants
 
     if sys.platform.startswith("win"):
         dwf = cdll.dwf
@@ -281,8 +281,6 @@ class NiDaq(DaqAbstraction):
         output = [0] * len(self.channels)
         self._task.write(output)
 
-
-# Only load this Digilent class if the libraries have loaded
 if DIGILENT_LOAD:
     class DigilentDaq(DaqAbstraction):
         """
