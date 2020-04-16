@@ -7,6 +7,7 @@ import logging
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from queue import Queue
 import numpy as np
 import nidaqmx
@@ -130,6 +131,15 @@ class DaqAbstraction(ABC):
     def stop_voltage(self):
         pass
 
+    def add_do_channel(self, channel):
+        pass
+
+    def set_do_channel(self, channel, value):
+        pass
+
+    def update_do_channels(self):
+        pass
+
 
 class NiDaq(DaqAbstraction):
     """
@@ -145,6 +155,8 @@ class NiDaq(DaqAbstraction):
         self._total_samples = 0
         self._device = kwargs['Device']
         self._samples = 0
+        self._do_task = nidaqmx.Task()
+        self._set_do_values = OrderedDict()
 
     def add_analog_output(self, channel):
         """
@@ -280,6 +292,37 @@ class NiDaq(DaqAbstraction):
         """ Sets the Voltage to Zero"""
         output = [0] * len(self.channels)
         self._task.write(output)
+
+    def add_do_channel(self, channel):
+        """
+        Add a digital output channel. Channel should be a string identifier for the digital output.
+        For NI that inlcues both the port and line numbers:
+
+        port0/line5 is an appropriate channel id
+
+        :param channel:
+        :return:
+        """
+        self._do_task.do_channels.add_do_chan('/' + self._device + '/' + channel)
+        self._set_do_values[channel]=False
+
+    def set_do_channel(self, channel, value):
+        """
+        Change the desired value for digital output channel. This will not update the actual value until the update/write
+        command is sent.
+        :param channel:
+        :param value:
+        :return:
+        """
+        self._set_do_values[channel] = value
+
+    def update_do_channels(self):
+        """
+        Updates the digital output channels with the desired set values
+        :return:
+        """
+        self._do_task.write(list(self._set_do_values.values()))
+
 
 if DIGILENT_LOAD:
     class DigilentDaq(DaqAbstraction):
