@@ -34,7 +34,7 @@ class UtilityFactory(ABC):
     """
 
     @abstractmethod
-    def build_object(self, controller):
+    def build_object(self, controller, role, *args):
         """Use the daqcontroller ID to determine what type of daqcontroller will be used for the utility. Then select the
         appropriate UtilityControl class that matches that daqcontroller and return the object
         """

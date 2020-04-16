@@ -22,8 +22,9 @@ class XYAbstraction(ABC):
     wait_for_move = waits for the stage to stop moving
     """
 
-    def __init__(self, controller):
+    def __init__(self, controller, role):
         self.controller = controller
+        self.role = role
         self._scale = 1
         self._x_inversion = 1
         self._y_inversion = 1
@@ -100,8 +101,8 @@ class XYAbstraction(ABC):
 
 class MicroManagerXY(XYAbstraction, UtilityControl):
 
-    def __init__(self, controller):
-        super().__init__(controller)
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
         self._dev_name = 'N/A'
 
     def _get_xy_device(self):
@@ -164,8 +165,8 @@ class MicroManagerXY(XYAbstraction, UtilityControl):
 
 class PriorXY(XYAbstraction, UtilityControl):
 
-    def __init__(self, controller):
-        super().__init__(controller)
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
 
     def startup(self):
         """Prepare the stage for startup"""
@@ -206,11 +207,11 @@ class PriorXY(XYAbstraction, UtilityControl):
 class XYControlFactory(UtilityFactory):
     """ Determines the type of xy utility object to return according to the daqcontroller id"""
 
-    def build_object(self, controller):
+    def build_object(self, controller, role):
         if controller.id == 'micromanager':
-            return MicroManagerXY(controller)
+            return MicroManagerXY(controller, role)
         elif controller.id == 'prior':
-            return PriorXY(controller)
+            return PriorXY(controller, role)
         else:
             return None
 

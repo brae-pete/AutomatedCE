@@ -68,8 +68,9 @@ class DetectorAbstraction(ABC):
 
     """
 
-    def __init__(self, controller):
+    def __init__(self, controller, role):
         self.daqcontroller = controller
+        self.role = role
         self.rfu = np.asarray([])
         self.time = np.asarray([])
         self._lock = threading.Lock()
@@ -154,11 +155,18 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
     """
     This is a class to control data coming from a single channel photomultiplier typically using a daqcontroller.
 
+    Inputs should include the analog input channel that needs to be read.
+    config examples digilent:
+    utility,daq1,detector,detector,pmt,1
+
+    config example national instruments
+    utility,daq1,detector,detector,pmt,ai5
+
     Inclues oversampling and sampling
     """
 
-    def __init__(self, controller: DaqAbstraction, channel):
-        super().__init__(controller)
+    def __init__(self, controller: DaqAbstraction,role,  channel):
+        super().__init__(controller, role)
         self.daqcontroller.add_analog_input(channel)
         self.daqcontroller.add_callback(self.add_data, channel, 'waveform', [])
 
@@ -282,3 +290,24 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         """
         with self._lock:
             return self.get_data()
+
+
+class DetectorFactory(UtilityFactory):
+    """ Determines the type of detector utility object to return according to the controller id"""
+
+    def build_object(self, controller, role, *args):
+        """
+        Build the high voltage object,
+        :param controller:
+        :param role:
+        :param args: settings list from utility
+        :return:
+        """
+        if controller.id == 'daq':
+            settings = args[0]
+            if settings[4]=='pmt':
+                return PhotomultiplierDetector(controller, role, settings[5])
+            else:
+                return None
+        else:
+            return None

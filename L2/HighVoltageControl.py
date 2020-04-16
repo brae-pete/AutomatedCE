@@ -17,8 +17,9 @@ class HighVoltageAbstraction(ABC):
     get_current = returns the current reading
     """
 
-    def __init__(self, controller):
+    def __init__(self, controller, role):
         self.daqcontroller = controller
+        self.role = role
         self._set_voltages = {}
         self._voltages = {}
         self._current = {}
@@ -56,20 +57,32 @@ class HighVoltageAbstraction(ABC):
 
 class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
     """
-    National instrument control over a high Spellman 1000CZR Powersupply
+    National instrument control over a high Spellman 1000CZR Powersupply.
+    Input Ports should be given in this order:
+     Voltage Control - Analog Output,
+     Voltage Read - Analog Input*,
+     Current Read - Analog Input *
+
+     * Inputs are optional and 'na' can be passed in place of a valid channel name.
+
+     Config example for Digilent DAQ:
+     utility, daq1, high_voltage, outlet_voltage, spellman, 0, 0, 'na'
+
+     Config example for NI Daq:
+     utility, daq1, high_voltage, outlet_voltage, spellman, 'ao0', 'ai0','ai2'
 
     It also incorporates the UtilityControl class for basic utility functions (shutdown, startup, get status, etc...)
     """
 
-    def __init__(self, controller:DAQControllers.DaqAbstraction, hv_ao='ao0',
+    def __init__(self, controller:DAQControllers.DaqAbstraction, role, hv_ao='ao0',
                  hv_ai='na', ua_ai='ai1'):
-        super().__init__(controller)
+        super().__init__(controller, role)
         self._hv_channel = hv_ao
         self.daqcontroller.add_analog_output(hv_ao)
 
         inputs = []
         for channel in [hv_ai, ua_ai]:
-            if channel != "NA":
+            if channel.upper() != "NA":
                 self.daqcontroller.add_analog_input(channel)
                 inputs.append(channel)
 
@@ -151,9 +164,20 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
 class HighVoltageFactory(UtilityFactory):
     """ Determines the type of pressure utility object to return according to the daqcontroller id"""
 
-    def build_object(self, controller):
-        if controller.id == 'spellman':
-            return SpellmanPowerSupply(controller)
+    def build_object(self, controller, role, *args):
+        """
+        Build the high voltage object,
+        :param controller:
+        :param role:
+        :param args: settings list from utility
+        :return:
+        """
+        if controller.id == 'daq':
+            settings = args[0]
+            if settings[4]=='spellman':
+                return SpellmanPowerSupply(controller, role, settings[5], settings[6], settings[7])
+            else:
+                return None
         else:
             return None
 

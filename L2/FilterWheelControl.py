@@ -13,8 +13,9 @@ class FilterWheelAbstraction(ABC):
     seal = Closes the outlet, sealing it from all pressure sources
     """
 
-    def __init__(self, controller):
+    def __init__(self, controller, role):
         self.controller = controller
+        self.role = role
         self._state = 0
 
     @abstractmethod
@@ -42,8 +43,8 @@ class FilterWheelAbstraction(ABC):
 class MicroManagerFilterWheel(FilterWheelAbstraction, UtilityControl):
     """ Class to control the filter wheel"""
 
-    def __init__(self, controller):
-        super().__init__(controller)
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
         self._dev_name = "N/A"
 
     def startup(self):
@@ -77,12 +78,12 @@ class MicroManagerFilterWheel(FilterWheelAbstraction, UtilityControl):
         return self._dev_name
 
 
-class FilterWheelControlFactory(UtilityFactory):
+class FilterWheelFactory(UtilityFactory):
     """ Determines the type of xy utility object to return according to the daqcontroller id"""
 
-    def build_object(self, controller):
+    def build_object(self, controller, role, *args):
         if controller.id == 'micromanager':
-            return MicroManagerFilterWheel(controller)
+            return MicroManagerFilterWheel(controller, role)
         else:
             return None
 
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     from L1 import Controllers
     ctl = Controllers.MicroManagerController()
     ctl.open()
-    fw = FilterWheelControlFactory().build_object(ctl)
+    fw = FilterWheelFactory().build_object(ctl)
     fw.set_channel(2)
     fw.get_channel()
     print(fw.get_status())

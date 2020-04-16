@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from L1 import Controllers
-from L2 import PressureControl, XYControl
+from L1 import Controllers, DAQControllers
+from L2 import PressureControl, XYControl, ZControl, HighVoltageControl, DetectorControl, LaserControl, \
+    FilterWheelControl, ShutterControl, CameraControl
 
 
 class Director(ABC):
@@ -73,19 +74,21 @@ class ControllerBuilder(Builder):
         super().__init__(SystemsObject())
 
     def add_arduino(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.ArduinoController(settings[3])
+        self.constructed_object.fields[settings[1]] = Controllers.ArduinoController(settings[2])
 
     def add_simulated(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.SimulatedController(settings[3])
+        self.constructed_object.fields[settings[1]] = Controllers.SimulatedController(settings[2])
 
     def add_micromanager(self, settings):
         if len(settings) < 4:
             raise ValueError('No Config file was provided: {}'.format(settings))
-        self.constructed_object.fields[settings[1]] = Controllers.MicroManagerController(settings[3], settings[4])
+        self.constructed_object.fields[settings[1]] = Controllers.MicroManagerController(settings[2], settings[3])
 
     def add_prior(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.PriorController(settings[3])
+        self.constructed_object.fields[settings[1]] = Controllers.PriorController(settings[2])
 
+    def add_digilent(self, settings):
+        self.constructed_object.fields[settings[1]] = DAQControllers.DigilentDaq()
 
 
 class UtilityBuilder(Builder):
@@ -94,18 +97,60 @@ class UtilityBuilder(Builder):
     utility listed in L2. The corresponding factory for the utility should be used passing the daqcontroller that will be
     used for that utility. The add_* functions will create the utility object using the settings passed
     from a config file line. This object will be added to the constructed_object or the systems object.
+
+    A single systems object can have multiple of the same type of utility classes as long as the roles have unique
+    identifies. If roles are matching, the role whose utility was created last will overwrite the other matching role.
+
+
     """
 
     def __init__(self):
         super().__init__(SystemsObject())
         self._pressure_factory = PressureControl.PressureControlFactory()
         self._xy_factory = XYControl.XYControlFactory()
+        self._z_factory = ZControl.ZControlFactory()
+        self._high_voltage_factory = HighVoltageControl.HighVoltageFactory()
+        self._detector_factory = DetectorControl.DetectorFactory()
+        self._laser_factory = LaserControl.LaserFactory()
+        self._filter_wheel_factory = FilterWheelControl.FilterWheelFactory()
+        self._shutter_factory = ShutterControl.ShutterFactory()
+        self._camera_factory = CameraControl.CameraFactory()
 
     def add_pressure(self, controller, settings):
-        self.constructed_object.fields['pressure'] = self._pressure_factory.build_object(controller)
+        role = settings[3]
+        self.constructed_object.fields[role] = self._pressure_factory.build_object(controller, role)
 
     def add_xy(self, controller, settings):
-        self.constructed_object.fields['xy'] = self._xy_factory.build_object(controller)
+        role = settings[3]
+        self.constructed_object.fields[role] = self._xy_factory.build_object(controller, role)
+
+    def add_z(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._z_factory.build_object(controller, role)
+
+    def add_high_voltage(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._high_voltage_factory.build_object(controller, role, settings)
+
+    def add_detector(self, controller,settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._detector_factory.build_object(controller, role, settings)
+
+    def add_laser(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._laser_factory.build_object(controller, role, settings)
+
+    def add_filter_wheel(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._filter_wheel_factory.build_object(controller, role)
+
+    def add_shutter(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._filter_wheel_factory.build_object(controller, role)
+
+    def add_camera(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._camera_factory.build_object(controller, role)
 
 
 class ConcreteDirector(Director):
@@ -161,8 +206,10 @@ class ConcreteDirector(Director):
                 self._controller_builder.add_micromanager(settings)
             elif control_type == 'prior':
                 self._controller_builder.add_prior(settings)
+            elif control_type == 'digilent':
+                self._controller_builder.add_digilent(settings)
             else:
-                raise ValueError('Controller options are: "arduino", "simulated", "micromanager", "prior"')
+                raise ValueError('Entered invalid controller: {}'.format(control_type))
         return self._controller_builder.get_object()
 
     def _build_utilities(self, utility_list, controllers):
@@ -174,14 +221,28 @@ class ConcreteDirector(Director):
         """
         for utility in utility_list:
             settings = utility.split(',')
-            utility_type = settings[1]
-            controller = controllers[settings[2]]
+            utility_type = settings[2]
+            controller = controllers[settings[1]]
             if utility_type == 'pressure':
                 self._utility_builder.add_pressure(controller, settings)
             elif utility_type == 'xy':
                 self._utility_builder.add_xy(controller, settings)
+            elif utility_type == 'z':
+                self._utility_builder.add_z(controller,settings)
+            elif utility_type == 'high_voltage':
+                self._utility_builder.add_high_voltage(controller,settings)
+            elif utility_type == 'detector':
+                self._utility_builder.add_detector(controller, settings)
+            elif utility_type == 'laser':
+                self._utility_builder.add_laser(controller, settings)
+            elif utility_type == 'filter_wheel':
+                self._utility_builder.add_filter_wheel(controller,settings)
+            elif utility_type == 'shutter':
+                self._utility_builder.add_shutter(controller, settings)
+            elif utility_type == 'camera':
+                self._utility_builder.add_camera(controller, settings)
             else:
-                raise ValueError('Utility options are: "pressure"')
+                raise ValueError('Entered invalid utility: {}'.format(utility_type))
 
 
 class Interpreter(ABC):
@@ -254,3 +315,5 @@ class TextInterpreter:
 if __name__ == "__main__":
     director = ConcreteDirector()
     director.construct(r"D:\Scripts\AutomatedCE\config\Test-System.cfg")
+    print(director.get_controllers().fields)
+    print(director.get_utilities().fields)

@@ -56,7 +56,7 @@ class SimulatedController(ControllerAbstraction):
     """
     Simulated daqcontroller class to test daqcontroller functionality from home.
     """
-    id = 'Simulated'
+    id = 'simulator'
 
     def __init__(self, port='COMX'):
         super().__init__(port)
@@ -179,6 +179,8 @@ class MicroManagerController(ControllerAbstraction):
             self._mmc.send_command(command)
             response = self._mmc.read_response()
         return response
+
+
 class PriorController(ControllerAbstraction):
     """
     Controller class to control devices using a Prior microcontroller. Prior commands are reported in the user manual

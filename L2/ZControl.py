@@ -157,6 +157,33 @@ class ArduinoZ(ZAbstraction, UtilityControl):
         self.max_z = self.max_z / 2
 
 
+class SimulatedZ(ZAbstraction, UtilityControl):
+
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
+
+    def startup(self):
+        self.set_z(0)
+
+    def shutdown(self):
+        self.set_z(0)
+
+    def set_home(self):
+        self.pos = 0
+
+    def homing(self):
+        self.set_home()
+
+    def set_z(self, z: float):
+        self.pos = z
+
+    def read_z(self):
+        return self.pos
+
+    def go_home(self):
+        self.set_z(0)
+
+
 class PriorZ(ZAbstraction, UtilityControl):
 
     def __init__(self, controller, role):
@@ -377,6 +404,7 @@ class ZControlFactory(UtilityFactory):
     """ Determines the type of xy utility object to return according to the daqcontroller id"""
 
     def build_object(self, controller, role):
+
         if controller.id == 'micromanager':
             return MicroManagerZ(controller, role)
         elif controller.id == 'prior':
@@ -385,6 +413,8 @@ class ZControlFactory(UtilityFactory):
             return ArduinoZ(controller, role)
         elif controller.id == 'kinesis':
             return KinesisZ(controller, role)
+        elif controller.id == 'simulator':
+            return SimulatedZ(controller, role)
         else:
             return None
 

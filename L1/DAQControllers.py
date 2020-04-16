@@ -43,6 +43,7 @@ class DaqAbstraction(ABC):
         self._current_voltages = {}
         self._lock = threading.Lock()
         self._read_thread = threading.Thread()
+        self.id = 'daq'
 
         pass
 
@@ -334,9 +335,12 @@ if DIGILENT_LOAD:
             super().__init__()
             self._set_ao_channels = []
             self.set_ai_channels = []
+
             self._callbacks = []
             self._samples = 8192
             self._read_flag = threading.Event()
+            self._dio_mask = ['0']*16 # Bit mask for digital inputs outputs enable
+            self._set_do_channels = ['0']*16 # Bit mask for do channel values
             if DIGILENT_LOAD:
                 load = self._init_device()
             else:
@@ -371,6 +375,7 @@ if DIGILENT_LOAD:
 
         def add_analog_output(self, channel: int):
             """ Adds a analog output channel """
+            channel = int(channel)
             assert channel in [0, 1]  # channel must be one of these two values, add to list of enabled channels
             self._set_ao_channels.append(channel)
             # Enable the channel
@@ -385,6 +390,7 @@ if DIGILENT_LOAD:
             :param range:
             :return:
             """
+            channel = int(channel)
             assert channel in [0, 1]
             self.set_ai_channels.append(channel)
             dwf.FDwfAnalogInChannelEnableSet(self.hdwf, c_int(channel), c_bool(True))
@@ -503,6 +509,47 @@ if DIGILENT_LOAD:
                     # Record the sample number the data was collected at
                     total_samples += self._samples + buf_index.value
                     self._send_data(data_buffer, total_samples)
+
+        def add_do_channel(self, channel):
+            """
+            Add a digital output channel. Channel should be a string identifier for the digital output.
+            For Digilent that should be an int indicating which pin it refers to.
+
+            :param channel:
+            :return:
+            """
+            channel = int(channel)
+            assert type(channel) == int, "Channel must be an Integer"
+            # Adjust the maskk and enable the pin
+            self._dio_mask[channel]='1'
+            mask = "".join(self._dio_mask)
+            dwf.FDwfDigitalIOOutputEnableSet(self.hdwf, c_int(int(mask, base=2)))
+
+        def set_do_channel(self, channel, value):
+            """
+            Change the desired value for digital output channel. This will not update the actual value until the update/write
+            command is sent.
+            :param channel:
+            :param value:
+            :return:
+            """
+            channel = int(channel)
+            assert type(channel) == int, 'Channel must be an integer'
+
+            if value:
+                value = '1'
+            else:
+                value = '0'
+
+            self._set_do_channels[channel]=value
+
+        def update_do_channels(self):
+            """
+            Updates the digital output channels with the desired set values
+            :return:
+            """
+            mask = "".join(self._set_do_channels)
+            dwf.FDwfDigitalIOOutputSet(self.hdwf, c_int(int(mask, base=2)))
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

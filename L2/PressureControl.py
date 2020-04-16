@@ -14,8 +14,9 @@ class PressureAbstraction(ABC):
     seal = Closes the outlet, sealing it from all pressure sources
     """
 
-    def __init__(self, controller):
+    def __init__(self, controller, role):
         self.controller = controller
+        self.role=role
         self.state ='Sealed'
 
     @abstractmethod
@@ -46,8 +47,8 @@ class ArduinoPressure(PressureAbstraction, UtilityControl):
     It also incorporates the UtilityControl class for basic utility functions (shutdown, startup, get status, etc...)
     """
 
-    def __init__(self, controller):
-        super().__init__(controller)
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
 
     def startup(self):
         """
@@ -93,8 +94,8 @@ class SimulatedPressure(PressureAbstraction, UtilityControl):
     when a SimulatedController object is used.
     """
 
-    def __init__(self, controller):
-        super().__init__(controller)
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
         # some private properties for the simulation
         self._pressure_valve = False
         self._vacuum_valve = False
@@ -137,14 +138,15 @@ class SimulatedPressure(PressureAbstraction, UtilityControl):
         self._vacuum_valve = False
         self._pressure_valve = False
 
+
 class PressureControlFactory(UtilityFactory):
     """ Determines the type of pressure utility object to return according to the daqcontroller id"""
 
-    def build_object(self, controller):
+    def build_object(self, controller, role):
         if controller.id == 'arduino':
-            return ArduinoPressure(controller)
+            return ArduinoPressure(controller, role)
         elif controller.id == 'simulator':
-            return SimulatedPressure(controller)
+            return SimulatedPressure(controller, role)
         else:
             return None
 
@@ -152,7 +154,7 @@ class PressureControlFactory(UtilityFactory):
 if __name__ == "__main__":
     from L1.Controllers import SimulatedController
     controller = SimulatedController()
-    pressure = SimulatedPressure(controller)
+    pressure = SimulatedPressure(controller, 'test')
 
 
 

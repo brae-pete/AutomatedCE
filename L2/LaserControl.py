@@ -4,8 +4,9 @@ from L1.DAQControllers import DaqAbstraction
 
 class LaserAbstraction(ABC):
 
-    def __init__(self, controller):
+    def __init__(self, controller, role):
         self.daqcontroller = controller
+        self.role = role
         self.enable = False
 
     def set_parameters(self, *args):
@@ -37,10 +38,18 @@ class LaserAbstraction(ABC):
 
 
 class Uniphase(LaserAbstraction, UtilityControl):
+    """
+    Utility class for control over a Uniphase laser using the digital outputs from a DAQ controller.
 
-    def __init__(self, controller:DaqAbstraction, computer='port0/line0', laser_on='port0/line1', pulse='port0/line5'):
-        super().__init__(controller)
+    User must supply the digial output channels that connect to the computer, laser on/off, and pulse lines of the
+    Uniphase 9 pin D-sub.
 
+    Config example National Instrument daq:
+    utility,daq1,laser,lysis_laser,uniphase,port0/line0,port0/line1,port0/line5
+    """
+
+    def __init__(self, controller:DaqAbstraction, role, computer='port0/line0', laser_on='port0/line1', pulse='port0/line5'):
+        super().__init__(controller, role)
 
         # Initialize the daq controller settings
         self.daqcontroller.add_do_channel(computer)
@@ -85,3 +94,26 @@ class Uniphase(LaserAbstraction, UtilityControl):
         :return:
         """
         return {'laser':self.enable}
+
+
+class LaserFactory(UtilityFactory):
+    """ Determines the type of detector utility object to return according to the controller id"""
+
+    def build_object(self, controller, role, *args):
+        """
+        Build the high voltage object,
+        :param controller:
+        :param role:
+        :param args: settings list from utility
+        :return:
+        """
+        print(controller.id)
+        if controller.id == 'daq':
+            settings = args[0]
+            print(settings[4])
+            if settings[4]=='uniphase':
+                return Uniphase(controller, role, settings[5], settings[6], settings[7])
+            else:
+                return None
+        else:
+            return None

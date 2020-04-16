@@ -9,12 +9,13 @@ class CameraAbstraction(ABC):
     Utility class for controlling camera hardware
     """
 
-    def __init__(self, controller):
+    def __init__(self, controller,role):
         self.controller = controller
+        self.role = role
         self._callbacks = []
         self.last_image = []
 
-        #Continuous properties
+        # Continuous properties
         self._continuous_thread = threading.Thread()
         self._continuous_running = threading.Event()
 
@@ -40,7 +41,6 @@ class CameraAbstraction(ABC):
         """
         pass
 
-
     def add_callback(self, function):
         """
         Add function to call during continuous acquisition
@@ -50,7 +50,7 @@ class CameraAbstraction(ABC):
         self._callbacks.append(function)
 
     @abstractmethod
-    def set_exposure(self, exposure:int):
+    def set_exposure(self, exposure: int):
         """
         Set the exposure in milliseconds
         :param exposure:
@@ -67,20 +67,19 @@ class CameraAbstraction(ABC):
 
 
 class MicroManagerCamera(CameraAbstraction, UtilityControl):
-
     """
     Camera control using the Micromanager controller class
     """
 
-    def __init__(self, controller : ControllerAbstraction):
-        super().__init__(controller)
+    def __init__(self, controller: ControllerAbstraction, role):
+        super().__init__(controller, role)
 
     def snap(self):
         """
         Take and return a single image
         :return:
         """
-        response = self.controller.send_command('camera,snap\n')
+        _ = self.controller.send_command('camera,snap\n')
         image = self.controller.send_command('camera,get_image\n')
         return image
 
@@ -89,7 +88,7 @@ class MicroManagerCamera(CameraAbstraction, UtilityControl):
         Start the continuous image sequence
         :return:
         """
-        response = self.controller.send_command('camera,start_continuous\n')
+        _ = self.controller.send_command('camera,start_continuous\n')
         self._continuous_running.set()
         self._continuous_thread = threading.Thread(target=self._continuous_callback)
         self._continuous_thread.start()
@@ -114,8 +113,7 @@ class MicroManagerCamera(CameraAbstraction, UtilityControl):
         self.controller.send_command('camera,stop_continuous\n')
         self._continuous_running.clear()
 
-
-    def set_exposure(self, exposure:int):
+    def set_exposure(self, exposure: int):
         """
         Sets the camera exposure in milliseconds
         :param exposure:
@@ -149,22 +147,33 @@ class MicroManagerCamera(CameraAbstraction, UtilityControl):
         Return the continuous running status
         :return:
         """
-        return {'camera':self._continuous_running.is_set()}
+        return {'camera': self._continuous_running.is_set()}
+
+
+class CameraFactory(UtilityFactory):
+    """ Determines the type of Camera Utility to return based off the controller being used"""
+
+    def build_object(self, controller, role, *args):
+        if controller.id == 'micromanager':
+            return MicroManagerCamera(controller, role)
+        else:
+            return None
 
 
 if __name__ == "__main__":
     from L1.Controllers import MicroManagerController
     import time
+
     cont = MicroManagerController()
     cont.open()
     cc = MicroManagerCamera(cont)
 
-    def update_log_screen(image,*args):
+
+    def update_log_screen(*args):
         print("New Image")
 
-    cc.add_callback(update_log_screen)
 
+    cc.add_callback(update_log_screen)
     cc.continuous_snap()
     time.sleep(5)
     cc.stop_continuous()
-
