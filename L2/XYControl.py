@@ -6,7 +6,7 @@ from L2.Utility import UtilityControl, UtilityFactory
 
 class XYAbstraction(ABC):
     """
-    Utility class for moving an automated microscope stage.
+    Utility class for moving an automated microscope stage. Values should be recorded in millimeters.
 
     Specialized functions include:
     set_xy = sets the absolute position of the stage
@@ -29,6 +29,12 @@ class XYAbstraction(ABC):
         self._x_inversion = 1
         self._y_inversion = 1
         self.pos = [0, 0]
+        self._acceleration = 10 # mm/s2
+        self._velocity = 5 # mm/s
+        self.velocity_max = 5
+        self.acceleration = 20
+        self.jerk = 5
+
 
     def _scale_values(self, xy):
         xy = [x / self._scale for x in xy]
@@ -41,6 +47,39 @@ class XYAbstraction(ABC):
         xy[1] *= self._y_inversion
         xy = [x * self._scale for x in xy]
         return xy
+
+    @abstractmethod
+    def get_velocity(self):
+        """
+
+        :return:
+        """
+        return self._velocity
+
+    @abstractmethod
+    def get_accleration(self):
+        """
+        Micromanager does not have a way to retrieve the Stage acceleration, so we can make an estimate.
+
+        :return:
+        """
+        return self._acceleration
+
+    @abstractmethod
+    def set_acceleration(self, acceleration):
+        """
+        Set the accerlation of the XY stage
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    def set_velocity(self, velocity):
+        """
+        Set the velocity of the XY stage
+        :return:
+        """
+        pass
 
     @abstractmethod
     def read_xy(self):
@@ -104,6 +143,7 @@ class MicroManagerXY(XYAbstraction, UtilityControl):
     def __init__(self, controller, role):
         super().__init__(controller, role)
         self._dev_name = 'N/A'
+        self._scale = 0.001 # Micromanager records units in um
 
     def _get_xy_device(self):
         """
@@ -145,8 +185,8 @@ class MicroManagerXY(XYAbstraction, UtilityControl):
         if type(xy[0]) is not float and type(xy[0]) is not int:
             logging.warning("Did not read XY stage position: {}".format(xy))
             return None
-        self.pos = xy
-        return self._scale_values(xy)
+        self.pos = self._scale_values(xy)
+        return self.pos
 
     def set_xy(self, xy):
         raw_xy = self._invert_scale(xy)
@@ -161,6 +201,36 @@ class MicroManagerXY(XYAbstraction, UtilityControl):
             'xy,rel_position,{},{},{}\n'.format(self._get_xy_device(), rel_xy[0], rel_xy[1]))
         msg = "Did not set XY stage"
         return self._ok_check(rsp, msg)
+
+    def set_acceleration(self, acceleration):
+        """
+        Micromanager has no way to set accerlation, so the user must make their best guess
+        :return:
+        """
+        self._acceleration = acceleration
+
+    def set_velocity(self, velocity):
+        """
+        Micromanager has no way to set the velocity of the stage, so the user must make their best guess
+        :param velocity:
+        :return:
+        """
+        self._velocity = velocity
+
+    def get_accleration(self):
+        """
+        Return the best guess of the XY stage accerlation
+        :return:
+        """
+        return self._accleration
+
+    def get_velocity(self):
+        """
+        Return the best guess of the XY stage max velocity
+        :return: float
+        """
+
+        return self._velocity
 
 
 class PriorXY(XYAbstraction, UtilityControl):
@@ -202,6 +272,14 @@ class PriorXY(XYAbstraction, UtilityControl):
     def go_home(self):
         """ Sends the stage to the home position"""
         self.set_xy([0, 0])
+
+    def set_velocity(self, velocity):
+        """
+        Sets the max velocity of the stage in mm/s
+        :param velocity:
+        :return:
+        """
+        
 
 
 class XYControlFactory(UtilityFactory):

@@ -1,0 +1,7 @@
+# Automated method for a CE System 								
+# Columns are delimited by tabs (not commas) and column order should be matched
+# Default units for outlet is cm, for inlet is mm, for voltage is kV for time is seconds, you may enter in cm, mm, kv, s, min to specify other units"
+METHOD
+name	location	outlet_height	inlet_height	pressure	vacuum	voltage	time	special
+rinse	well_1, sample_1	0 cm	25 mm	1	0	0.0 kV	60 s
+step1	well_2	 -5 cm	15 mm	0	0	0.5 kV	2 min

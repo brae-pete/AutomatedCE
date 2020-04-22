@@ -34,7 +34,7 @@ class CameraAbstraction(ABC):
         """
 
     @abstractmethod
-    def stop_continuous(self):
+    def stop(self):
         """
         Stops the continuous acquisiton
         :return:
@@ -105,13 +105,14 @@ class MicroManagerCamera(CameraAbstraction, UtilityControl):
             for func in self._callbacks:
                 func(image)
 
-    def stop_continuous(self):
+    def stop(self):
         """
         Stops the continuous acquisition
         :return:
         """
         self.controller.send_command('camera,stop_continuous\n')
         self._continuous_running.clear()
+
 
     def set_exposure(self, exposure: int):
         """
@@ -140,7 +141,7 @@ class MicroManagerCamera(CameraAbstraction, UtilityControl):
         Make sure continuous acquisiton is stopped
         :return:
         """
-        self.stop_continuous()
+        self.stop()
 
     def get_status(self):
         """
@@ -176,4 +177,4 @@ if __name__ == "__main__":
     cc.add_callback(update_log_screen)
     cc.continuous_snap()
     time.sleep(5)
-    cc.stop_continuous()
+    cc.stop()

@@ -39,6 +39,13 @@ class FilterWheelAbstraction(ABC):
         """Retrieves the last known state of the device """
         return {'filter':self._state}
 
+    def stop(self):
+        """
+        Stop does nothing
+        :return:
+        """
+        pass
+
 
 class MicroManagerFilterWheel(FilterWheelAbstraction, UtilityControl):
     """ Class to control the filter wheel"""

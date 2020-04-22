@@ -138,6 +138,13 @@ class SimulatedPressure(PressureAbstraction, UtilityControl):
         self._vacuum_valve = False
         self._pressure_valve = False
 
+    def stop(self):
+        """
+        Stop seals the outlet vial.
+        :return:
+        """
+        self.seal()
+
 
 class PressureControlFactory(UtilityFactory):
     """ Determines the type of pressure utility object to return according to the daqcontroller id"""

@@ -45,6 +45,13 @@ class ShutterAbstraction(ABC):
         """Retrieves the last known state of the device """
         return {'filter':self._state}
 
+    def stop(self):
+        """
+        Stop does nothing.
+        :return:
+        """
+        pass
+
 
 class MicroManagerShutter(ShutterAbstraction, UtilityControl):
     """ Class to control the filter wheel"""

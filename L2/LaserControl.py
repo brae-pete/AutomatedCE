@@ -95,6 +95,13 @@ class Uniphase(LaserAbstraction, UtilityControl):
         """
         return {'laser':self.enable}
 
+    def stop(self):
+        """
+        Stop diables the enable flag
+        :return:
+        """
+        self.enable = False
+
 
 class LaserFactory(UtilityFactory):
     """ Determines the type of detector utility object to return according to the controller id"""

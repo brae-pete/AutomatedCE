@@ -26,6 +26,10 @@ class UtilityControl(ABC):
     def shutdown(self):
         pass
 
+    @abstractmethod
+    def stop(self):
+        pass
+
 class UtilityFactory(ABC):
 
     """

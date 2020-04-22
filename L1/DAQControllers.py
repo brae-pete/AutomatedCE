@@ -47,6 +47,20 @@ class DaqAbstraction(ABC):
 
         pass
 
+    def open(self):
+        """
+        By default the DAQ's don't need to be opened or closed
+        :return:
+        """
+        pass
+
+    def close(self):
+        """
+        By default DAQ's don't need to be opened or closed
+        :return:
+        """
+        pass
+
     @abstractmethod
     def add_analog_input(self, channels, *args):
         """

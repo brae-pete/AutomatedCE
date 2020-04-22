@@ -55,6 +55,7 @@ class HighVoltageAbstraction(ABC):
         pass
 
 
+
 class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
     """
     National instrument control over a high Spellman 1000CZR Powersupply.

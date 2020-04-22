@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from L1 import Controllers, DAQControllers
 from L2 import PressureControl, XYControl, ZControl, HighVoltageControl, DetectorControl, LaserControl, \
@@ -24,10 +25,10 @@ class Director(ABC):
         pass
 
     def get_utilities(self):
-        return self._utility_builder.constructed_object
+        return self._utility_builder.constructed_object.fields
 
     def get_controllers(self):
-        return self._controller_builder.constructed_object
+        return self._controller_builder.constructed_object.fields
 
 
 class Builder(ABC):
@@ -42,7 +43,7 @@ class Builder(ABC):
         return self.constructed_object
 
 
-class SystemsObject(object):
+class ControlledObjects(object):
     """
     This contains a dictionary holding either the L1 or L2 objects.
     Set and get have defined so that you can treat treat this object like a dictionary
@@ -71,7 +72,7 @@ class ControllerBuilder(Builder):
     """
 
     def __init__(self):
-        super().__init__(SystemsObject())
+        super().__init__(ControlledObjects())
 
     def add_arduino(self, settings):
         self.constructed_object.fields[settings[1]] = Controllers.ArduinoController(settings[2])
@@ -105,7 +106,7 @@ class UtilityBuilder(Builder):
     """
 
     def __init__(self):
-        super().__init__(SystemsObject())
+        super().__init__(ControlledObjects())
         self._pressure_factory = PressureControl.PressureControlFactory()
         self._xy_factory = XYControl.XYControlFactory()
         self._z_factory = ZControl.ZControlFactory()
@@ -312,8 +313,87 @@ class TextInterpreter:
         return new_lines
 
 
+class SystemAbstraction(ABC):
+
+    def __init__(self):
+        self.controllers = {}
+
+    def load_config(self, config_file=r"D:\Scripts\AutomatedCE\config\Test-System.cfg"):
+        """
+        Load the controllers and utitily objects, and assign them to the CE System utilities.
+        :param config_file:
+        :return:
+        """
+
+        director = ConcreteDirector()
+        director.construct(config_file)
+        utilities = director.get_utilities()
+
+        # Update the class utility properties
+        for key, value in utilities.items():
+            self.__setattr__(key,value)
+
+        self.controllers = director.get_controllers()
+
+    def open_controllers(self):
+        """
+        Open the controller resources
+        :return:
+        """
+        for name, controller in self.controllers.items():
+            controller.open()
+
+    def close_controllers(self):
+        """
+        Close the controller resources
+        :return:
+        """
+        for name, controller in self.controllers.items():
+            controller.close()
+
+
+class CESystem(SystemAbstraction):
+    """
+    CE System object. Contains all the utility functions needed for an automated CE system.
+    Each utility will be declared as a property of the class after load_config is called.
+
+    Care should be taken to only call methods from the utility classes that have been defined by the class abstraction.
+    This enables the CE System to swap between different vendors for hardware easily.
+
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Define list of Utilities Needed for this class (this makes it so we can dynamically type with this class)
+        self.outlet_pressure = PressureControl.PressureAbstraction
+        self.xy_stage = XYControl.XYAbstraction
+        self.objective = ZControl.ZAbstraction
+        self.outlet_z = ZControl.ZAbstraction
+        self.inlet_z = ZControl.ZAbstraction
+        self.filter_wheel = FilterWheelControl.FilterWheelAbstraction
+        self.shutter = ShutterControl.ShutterAbstraction
+        self.camera = CameraControl.CameraAbstraction
+        self.high_voltage = HighVoltageControl.HighVoltageAbstraction
+        self.detector = DetectorControl.DetectorAbstraction
+        self.lysis_laser = LaserControl.LaserAbstraction
+
+    def stop_ce(self):
+        """
+        Command to stop a list of Utilities when stopping a run
+        :return:
+        """
+        stop_list = [self.high_voltage, self.xy_stage, self.inlet_z, self.objective, self.outlet_z,
+                     self.outlet_pressure, self.lysis_laser]
+
+        for utility in stop_list:
+            try:
+                utility.stop()
+            except Exception as e:
+                logging.error(f"ERR: {utility} did not stop. \n {e}")
+
+
+
 if __name__ == "__main__":
-    director = ConcreteDirector()
-    director.construct(r"D:\Scripts\AutomatedCE\config\Test-System.cfg")
-    print(director.get_controllers().fields)
-    print(director.get_utilities().fields)
+    system = CESystem()
+    system.load_config()
+    system.open_controllers()

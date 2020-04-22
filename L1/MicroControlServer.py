@@ -341,7 +341,9 @@ class MicroControl:
 
 def main(args):
     logging.warning("Python 2 Subprocess started...")
-
+    logging.warning(sys.argv)
+    if sys.argv[1] == '-f':
+        return
     with open(r'py2_log.txt'.format(USER), 'a') as fout:
         fout.write("Python 2 started {}\n".format(args))
 
@@ -352,7 +354,6 @@ def main(args):
     else:
         sock = MicroServer()
     sock.start_server()
-
 
 main(sys.argv)
 

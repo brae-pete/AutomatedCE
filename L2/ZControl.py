@@ -99,11 +99,22 @@ class ZAbstraction(ABC):
     def wait_for_move(self):
         pass
 
+    @abstractmethod
+    def stop(self):
+        """
+        Stop the object movement.
+        :return:
+        """
+        self.set_rel_z(0)
+
 
 class ArduinoZ(ZAbstraction, UtilityControl):
     """ Utility class for moving a single axis motor with the PowerStep01 stepper driver and an Arduino.
 
     """
+    velocity_max = 20  # mm/s
+    acceleration = 5
+    jerk = 0  # If constant acceleration, set jerk equal to 0
 
     def __init__(self, controller, role):
         super().__init__(controller, role)
@@ -158,7 +169,9 @@ class ArduinoZ(ZAbstraction, UtilityControl):
 
 
 class SimulatedZ(ZAbstraction, UtilityControl):
-
+    velocity_max = 20  # mm/s
+    acceleration = 5
+    jerk = 0  # If constant acceleration, set jerk equal to 0
     def __init__(self, controller, role):
         super().__init__(controller, role)
 
@@ -183,9 +196,14 @@ class SimulatedZ(ZAbstraction, UtilityControl):
     def go_home(self):
         self.set_z(0)
 
+    def stop(self):
+        pass
+
 
 class PriorZ(ZAbstraction, UtilityControl):
-
+    velocity_max = 20  # mm/s
+    acceleration = 5
+    jerk = 0  # If constant acceleration, set jerk equal to 0
     def __init__(self, controller, role):
         super().__init__(controller, role)
         self.min_z = 0
@@ -232,7 +250,9 @@ class MicroManagerZ(ZAbstraction, UtilityControl):
     micromanager.
 
     """
-
+    velocity_max = 20  # mm/s
+    acceleration = 5
+    jerk = 0  # If constant acceleration, set jerk equal to 0
     def __init__(self, controller, role):
         super().__init__(controller, role)
         self.min_z = 0
@@ -268,6 +288,14 @@ class MicroManagerZ(ZAbstraction, UtilityControl):
     def homing(self):
         """ Go to the hardware homing point"""
         logging.warning("Homing not implemented")
+
+    def stop(self):
+        """
+        Stop the hardware
+        :return:
+        """
+        self.set_rel_z(0)
+
 
 
 class KinesisZ(ZAbstraction, UtilityControl):
