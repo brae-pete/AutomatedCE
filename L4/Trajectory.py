@@ -23,6 +23,7 @@ class SafeMove:
         self.xyz0 = xyz0
         self.xyz1 = xyz1
         self.visual = visual
+        self.display_data = {}
 
     def move(self):
         """
@@ -45,8 +46,9 @@ class SafeMove:
 
         # Determine the max height over the entire range
         mid_max = max(ledge_z.max(), z0, z1)
-
+        zz = [0]
         # Determine the increase move step (moving from start point to max point)
+        xy_stage_delay = 0
         if mid_max > z0:
             # Move the Z inlet first then the XY stage after delay
             st = time.time()
@@ -54,18 +56,19 @@ class SafeMove:
 
             # Calculate the xy delay
             zz = _get_motor_path([z0], [mid_max], self.system.inlet_z)[0]
-            xy_stage_delay = self.get_delay(ledge_z, zz)
+            xy_stage_delay = self.get_delay(ledge_z, zz, increasing=True)
             while time.time() - st < xy_stage_delay:
                 time.sleep(0.01)
 
         # Move the XY stage (only after the capillary has increased its height sufficiently)
         st = time.time()
         self.system.xy_stage.set_xy([x1, y1])
-
+        zz_decrease = [0]
         # Determine the decrease move step delay (moving down from our max point to final point)
+        z_stage_down_delay = 0
         if mid_max > z1:
-            zz = _get_motor_path([mid_max], [z1], self.system.inlet_z)[0]
-            z_stage_down_delay = self.get_delay(ledge_z, zz)
+            zz_decrease = _get_motor_path([mid_max], [z1], self.system.inlet_z)[0]
+            z_stage_down_delay = self.get_delay(ledge_z, zz_decrease, increasing=False)
             while time.time() - st < z_stage_down_delay:
                 time.sleep(0.01)
             self.system.inlet_z.set_z(z1)
@@ -77,9 +80,35 @@ class SafeMove:
                 time.sleep(0.01)
             self.system.inlet_z.set_z(self.xyz1[2])
 
+        # Record data if necessary
+        if self.visual:
+            self.visualize(xx, yy, ledge_z, zz, zz_decrease, xy_stage_delay, z_stage_down_delay)
+
+    def visualize(self, xx, yy, ledge_z, zz, zz_decrease, xy_delay, z_delay):
+        self.display_data['xx'] = xx
+        self.display_data['yy'] = yy
+        self.display_data['zz_ledge'] = ledge_z
+        self.display_data['z_incr'] = zz
+        self.display_data['z_decr'] = zz_decrease
+        tt_time = np.linspace(0,xx.shape[0]/1000, xx.shape[0])
+        plt.plot(tt_time,xx, label = 'X-Motor')
+        plt.plot(tt_time, yy, label='Y-motor')
+        plt.plot(tt_time, ledge_z, label ='Ledges')
+        if len(zz)>1:
+            logging.info(f"Increase Delay: {xy_delay}")
+            tt_time = np.linspace(-xy_delay, -xy_delay+len(zz)/1000, len(zz))
+            plt.plot(tt_time, zz, label ='Increasing Inlet')
+        if len(zz_decrease)>1:
+            logging.info(f"Decrease Delay: {z_delay}")
+            tt_time = np.linspace(z_delay, z_delay+ len(zz_decrease)/1000, len(zz_decrease))
+            plt.plot(tt_time, zz_decrease, label = "Decreasing Inlet")
+        plt.legend()
+        plt.show()
+
     @staticmethod
     def get_delay(ledge, zz, increasing=True, tolerance=0.5):
         ledge = ledge - tolerance
+        ledge, zz = _normalize_paths([ledge, zz])
         # Get the delay time needed between the stages
         delay = 0
         collision = zz - ledge
@@ -119,14 +148,26 @@ def _get_motor_path(xy1, xy2, motor):
     """
     v, a, j = motor.velocity_max, motor.acceleration, motor.jerk
     xy_path = []
+
+
     for start, stop in zip(xy1, xy2):
+
+        if start > stop:
+            diff = start-stop
+            invert =-1
+        else:
+            diff = stop-start
+            invert=1
+
         if j == 0:
             # For now assume very high J, but should go back and write new function
             j = a * 500
-        path_arr = _get_path(stop - start, v, a, j)
+
+        path_arr = _get_path(diff, v, a, j)*invert
         path_arr += start
         xy_path.append(path_arr)
-    return xy_path
+
+    return _normalize_paths(xy_path)
 
 
 def _normalize_paths(xyz):
@@ -270,13 +311,13 @@ def _get_path(xf, vmax=10, a=20, j=200, extra=False):
 
 if __name__ == "__main__":
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     system = CESystem()
     system.load_config()
     system.open_controllers()
     tm = AutomatedControl.Template()
-    xyz0 = [20, 20, 20]
-    xyz1 = [100, 100, 10]
-    path = safe_move(system, xyz0, xyz1, tm, visual=True)
-    plt.show()
-    plt.legend()
+    xyz0 = [20, 20, 3]
+    xyz1 = [100, 35, 10]
+    path = SafeMove(system, tm, xyz0, xyz1, visual=True)
+    path.move()
+

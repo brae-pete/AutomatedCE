@@ -290,8 +290,8 @@ class Template(object):
 
     def get_intersection(self, xx, yy):
 
-        zz = np.zeros(xx.shape[0])
-        for _, ledge in template.ledges.items():
+        zz = np.zeros(len(xx))
+        for _, ledge in self.ledges.items():
             zz += ledge.get_intersection(xx, yy)
         return zz
 
