@@ -1,0 +1,2 @@
+data_dir,"D:\Scripts\AcesTestData"
+micro_manager_dir,"D:\Micro-Manager-1.4"

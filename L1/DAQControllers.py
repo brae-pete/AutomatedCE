@@ -38,12 +38,14 @@ class DaqAbstraction(ABC):
         self._callbacks = []
         self._set_ai_channels = []
         self._set_ao_channels = []
-
+        self._rate = 1000
+        self._total_samples = 0 # used to keep track of time
         self._set_voltages = {}
         self._current_voltages = {}
         self._lock = threading.Lock()
         self._read_thread = threading.Thread()
         self.id = 'daq'
+
 
         pass
 
@@ -89,6 +91,13 @@ class DaqAbstraction(ABC):
         """
         pass
 
+    def get_sampling_frequency(self):
+        """
+        Returns the current sampling frequency target
+        :return:
+        """
+        return self._rate
+
     @abstractmethod
     def start_measurement(self):
         """
@@ -118,21 +127,25 @@ class DaqAbstraction(ABC):
 
     def _send_data(self, data, total_samples):
         """
-        Copies and sends data to the corresponding callback functions
+        Copies and sends data to the corresponding callback functions.
+        Outputs the data array, the time it took to acquire this array, and channels gathered
         :param data:
         :param total_samples:
         :return:
         """
+
+        # Get the total time elapsed since the start_measurment was last called
+        time_elapsed = total_samples/self._rate
         for callback_info in self._callbacks:
             [func, channels, mode, args] = callback_info
             out_data = []
             if mode.upper() == 'RMS':
                 for chan in channels:
-                    out_data.append(np.mean(data[chan]))
+                    out_data.append(np.mean(data[int(chan)]))
             else:
                 for chan in channels:
-                    out_data.append(data[chan].copy())
-            threading.Thread(target=func, args=(out_data, total_samples, channels, args)).start()
+                    out_data.append(np.asarray(data[int(chan)]))
+            threading.Thread(target=func, args=(out_data, time_elapsed, channels, args)).start()
 
     @abstractmethod
     def set_channel_voltage(self, channel: str, voltage: float):
@@ -166,7 +179,7 @@ class NiDaq(DaqAbstraction):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._task = nidaqmx.Task()
-        self._rate = 1000
+
         self._total_samples = 0
         self._device = kwargs['Device']
         self._samples = 0
@@ -363,6 +376,8 @@ if DIGILENT_LOAD:
             if not load:
                 raise ValueError('Digilent Device Failed to Open')
 
+            self.set_sampling_frequency(self._rate)
+
         def _init_device(self):
             """
             Load the Digilent Device if possible
@@ -420,6 +435,7 @@ if DIGILENT_LOAD:
             :param channel: int [0, 1]
             :return:
             """
+            channel = int(channel)
             assert channel in self._set_ao_channels
             # Set the DC amplitude
             dwf.FDwfAnalogOutNodeOffsetSet(self.hdwf, c_int(channel), c_int(0), c_double(voltage))
@@ -431,6 +447,7 @@ if DIGILENT_LOAD:
             :return:
             """
             dwf.FDwfAnalogInFrequencySet(self.hdwf, c_double(frequency))
+            self._rate = frequency
 
         def start_voltage(self):
             """
@@ -469,7 +486,6 @@ if DIGILENT_LOAD:
             else:
                 status = 1
             dwf.FDwfAnalogInConfigure(self.hdwf, c_int(1), c_int(status))
-
             # Reset the flag if needed and start a new thread
             if self._read_flag.is_set():
                 self._read_flag.clear()
@@ -521,8 +537,8 @@ if DIGILENT_LOAD:
                     for chan, buffer in data_buffer.items():
                         dwf.FDwfAnalogInStatusData(self.hdwf, c_int(chan), byref(buffer), cValid)  # get channel 1 data
                     # Record the sample number the data was collected at
-                    total_samples += self._samples + buf_index.value
                     self._send_data(data_buffer, total_samples)
+                    total_samples += self._samples + buf_index.value
 
         def add_do_channel(self, channel):
             """

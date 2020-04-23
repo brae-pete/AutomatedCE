@@ -239,7 +239,7 @@ def _get_distance_diff(v_max, xf, a, j, extra=False):
 
 
 def _slow_optimize(f, var, args=None, tol=.01, iterations=50):
-    logging.info("Optmizing Velocity for Short Distance")
+    logging.debug("Optmizing Velocity for Short Distance")
     initial = f(var, *args)
     step = var / 20
     best_initial = np.abs(initial)
@@ -269,7 +269,7 @@ def _slow_optimize(f, var, args=None, tol=.01, iterations=50):
         solutions.append(var)
         errors.append(initial)
 
-        logging.info(f" Velocity: {var}, Displacement in X: {initial}")
+        logging.debug(f" Velocity: {var}, Displacement in X: {initial}")
     return var
 
 
@@ -318,6 +318,6 @@ if __name__ == "__main__":
     tm = AutomatedControl.Template()
     xyz0 = [20, 20, 3]
     xyz1 = [100, 35, 10]
-    path = SafeMove(system, tm, xyz0, xyz1, visual=True)
-    path.move()
+    path = SafeMove(system, tm, xyz0, xyz1, visual=True).move()
+
 

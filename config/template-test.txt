@@ -12,6 +12,7 @@ WELLS
 Name	Shape	Size	XY	
 sample_1	circle	2.5	"0,0"	
 well_1	circle	2	"100,100"	
+well_2	circle	2.4	"25,85"	
 LEDGES				
 name	shape	size	XY	z
 pcr_tubes	rectangle	"50,50"	"20,20"	17

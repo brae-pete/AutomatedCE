@@ -1,4 +1,5 @@
 # Implement a Factory for the pressure control.
+import time
 from abc import ABC, abstractmethod
 from L2.Utility import UtilityControl, UtilityFactory
 
@@ -143,6 +144,8 @@ class SimulatedPressure(PressureAbstraction, UtilityControl):
         Stop seals the outlet vial.
         :return:
         """
+        self.release()
+        time.sleep(0.5)
         self.seal()
 
 

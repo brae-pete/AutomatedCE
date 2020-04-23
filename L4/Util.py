@@ -15,7 +15,7 @@ class TracedThread(threading.Thread):
         threading.Thread.start(self)
 
     def __run(self):
-        sys.settrace(self.globaltrace)
+        #sys.settrace(self.globaltrace)
         self.__run_backup()
         self.run = self.__run_backup
 

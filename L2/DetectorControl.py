@@ -220,13 +220,14 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
                 filtered = butter_lowpass_filter(self.rfu, kwargs)
             elif filter_type == 'savgol':
                 filtered = savgol_filter(self.rfu, kwargs)
+            else:
+                filtered = self.rfu
             return {'time': self.time.copy(), 'rfu': filtered}
 
-    def add_data(self, incoming_data, samples, *args):
+    def add_data(self, incoming_data, time_elapsed, *args):
         """
         Adds incoming data and oversample filters it as necessary
         :param incoming_data: should be a list of numpy arrays
-        :param samples:
         :param args:
         :return:
         """
@@ -236,7 +237,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
                 self._add_oversampled_data(incoming_data[0], self._sampling_f / self._final_f)
             else:
                 self.rfu = np.append(self.rfu, incoming_data[0])
-                self.time = np.linspace(0, self._sampling_f * len(self.rfu), num=len(self.rfu), endpoint=False)
+                self.time = np.linspace(0, len(self.rfu)/self._sampling_f, num=len(self.rfu), endpoint=False)
 
     def _add_oversampled_data(self, data, sample_n):
         """
@@ -250,16 +251,21 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         :return:
         """
         self._oversample_buffer = np.append(self._oversample_buffer, data)
+        sample_n = int(sample_n)
         while len(self._oversample_buffer) >= sample_n:
             self.rfu = np.append(self.rfu, np.mean(self._oversample_buffer[0:sample_n]))
             self._oversample_buffer = np.delete(self._oversample_buffer, np.s_[0:sample_n])
-        self.time = np.linspace(0, self._final_f * len(self.rfu), num=len(self.rfu), endpoint=False)
+        self.time = np.linspace(0,len(self.rfu)/self._final_f, num=len(self.rfu), endpoint=False)
 
     def start(self):
         """
         Starts the daqcontroller measurement process
         :return:
         """
+        with self._lock:
+            self.rfu = np.asarray([])
+            self.time = np.asarray([])
+            self._oversample_buffer = np.asarray([])
         self.daqcontroller.start_measurement()
 
     def stop(self):

@@ -21,8 +21,11 @@ class HighVoltageAbstraction(ABC):
         self.daqcontroller = controller
         self.role = role
         self._set_voltages = {}
-        self._voltages = {}
-        self._current = {}
+        self._voltages = 0
+        self._current = 0
+        self.data = {'voltage':[], 'current':[], 'time':[]}
+        self._data_lock = threading.Lock()
+
 
 
     @abstractmethod
@@ -53,6 +56,14 @@ class HighVoltageAbstraction(ABC):
     def get_status(self):
         """Returns the set_voltages for each channel"""
         pass
+
+    def get_data(self):
+        """
+        Returns the data dictionary
+        :return:
+        """
+        with self._data_lock:
+            return self.data.copy()
 
 
 
@@ -87,8 +98,8 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
                 self.daqcontroller.add_analog_input(channel)
                 inputs.append(channel)
 
+        self._input_channels = [hv_ai, ua_ai]
         self.daqcontroller.add_callback(self._read_data, inputs, 'RMS', ())
-        self._data_lock = threading.Lock()
         self._voltage_scalar = 1 / 30 * 5 # kV setting / 30 kV * 5 V
         self._current_scalar = 1 / 100 * 5 # uA / 100 uA * 5 V
 
@@ -111,6 +122,8 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
         Applies the voltages
         :return:
         """
+        with self._data_lock:
+            self.data = {'voltage':[], 'current':[], 'time':[]}
         self.daqcontroller.start_voltage()
         self.daqcontroller.start_measurement()
 
@@ -147,7 +160,7 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
         with self._data_lock:
             return self._voltages
 
-    def _read_data(self, samples, *args):
+    def _read_data(self, samples, time_elapsed, *args):
         """
         This function is called during a continuous acquisition of data from the ADC every time enough samples are acquired.
         Samples are two lists of data, the first index being for voltage and the second for voltage
@@ -158,8 +171,19 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
         """
         # Empty queue
         with self._data_lock:
-            self._current = samples[1]/ self._current_scalar
-            self._voltages = samples[0]/self._voltage_scalar
+            idx = 0
+            for output, channel, scalar in zip([self._voltages, self._current], self._input_channels,
+                                                [self._voltage_scalar, self._current_scalar]):
+                # Only add data if we are getting data from our channels, channels that aren't recorded have the NA name
+                if channel.upper() != "NA":
+                    output = samples[0]/scalar
+                    idx += 1
+
+            self.data['time'].append(time_elapsed)
+            self.data['current'].append(self._current)
+            self.data['voltage'].append(self._voltages)
+
+
 
 
 class HighVoltageFactory(UtilityFactory):
