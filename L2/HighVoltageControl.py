@@ -23,7 +23,7 @@ class HighVoltageAbstraction(ABC):
         self._set_voltages = {}
         self._voltages = 0
         self._current = 0
-        self.data = {'voltage':[], 'current':[], 'time':[]}
+        self.data = {'voltage':[], 'current':[], 'time_data':[]}
         self._data_lock = threading.Lock()
 
 
@@ -123,7 +123,7 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
         :return:
         """
         with self._data_lock:
-            self.data = {'voltage':[], 'current':[], 'time':[]}
+            self.data = {'voltage':[], 'current':[], 'time_data':[]}
         self.daqcontroller.start_voltage()
         self.daqcontroller.start_measurement()
 
@@ -162,7 +162,7 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
 
     def _read_data(self, samples, time_elapsed, *args):
         """
-        This function is called during a continuous acquisition of data from the ADC every time enough samples are acquired.
+        This function is called during a continuous acquisition of data from the ADC every time_data enough samples are acquired.
         Samples are two lists of data, the first index being for voltage and the second for voltage
         The samples are added to a thread-safe queue which is checked before returning get_current or get_voltage
         :param samples:
@@ -179,7 +179,7 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
                     output = samples[0]/scalar
                     idx += 1
 
-            self.data['time'].append(time_elapsed)
+            self.data['time_data'].append(time_elapsed)
             self.data['current'].append(self._current)
             self.data['voltage'].append(self._voltages)
 

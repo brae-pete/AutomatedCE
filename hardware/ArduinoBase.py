@@ -181,7 +181,7 @@ class ArduinoBase:
             self.pos = pos = 0
             return pos, offset
 
-        # If the response is atypical try again next time its called
+        # If the response is atypical try again next time_data its called
         try:
             response = float(response.strip("\n".encode()))
             self.pos = pos = float(response)

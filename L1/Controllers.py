@@ -171,7 +171,7 @@ class MicroManagerController(ControllerAbstraction):
     def send_command(self, command):
         """Sends a command to the micromanager subprocess. All commands should be sent using this command
         A lock is used to provide some thread safety, preventing multiple commands from being sent to the mmc at one
-        time.
+        time_data.
 
         :param command: str #one of the acceptable commands provided in the MicroControlServer.py file
         """

@@ -652,7 +652,7 @@ class MethodScreenController:
             elif data['PolarityReverseRadio']:
                 summary += ['Reverse Polarity']
 
-            # Get duration and ramp time.
+            # Get duration and ramp time_data.
             duration = '{} min'.format(data['ValuesDurationEdit'])
             summary += ['{} min Ramp'.format(data['ValuesRampTimeEdit'])]
 
@@ -1383,7 +1383,7 @@ class RunScreenController:
                         self._new_pixmap = self.screen.update_pixmap(camera=True)
         
                         self.screen.feed_updated.emit()
-                        time.sleep(.01)
+                        time_data.sleep(.01)
         
                     elif self.hardware.hasXYControl:
                         event_location = self.hardware.get_xy()
@@ -1943,25 +1943,25 @@ class RunScreenController:
             focused = self.focus()
             if not focused:
                 return None
-            time.sleep(1)
+            time_data.sleep(1)
 
         if not self.hardware.get_network_status():
             logging.info('Loading networks. Takes up to 15-20 seconds normally.')
             threading.Thread(target=self.hardware.prepare_networks).start()
-            start_time = time.time()
+            start_time = time_data.time_data()
             while not self.hardware.get_network_status():
-                if (time.time() - start_time) > 60:
+                if (time_data.time_data() - start_time) > 60:
                     logging.error('Networks took too long to load.')
                     return False
-                time.sleep(3)
+                time_data.sleep(3)
             logging.info('Networks loaded.')
 
-        start_time = time.time()
+        start_time = time_data.time_data()
         max_time = 60  # s
         min_separation = 10  # µm
 
         while True:
-            if time.time() - start_time > max_time:
+            if time_data.time_data() - start_time > max_time:
                 logging.info('Cell not found.')
                 return None
 
@@ -2004,7 +2004,7 @@ class RunScreenController:
             else:
                 return True
                 smart_move(repetitions)
-                time.sleep(0.25)
+                time_data.sleep(0.25)
                 focused = self.focus()
                 if not focused:
                     return None
@@ -2120,7 +2120,7 @@ class RunScreenController:
         self.hardware.shutter_open()
         # Snap
         time.sleep((exposure / 1000) + 0.5)
-        # st = time.time()
+        # st = time_data.time_data()
         img = self.hardware.snap_image()
         self.hardware.save_raw_image('recentFlImg.tiff')
 
@@ -2229,7 +2229,7 @@ class RunScreenController:
             return check_flags()
 
         def wait_sleep(wait_time):
-            """ Returns false if wait time was interupted by stop command"""
+            """ Returns false if wait time_data was interupted by stop command"""
             start_time = time.time()
             while time.time()-start_time< wait_time and not self._stop_thread_flag.is_set():
                 time.sleep(0.05)

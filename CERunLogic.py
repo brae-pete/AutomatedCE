@@ -43,7 +43,7 @@ class RunMethod:
     collection_well = -1
     injection_wait = 6  # How long to wait after an injection for repeatable spontaneous fluid displacement
     sequence_id = round(time.time())  # Time in s from epoch, that links a repetitions in a sequence
-    running=threading.Event() # ONLY ONE METHOD SHALL RUN (at a time) ALL OTHERS MUST WAIT THEIR TURN!!!
+    running=threading.Event() # ONLY ONE METHOD SHALL RUN (at a time_data) ALL OTHERS MUST WAIT THEIR TURN!!!
     def __init__(self, hardware, methods, repetitions, methods_id,
                  flags, insert, folder, cap_control, cell_finders):
         """
@@ -188,7 +188,7 @@ class RunMethod:
         return self.check_flags()
 
     def wait_sleep(self, wait_time, start_time=None):
-        """ Returns false if wait time was interupted by stop command"""
+        """ Returns false if wait time_data was interupted by stop command"""
         if start_time is None:
             start_time = time.time()
         while time.time() - start_time < wait_time and not self._stop_thread_flag.is_set():
@@ -393,9 +393,9 @@ class RunMethod:
                 self.hardware.save_raw_image(filepath)
 
                 """            self.hardware.snap_image()
-                st = time.time()
-                while time.time() - st < exp / 1000:
-                    time.sleep(exp / 10000)
+                st = time_data.time_data()
+                while time_data.time_data() - st < exp / 1000:
+                    time_data.sleep(exp / 10000)
                 self.hardware.save_raw_image(filepath)"""
                 # Close Shutter
                 self.hardware.shutter_close()
@@ -759,13 +759,13 @@ class NewCELogic:
         """
         All actions that must take place while the Z-stage is lowered.
 
-        1. Make sure spontaneous fluid time matches
+        1. Make sure spontaneous fluid time_data matches
         2. Lower Z Stage
 
         :param tolerance:
         :return:
         """
-        # Spontaneous Fluid displacement requires all time in air after injections are consisitent
+        # Spontaneous Fluid displacement requires all time_data in air after injections are consisitent
         if time.time() - self.last_inject_time < self.spont_time:
             time.sleep(self.spont_time - (time.time() - self.last_inject_time))
 
@@ -1000,9 +1000,9 @@ class NewCELogic:
                 self.hardware.save_raw_image(filepath)
 
                 """            self.hardware.snap_image()
-                st = time.time()
-                while time.time() - st < exp / 1000:
-                    time.sleep(exp / 10000)
+                st = time_data.time_data()
+                while time_data.time_data() - st < exp / 1000:
+                    time_data.sleep(exp / 10000)
                 self.hardware.save_raw_image(filepath)"""
                 # Close Shutter
                 self.hardware.shutter_close()
@@ -1138,7 +1138,7 @@ class NewCELogic:
         pass
 
     def wait_sleep(self, wait_time,start_time=None):
-        """ Returns false if wait time was interupted by stop command"""
+        """ Returns false if wait time_data was interupted by stop command"""
         if start_time is None:
             start_time = time.time()
         running = self.step_check()

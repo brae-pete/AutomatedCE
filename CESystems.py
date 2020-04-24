@@ -265,15 +265,15 @@ class BaseSystem:
         return self.adc_control.data[-1, 0]
 
     def get_voltage_data(self):
-        """Gets a list of the voltages over time."""
+        """Gets a list of the voltages over time_data."""
         return self.adc_control.data[0, :]
 
     def get_current_data(self):
-        """Gets a list of the current over time."""
+        """Gets a list of the current over time_data."""
         return self.adc_control.data[1, :]
 
     def get_rfu_data(self):
-        """Gets a list of the RFU over time."""
+        """Gets a list of the RFU over time_data."""
         data = self.adc_control.data[2, :]
         if len(data) > 100:
             data = self.data_filter_control.filter_data(data)
@@ -286,15 +286,15 @@ class BaseSystem:
             volts = self.get_voltage_data()
             current = self.get_current_data()
         time_points = np.linspace(0, len(rfu) / self.adc_control.downsampled_freq, len(rfu))
-        return {'rfu': rfu, 'volts': volts, 'current': current, 'time': time_points}
+        return {'rfu': rfu, 'volts': volts, 'current': current, 'time_data': time_points}
 
     def save_data(self, filename):
         """ Save the data to a file """
         data = self.get_data()
         with open(filename, 'w') as f_in:
-            f_in.write('time, rfu, kV, uA\n')
+            f_in.write('time_data, rfu, kV, uA\n')
             for i in range(len(data['rfu'])):
-                t_point = data['time'][i]
+                t_point = data['time_data'][i]
                 rfu = data['rfu'][i]
                 ua = data['current'][i]
                 kv = data['volts'][i]
@@ -414,7 +414,7 @@ class BaseSystem:
         self.laser_control.laser_check()
 
     def restart_laser_run_time(self):
-        """ Restarts the clock for the laser run time or restarts the laser
+        """ Restarts the clock for the laser run time_data or restarts the laser
         This is needed for the NewWave laser
         """
 
@@ -507,7 +507,7 @@ class BaseSystem:
         self.shutter_open()
         # Snap
         time.sleep((exp / 1000) + 0.5)
-        # st = time.time()
+        # st = time_data.time_data()
         img = self.snap_image()
         if filepath:
             self.save_raw_image(filepath)
@@ -957,7 +957,7 @@ class BarracudaSystem(BaseSystem):
         return True
 
     def restart_laser_run_time(self):
-        """ Restarts the clock for the laser run time or restarts the laser"""
+        """ Restarts the clock for the laser run time_data or restarts the laser"""
 
         if self._laser_poll_flag.is_set():
             self.laser_start_time = time.time()
@@ -1414,7 +1414,7 @@ class NikonEclipseTi(BaseSystem):
         self.shutter_open()
         # Snap
         time.sleep((exp / 1000) + 0.5)
-        # st = time.time()
+        # st = time_data.time_data()
         img = self.snap_image()
         if filepath:
             self.save_raw_image(filepath)
@@ -1857,15 +1857,15 @@ class OstrichSystem(BaseSystem):
         return self.daq_board_control.voltage
 
     def get_voltage_data(self):
-        """Gets a list of the voltages over time."""
+        """Gets a list of the voltages over time_data."""
         return self.daq_board_control.data[self._daq_voltage_readout]
 
     def get_current_data(self):
-        """Gets a list of the current over time."""
+        """Gets a list of the current over time_data."""
         return self.daq_board_control.data[self._daq_current_readout]
 
     def get_rfu_data(self):
-        """Gets a list of the RFU over time."""
+        """Gets a list of the RFU over time_data."""
         return self.daq_board_control.data[self._daq_rfu]
 
     def close_image(self):
@@ -2092,7 +2092,7 @@ class Chip_TiEclipseSeattle(BaseSystem):
             current = self.get_current_data()
         time_points = np.linspace(0, (volts.shape[1] - 1) / self.adc_control.downsampled_freq, volts.shape[1])
         x = OrderedDict()
-        x['time'] = time_points
+        x['time_data'] = time_points
         for i in range(volts.shape[0]):
             x['E{}_voltage'.format(i)] = volts[i, :]
         for i in range(current.shape[0]):

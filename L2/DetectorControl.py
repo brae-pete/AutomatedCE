@@ -206,7 +206,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         :return:
         """
         with self._lock:
-            return {'time': self.time.copy(), 'rfu': self.rfu.copy()}
+            return {'time_data': self.time.copy(), 'rfu': self.rfu.copy()}
 
     def get_data(self):
         """
@@ -222,7 +222,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
                 filtered = savgol_filter(self.rfu, kwargs)
             else:
                 filtered = self.rfu
-            return {'time': self.time.copy(), 'rfu': filtered}
+            return {'time_data': self.time.copy(), 'rfu': filtered}
 
     def add_data(self, incoming_data, time_elapsed, *args):
         """

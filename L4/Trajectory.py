@@ -109,7 +109,7 @@ class SafeMove:
     def get_delay(ledge, zz, increasing=True, tolerance=0.5):
         ledge = ledge - tolerance
         ledge, zz = _normalize_paths([ledge, zz])
-        # Get the delay time needed between the stages
+        # Get the delay time_data needed between the stages
         delay = 0
         collision = zz - ledge
         # Move our zz array forward one (increase delay it will reach the ledge), do the opposite for decreasing

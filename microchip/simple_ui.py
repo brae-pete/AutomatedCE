@@ -99,7 +99,7 @@ class Model:
     """
     time_menu = """
     \n \n \n \n
-    Enter the total time to run voltage & acquire images in seconds: 
+    Enter the total time_data to run voltage & acquire images in seconds: 
     """
 
     electrode_menu = """
@@ -108,7 +108,7 @@ class Model:
     """
 
     running_menu = """
-    CE is Running: {} seconds remaining of {} second run time. 
+    CE is Running: {} seconds remaining of {} second run time_data. 
     Enter 1 to stop
     """
 
@@ -176,7 +176,7 @@ class Model:
             return pre_msg + self.exposure_menu
         elif resp == 3:
             self.menu_choice='Time'
-            pre_msg = "\n Current run time is {:.2f} \n ".format(self.run_time)
+            pre_msg = "\n Current run time_data is {:.2f} \n ".format(self.run_time)
             return pre_msg + self.time_menu
         elif resp == 4:
             self.menu_choice = 'Voltage'
@@ -213,7 +213,7 @@ class Model:
         run_time = float(text)
         self.run_time = run_time
         self.menu_choice = 'Main'
-        pre_message = "\n Run time set to {:.2f} s \n".format(self.run_time)
+        pre_message = "\n Run time_data set to {:.2f} s \n".format(self.run_time)
         return pre_message + self.main_menu
 
     def voltage_menu_options(self, text):
@@ -319,7 +319,7 @@ class Model:
             # Get an image
             adjusted_imgs.append(self.hardware.get_image())
             raw_imgs.append(self.hardware.image_control.raw_img)
-            # Record the time
+            # Record the time_data
             times.append(time.time()-start_time)
             # Sleep for a little bit
             target_time = better_sleep(target_time, exposure / 1000)
@@ -377,7 +377,7 @@ def save_image_data(save_dir, imgs, raw_imgs, times, now, raw_vid=False, adj_fol
             os.mkdir(capture_folder)
             idx=0
             with open(os.path.join(save_dir,'times'+lbl+str_now+'.csv'), 'a') as fout:
-                fout.write('time(ms), file_name\n')
+                fout.write('time_data(ms), file_name\n')
                 for frame,time_point in zip(dataset, times):
                     time_point = int(time_point*1000) # Convert to milliseconds
                     fname = os.path.join(capture_folder, lbl+"{:d}_{:05d}.tiff".format(time_point, idx))
@@ -388,8 +388,8 @@ def save_image_data(save_dir, imgs, raw_imgs, times, now, raw_vid=False, adj_fol
 
 def better_sleep(target, sample_time):
     """
-    This is a more accurate sleep call, it takes into account time that has elapsed while gathering data
-    :param moment: a object from time.time(), the last time better_sleep was run.
+    This is a more accurate sleep call, it takes into account time_data that has elapsed while gathering data
+    :param moment: a object from time_data.time_data(), the last time_data better_sleep was run.
     :param SAMPLE_FREQ: The sampling frequency you wish to sample at
     :return:
     """

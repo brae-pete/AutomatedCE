@@ -24,13 +24,13 @@ class SingleAxis:
 
     def move_to(self, position):
         """
-        Adjusts the velocity position equation. Resets the offset time and offset position. Adjusts the direction if
+        Adjusts the velocity position equation. Resets the offset time_data and offset position. Adjusts the direction if
         needed. Changes the set or target position.
 
         >>>ax = SingleAxis()
         >>>ax.move_to(1)
         >>>True
-        >>>time.sleep(1)
+        >>>time_data.sleep(1)
         >>>ax.get_position()
         >>>1.0
 
@@ -57,7 +57,7 @@ class SingleAxis:
         >>>ax = SingleAxis()
         >>>ax.move_to(1)
         >>>True
-        >>>time.sleep(1)
+        >>>time_data.sleep(1)
         >>>ax.get_position()
         >>>1.0
 

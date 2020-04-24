@@ -1218,27 +1218,27 @@ image2 = cv2.imread(r'recentImg.png')
 # # image4 = cv2.imread(r'netutil\zStacksZeros\s_image102_0.png')
 # #
 # bar = BarracudaCellDetector()
-# t = time.time()
+# t = time_data.time_data()
 # bar.prepare_model()
-# print('Time to prepare cell detector :: {}'.format(time.time() - t))
-# t = time.time()
+# print('Time to prepare cell detector :: {}'.format(time_data.time_data() - t))
+# t = time_data.time_data()
 # results = bar.get_cells(image2, debug=True)
 
-# print('Time to run cell detector :: {}'.format(time.time() - t))
+# print('Time to run cell detector :: {}'.format(time_data.time_data() - t))
 # print(results)
-# t = time.time()
+# t = time_data.time_data()
 # results = bar.get_cells(image3)
-# print('Time to run cell detector :: {}'.format(time.time() - t))
+# print('Time to run cell detector :: {}'.format(time_data.time_data() - t))
 # print(results)
-# t = time.time()
+# t = time_data.time_data()
 # results = bar.get_cells(image4)
-# print('Time to run cell detector :: {}'.format(time.time() - t))
+# print('Time to run cell detector :: {}'.format(time_data.time_data() - t))
 # print(results)
 #
 # bar = BarracudaFocusClassifier()
-# t = time.time()
+# t = time_data.time_data()
 # bar.prepare_model()
-# print('Time to prepare focus network :: {}'.format(time.time() - t))
+# print('Time to prepare focus network :: {}'.format(time_data.time_data() - t))
 # print(bar.get_focus(image2))
 #
 # count = 1
@@ -1248,12 +1248,12 @@ image2 = cv2.imread(r'recentImg.png')
 # for image_file in files:
 #     if count > 50:
 #         break
-#     t = time.time()
+#     t = time_data.time_data()
 #     image = cv2.imread(r'D:\zStacksResizedRinsed\{}'.format(image_file))
 #
 #     print(image_file)
 #     print(bar.get_focus(image))
-#     print('Time to run focus network :: {}\n'.format(time.time() - t))
+#     print('Time to run focus network :: {}\n'.format(time_data.time_data() - t))
 #
 #     count += 1
 def process_image(img):

@@ -73,15 +73,15 @@ class OutputElectropherogram:
     @staticmethod
     def write_data(data, header, filepath):
         """
-        Writes the CE data file containing a time column, a RFU, a kV and a uA column.
-        incoming data should be in that order (time, rfu, voltage, current)
+        Writes the CE data file containing a time_data column, a RFU, a kV and a uA column.
+        incoming data should be in that order (time_data, rfu, voltage, current)
         data = [list of lists or numpy arrays]
         filepath = filepath of location to save the object
         """
         time, rfu, voltage, current = data
         with open(filepath, 'w') as file_out:
             file_out.write(header)
-            file_out.write('time,rfu,voltage,current\n')
+            file_out.write('time_data,rfu,voltage,current\n')
             for t, r, v, c in zip(time, rfu, voltage, current):
                 file_out.write(f"{t},{r},{v},{c}\n")
 
@@ -95,9 +95,9 @@ class OutputElectropherogram:
         system.detector.stop()
         detector_data = system.detector.get_data()
         power_data = system.high_voltage.get_data()
-        power_time = power_data['time']
-        detector_time = detector_data['time']
-        # We need a power data to be as long as the detector data, so we add in one more time pair to be sure
+        power_time = power_data['time_data']
+        detector_time = detector_data['time_data']
+        # We need a power data to be as long as the detector data, so we add in one more time_data pair to be sure
         if max(power_time) < max(detector_time):
             power_time[-1] = detector_time[-1]
 

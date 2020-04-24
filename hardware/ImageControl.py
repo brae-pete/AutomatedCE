@@ -57,7 +57,7 @@ class ImageControl:
     rotate = 90
     _frame_num = 0
     _capture_ref = []
-    buffer_time = 30  # time to buffer images in seconds
+    buffer_time = 30  # time_data to buffer images in seconds
     _capture_lock = threading.Lock()
     live_running = threading.Event()
     save_sequence = threading.Event()
@@ -198,7 +198,7 @@ class ImageControl:
         """ Saves a 30 s buffer of camera images.
          Ordered Dictionary where the first element is checked to see if it is more than 30 s old.
          If so that frame is deleted.
-         A new frame is added to the dictionary with the time it was taken at in ms it was taken at
+         A new frame is added to the dictionary with the time_data it was taken at in ms it was taken at
          as the key for the filename.
          Filename is the frame number.
          """
@@ -283,11 +283,11 @@ class PVCamImageControl(ImageControl):
     snap an image there. If so exit out and restart the GUI.
      """
     cam = None  # PV camera object
-    exposure = 50  # ms exposure time
+    exposure = 50  # ms exposure time_data
     contrast_exposure = [0.5, 99]  # Low and high percintiles for contrast exposure
     rotate = 90
     img = None  # Copy of the raw image before processing
-    process_time = 0  # time it takes to process a single image for live feed
+    process_time = 0  # time_data it takes to process a single image for live feed
     name = 'None'
     serial_num = 'None'
     live_running = threading.Event()
@@ -298,7 +298,7 @@ class PVCamImageControl(ImageControl):
     sequence_start_time = time.perf_counter()
     _frame_num = 0
     _capture_ref = []
-    buffer_time = 30  # time to buffer images in seconds
+    buffer_time = 30  # time_data to buffer images in seconds
     _capture_lock = threading.Lock()
     size = 0.5
 

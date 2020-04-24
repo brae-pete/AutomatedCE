@@ -39,7 +39,7 @@ class DaqAbstraction(ABC):
         self._set_ai_channels = []
         self._set_ao_channels = []
         self._rate = 1000
-        self._total_samples = 0 # used to keep track of time
+        self._total_samples = 0 # used to keep track of time_data
         self._set_voltages = {}
         self._current_voltages = {}
         self._lock = threading.Lock()
@@ -128,13 +128,13 @@ class DaqAbstraction(ABC):
     def _send_data(self, data, total_samples):
         """
         Copies and sends data to the corresponding callback functions.
-        Outputs the data array, the time it took to acquire this array, and channels gathered
+        Outputs the data array, the time_data it took to acquire this array, and channels gathered
         :param data:
         :param total_samples:
         :return:
         """
 
-        # Get the total time elapsed since the start_measurment was last called
+        # Get the total time_data elapsed since the start_measurment was last called
         time_elapsed = total_samples/self._rate
         for callback_info in self._callbacks:
             [func, channels, mode, args] = callback_info

@@ -6,10 +6,36 @@ import threading
 import time
 from queue import Queue
 from L3.SystemsBuilder import CESystem
-from L4 import Util, Trajectory, FileIO
+from L4 import Util, Trajectory, FileIO, Electropherogram
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
+from typing import Union
 
+
+def get_standard_unit(value):
+    """
+    Adjusts the value to a standard value. Standard values do not need to bea dded to the units dictionary.
+    The scales for each value in the dictionary should be a multiplication scalar factor to reach the standard
+    unit scale.
+
+    Standard units are: mm (for distance), volts for Voltage, and seconds for time_data.
+
+    Example:
+    For value == '33 cm'
+    program returns: 3.3 * units['cm'] or 3.3 * 10 = 33
+
+    :param value: str
+    :return: float or int
+    """
+    units = {'cm': 10, 'kv': 1000, 'min': 60}
+    # Get Height (Assume mm and s)
+    value = value.split(' ')
+    value[0] = eval(value[0])
+    if len(value) > 1:
+        if value[1] in units.keys():
+            value[0] *= units[value[1]]
+    return value[0]
 
 class Step:
     """
@@ -31,30 +57,7 @@ class Step:
         # Read step
         self.read_line(line)
 
-    @staticmethod
-    def _get_standard_unit(value):
-        """
-        Adjusts the value to a standard value. Standard values do not need to bea dded to the units dictionary.
-        The scales for each value in the dictionary should be a multiplication scalar factor to reach the standard
-        unit scale.
 
-        Standard units are: mm (for distance), volts for Voltage, and seconds for time.
-
-        Example:
-        For value == '33 cm'
-        program returns: 3.3 * units['cm'] or 3.3 * 10 = 33
-
-        :param value: str
-        :return: float or int
-        """
-        units = {'cm': 10, 'kv': 1000, 'min': 60}
-        # Get Height (Assume mm)
-        value = value.split(' ')
-        value[0] = eval(value[0])
-        if len(value) > 1:
-            if value[1] in units.keys():
-                value[0] *= units[value[1]]
-        return value[0]
 
     @staticmethod
     def _get_true_false(value):
@@ -84,20 +87,20 @@ class Step:
         self.well_location = [col.rstrip().lstrip() for col in columns[1].split(',')]
 
         # Add Outlet Height (Assume mm)
-        self.outlet_height = self._get_standard_unit(columns[2])
+        self.outlet_height = get_standard_unit(columns[2])
 
         # Add Inlet Height
-        self.inlet_height = self._get_standard_unit(columns[3])
+        self.inlet_height = get_standard_unit(columns[3])
 
         # Add Pressure and Vacuum
         self.pressure = self._get_true_false(columns[4])
         self.vacuum = self._get_true_false(columns[5])
 
         # Get Voltage
-        self.voltage = self._get_standard_unit(columns[6])
+        self.voltage = get_standard_unit(columns[6])
 
-        # Get time
-        self.time = self._get_standard_unit(columns[7])
+        # Get time_data
+        self.time = get_standard_unit(columns[7])
 
         # Get Special
         if columns[8].lower() in self.special_commands:
@@ -108,6 +111,22 @@ class Step:
 
 
 class Method(object):
+    """
+    Creates a Method object that groups automation steps in a sequential order for automated analysis. Well locations
+    can be any well identifier listed in the template object.
+
+    An example config file is shown below:
+
+    # Automated method for a CE System
+    # Columns are delimited by tabs (not commas) and column order should be matched
+    # Default units for outlet is cm, for inlet is mm, for voltage is kV for time is seconds,
+    # You may enter in cm, mm, kv, s, min to specify other units
+    METHOD
+    name	location	outlet_height	inlet_height	pressure	vacuum	voltage	time	special	data
+    rinse	"well_1, sample_1"	0 cm	25 mm	1	0	0.0 kV	6 s		0
+    step1	well_2	 -5 cm	15 mm	0	0	0.5 kV	0.25 min		1
+
+    """
 
     def __init__(self, method_file):
         self.method_steps = []
@@ -127,12 +146,12 @@ class Method(object):
             lines = in_file.readlines()
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
         for idx, line in enumerate(method_lines):
-            if line.find('METHOD')>-1:
+            if line.find('METHOD') > -1:
                 break
-        method_lines = method_lines[idx+2:]
+        method_lines = method_lines[idx + 2:]
 
         for line in method_lines:
-            if line.count('\t')==9:
+            if line.count('\t') == 9:
                 logging.info("Adding step {}".format(line))
                 self.method_steps.append(Step(line))
             else:
@@ -229,9 +248,34 @@ class Ledge(BasicTemplateShape):
 
 
 class Template(object):
-    """
-    Data storage object for defining a template
-    """
+    '''
+    Data storage object for defining a template. Contains dictionaries of wells and ledges. Well names are used by
+    Methods to define the location the stage should move to. Ledges are used to define a safe distance that capillary
+    inlet should be at while moving over different areas of the template.
+
+    Below is an example template config: Note the config is tab separated values.
+
+    # Example Template File Format
+    # Template files have three sections, ""SIZE"", """"WELLS"""" and """"LEDGES"""""""
+    # ""SIZE should be defined before ""WELLS"" and ""WELLS should be defined before ""LEDGES"""
+    # Wells contain XY coordinates for the XY stage to move to place well underneath capillary
+    # XY units are in mm
+    # Ledges contain Heights (in mm) that indicate a safe inlet height to travel at when crossing the specified area.
+    # Size is dX,dY or dRadius depending on if 'rectangle' or 'circle' is the shape """
+
+    DIMENSIONS
+    Left X	Lower Y	Right X	Upper Y
+    160	110	0	0
+    WELLS
+    Name	Shape	Size	XY
+    sample_1	circle	2.5	"0,0"
+    well_1	circle	2	"100,100"
+    well_2	circle	2.4	"25,85"
+    LEDGES
+    name	shape	size	XY	z
+    pcr_tubes	rectangle	"50,50"	"20,20"	17
+    base	rectangle	"100,100"	"100,100"	2.5
+    '''
 
     def __init__(self, template_file=r'D:\Scripts\AutomatedCE\config\template-test.txt'):
         self.ledges = {}
@@ -314,8 +358,15 @@ class AutoRun:
     template: Template
 
     def __init__(self, system: CESystem()):
+        """
+        Creates and AutoRun object that groups templates and methods together and coordinates the actions on a
+        CE system object so that an automated run can take place.
+
+        :param system:  CE system object that will be automated
+        """
         self.system = system  # L3 CE Systems object
         self.methods = []
+        self.gate = GateSpecial()
         self.repetitions = 1
         self._queue = Queue()
         self.is_running = threading.Event()
@@ -324,9 +375,20 @@ class AutoRun:
         self.data_dir = FileIO.get_system_var('data_dir')[0]
 
     def add_method(self, method_file=r'D:\Scripts\AutomatedCE\config\method-test.txt'):
+        """
+        Adds a method using a method config file to define the steps
+        :param method_file: path to method config file
+        :return:
+        """
         self.methods.append(Method(method_file))
 
-    def set_template(self, template_file = r'D:\Scripts\AutomatedCE\config\template-test.txt'):
+    def set_template(self, template_file=r'D:\Scripts\AutomatedCE\config\template-test.txt'):
+        """
+        Sets the template that should be used. Uses a template config file to definen the well positions and
+        ledge heights.
+        :param template_file: path to template config file
+        :return:
+        """
         self.template = Template(template_file)
 
     def start_run(self, rep_style='sequence'):
@@ -397,7 +459,7 @@ class AutoRun:
         xyz0 = [x, y, z]
 
         # Get Ending Positions, Special command for collection will override this
-        x, y = self.template.wells[step.well_location[rep%len(step.well_location)]].xy
+        x, y = self.template.wells[step.well_location[rep % len(step.well_location)]].xy
         z = step.inlet_height
         xyz1 = [x, y, z]
 
@@ -409,7 +471,7 @@ class AutoRun:
         :param step:
         :return:
         """
-        # Keep track of the time we started applying forces
+        # Keep track of the time_data we started applying forces
         st = time.time()
 
         # Apply Hydrodynamic Forces
@@ -424,7 +486,7 @@ class AutoRun:
         self.system.high_voltage.set_voltage(step.voltage, channel='default')
         self.system.high_voltage.start()
         self.system.detector.start()
-        logging.info("Starting timed run at {}".format(time.time()-st))
+        logging.info("Starting timed run at {}".format(time.time() - st))
         # Wait while running
         while time.time() - st < step.time and self.is_running.is_set():
             time.sleep(0.05)
@@ -432,7 +494,7 @@ class AutoRun:
         # Stop applying the forces
         self.system.high_voltage.stop()
         self.system.detector.stop()
-        logging.info("Stopping timed run at {}".format(time.time()-st))
+        logging.info("Stopping timed run at {}".format(time.time() - st))
         threading.Thread(target=self.system.outlet_pressure.stop, name='PressureStop').start()
 
     def stop_run(self):
@@ -448,19 +510,96 @@ class AutoRun:
         self.system.stop_ce()
 
 
+class GateSpecial:
+    """
+    Analyzes the electropherogram following a separation and determines where to send the next collection XY well
+
+    Start by defining peaks using the add_peak function. Once peaks have been defined use the set_gate function.
+
+    gates = GateSpecial()
+    gates.add_peak('standard', 20.0, 29.5)
+    gates.add_peak('sample', 45.5, 60)
+    gates.set_gate(0.5, 'well_1', 'sample', 'standard')
+    """
+
+    def __init__(self):
+        self.gates = []
+        self.peaks = {}
+        self.target = ''
+
+    def add_peak(self, peak_name: str, start_time: float, stop_time: float):
+        """
+        Adds a new peak location that can be used when creating gates. Time start and stop should be tolerant
+        for any migration differences throughout the course of the experiment.
+
+        :param peak_name: identifier for this peak, should be unique
+        :param start_time: time point the peak starts at
+        :param stop_time: time point the peak ends at
+        :return:
+        """
+        self.peaks[peak_name] = (start_time, stop_time)
+
+    def set_gate(self, ratio: float, well_name: str, peak1: str, *peaks: str):
+        """
+        Sets the gate parameters.
+
+        Ratio is the ratio of peak 1 to the sum of peak 1 and all the peaks listed in peaks. If the value is greater
+        than the ratio it will set the next collection to the well_name specified.
+
+        example input:
+        x.set_gates(0.4, 'well_2', 'pk1', 'pk2', 'pk3')
+
+        :param ratio: value between 0 and 1, gate ratio for pk1/(sum(peaks,peak1))
+        :param well_name: name of well in the template
+        :param peak1: peak identifier set by add_time_bounds
+        :param peaks: one or more peak identifiers set by add_time_bounds, should not include peak1
+        :return:
+        """
+        self.gates.append((ratio, well_name, peak1, peaks))
+
+    def check_gates(self, time_data:np.ndarray, rfu_data:np.ndarray):
+        """
+        Checks if there are any gates whose requirements are met by the electropherogram data.
+        Peak areas are time and baseline corrected from the Electropherograms module.
+
+        :param time_data: array of time_data points for an electropherogram
+        :param rfu_data: array of data points for an electropherogram
+        :return: whether any gate condition was met
+        :rtype: bool
+        """
+
+        for ratio, well_name, peak1, peaks in self.gates:
+            # Get the area of the first peak
+            peak_start, peak_stop = self.peaks[peak1]
+            peak1_area = Electropherogram.get_corrected_peak_area(time_data, rfu_data, peak_start, peak_stop)
+            total_area = peak1_area
+            # Get the area of the remaining peaks
+            for peak_start, peak_stop in peaks:
+                total_area += Electropherogram.get_corrected_peak_area(time_data, rfu_data, peak_start, peak_stop)
+            if peak1_area/total_area < ratio:
+                self.target = well_name
+                return True
+        self.target = ""
+        return False
+
+
+class AutoSpecial:
+    pass
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import numpy as np
     import logging
+
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     system = CESystem()
     system.load_config()
     system.open_controllers()
-    system.detector.set_oversample_frequency(20000,10)
+    system.detector.set_oversample_frequency(20000, 10)
     auto = AutoRun(system)
     auto.add_method()
     auto.set_template()
-    auto.repetitions=2
+    auto.repetitions = 2
     auto.start_run()
-
