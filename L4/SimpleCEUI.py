@@ -42,11 +42,10 @@ class Application(tk.Frame):
 
 class Controller:
 
-    def __init__(self):
+    def __init__(self, debug = False):
         self.root = tk.Tk()
-        self.model = Model(controller=self)
+        self.model = ViewOptions(controller=self, debug=debug)
         self.view = Application(master=self.root, controller=self, default=self.model.default_text)
-
         self.view.mainloop()
 
     def send_command(self, text):
@@ -60,7 +59,7 @@ class Controller:
         self.view.master.after(1000, self.model.run_update)
 
 
-class Model:
+class ViewOptions:
     main_menu = """
         1: Initialize System
         2: Configure Run
@@ -72,10 +71,14 @@ class Model:
         1. Load System Config
         2. Open Controllers
         3. Initialize Hardware (reset to default states)
+        4. XY (Set Home, Set XY, etc...)
+        5. Inlet Height (Set Home, Set Z, etc...)
+        6. Pressure (Set Pressure, Set Vacuum, etc...)
         
         0. Main Menu
         More hardware options can be added here...
         """
+
     run_menu = """
         1. Add Method
         2. Set Template
@@ -93,9 +96,29 @@ class Model:
         0. Main Menu
         """
 
+    xy_menu = """
+        1. Set Home
+        2. Go Home
+        3. Set XY
+        4. Set Relative XY
+        
+        0. Main Menu
+        00. System Menu
+        """
+
+    inlet_menu = """
+        1. Set Home
+        2. Go Home
+        3. Set XY
+        4. Set Relative XY
+
+        0. Main Menu
+        00. System Menu
+        """
+
     params = {'sequence_type': 'sequence'}
 
-    def __init__(self, controller):
+    def __init__(self, controller, debug = False):
 
         self.controller = controller
         self.system = CESystem()
@@ -108,6 +131,21 @@ class Model:
         self._threads = {}
         self.is_running = threading.Event()
         self._remaining_time = 0
+
+        if debug:
+            self._test_system()
+
+    def _test_system(self):
+        """
+        To make testing easier, you can add any commands to initialize the GUI with using
+        this method, just add in the order you need the program to load in. You can also change
+        menu choice and default text if needed.
+        :return:
+        """
+        self.system.load_config()
+        self.system.open_controllers()
+        self.auto_run.add_method()
+        self.auto_run.set_template()
 
     def interpret(self, text):
         msg = self.menu_choice
@@ -166,7 +204,6 @@ class Model:
             self.auto_run.start_run()
             self.menu_choice = 'main'
             # Create a Timer program
-            self._remaining_time = self.run_time
             return self.main_menu
 
         return self.main_menu
@@ -188,6 +225,18 @@ class Model:
             self.system.initialize_hardware()
             return 'System Initialized \n\n\n' + self.system_menu
 
+        elif text == '4': # Enter XY Stage Menu
+            self.menu_choice = 'xy'
+            return self.xy_menu
+
+        elif text == '5': # Enter inlet Z menu
+            self.menu_choice = 'inlet'
+            return self.inlet_menu
+
+        elif text == '6': # Enter Pressure Menu
+            self.menu_choice = 'pressure'
+            return self.pressure_menu
+
         elif text == '0':
             self.menu_choice = 'main'
             return self.main_menu
@@ -195,20 +244,20 @@ class Model:
     def run_menu_options(self, text):
 
         if text == '1':  # Load Method
-            self.menu_choice = 'main'
+            self.menu_choice = 'run'
             file_path = filedialog.askopenfilename()
             if file_path != -1:
                 self.auto_run.add_method(file_path)
                 return f"Method {file_path} loaded" + self.main_menu
-            return self.main_menu
+            return self.run_menu
 
         elif text == '2':  # Set template
-            self.menu_choice = 'main'
+            self.menu_choice = 'run'
             file_path = filedialog.askopenfilename()
             if file_path != -1:
                 self.auto_run.set_template(file_path)
                 return f"Template {file_path} loaded" + self.main_menu
-            return self.main_menu
+            return self.run_menu
 
         elif text == '3':  # Set repetitions
             self.menu_choice = 'repetition_entry'
@@ -261,9 +310,8 @@ class Model:
             return self.main_menu
 
     def repetition_entry(self, text):
-        rep = float(text)
-        self.auto_run.repetitions = rep
-        self.menu_choice='gate'
+        self.auto_run.repetitions = int(text)
+        self.menu_choice='run'
         return self.gate_menu
 
     def sequence_entry(self, text):
@@ -308,8 +356,6 @@ class Model:
             self.menu_choice = 'main'
             return self.main_menu
 
-
-
 def better_sleep(target, sample_time):
     """
     This is a more accurate sleep call, it takes into account time_data that has elapsed while gathering data
@@ -323,4 +369,4 @@ def better_sleep(target, sample_time):
     return target + sample_time
 
 
-ctl = Controller()
+ctl = Controller(debug=True)

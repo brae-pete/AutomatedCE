@@ -368,6 +368,7 @@ class AutoRun:
         self.methods = []
         self.gate = GateSpecial()
         self.repetitions = 1
+        self.repetition_style = 'method'
         self._queue = Queue()
         self.is_running = threading.Event()
         self.traced_thread = Util.TracedThread()
@@ -391,21 +392,22 @@ class AutoRun:
         """
         self.template = Template(template_file)
 
-    def start_run(self, rep_style='sequence'):
+    def start_run(self):
         """
         Start a run. This creates a thread-safe queue object and sets the run flag.
         A run can be created in two style types. The first will run
         :param rep_style:
         :return:
         """
-
-        if rep_style == 'sequence':
+        rep_style = self.repetition_style.lower()
+        self.repetitions = int(self.repetitions)
+        if rep_style == 'sequence': # run through all methods in the list before repeating
             for rep in range(self.repetitions):
                 for method in self.methods:
                     for step in method.method_steps:
                         self._queue.put((step, rep))
 
-        else:
+        elif rep_style == 'method': # repeat each method before moving to the next method in the list
             for method in self.methods:
                 for rep in range(self.repetitions):
                     for step in method:

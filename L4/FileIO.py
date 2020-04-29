@@ -20,7 +20,7 @@ def get_system_var(*var_names):
     :return:
     """
     # Get the Var file
-    var_path = os.path.join(HOME, "config", "system_config.txt")
+    var_path = os.path.join(HOME, "config", "system_var.txt")
     with open(var_path) as fin:
         var_lines = fin.readlines()
 

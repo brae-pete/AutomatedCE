@@ -34,6 +34,7 @@ class XYAbstraction(ABC):
         self.velocity_max = 5
         self.acceleration = 20
         self.jerk = 5
+        self.home = [0, 0]
 
 
     def _scale_values(self, xy):
