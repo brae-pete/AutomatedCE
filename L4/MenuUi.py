@@ -14,6 +14,10 @@ the 'global' objects (ie CESystem, AutoRun, etc...). Parent refers to the menu d
 Try to avoid creating too many Master properties when adding functionality. Probably best to keep those properties inside
 the classes and objects responsible for the functionality when possible.
 
+Several get_<type>_value functions can be used to retrieve the desired value from a pop up window. All these functions
+follow the same format, user can pass in the message to display, the parent Tk window, and the value to return if
+the user exits the window.
+
 For a default UI the menu structure could be created as shown here:
 
 MainMenu
