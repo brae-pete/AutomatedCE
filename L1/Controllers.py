@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from threading import Lock
 from serial import Serial
 from L1 import MicroControlClient
+import logging
+import time
 
 
 class ControllerAbstraction(ABC):
@@ -97,9 +99,17 @@ class ArduinoController(ControllerAbstraction):
         Arduinos use a serial port to communicate, open the port if not alread done
         :return:
         """
-        if not self._serial.is_open():
+        if not self._serial.is_open:
             self._serial.port = self.port
             self._serial.open()
+            old_to = self._serial.timeout
+            self._serial.timeout=10
+            ans = self._serial.read_until('INIT\r\n'.encode())
+            time.sleep(1.5)
+            self._serial.timeout=old_to
+            self._serial.read_until('\r\n'.encode())
+
+
 
     def close(self):
         """
@@ -118,6 +128,14 @@ class ArduinoController(ControllerAbstraction):
         self.close()
         self.open()
 
+    def read_buffer(self):
+        """
+        Reads the Serial buffer and returns the entire list of commands or phases sent
+        :return: list of stringn commands from serial buffer
+        """
+        resp = self._serial.readlines()
+        return resp
+
     def send_command(self, command):
         """
         Send a command to the arduino microcontroller. See Arduino code or L2 arduino utility class for
@@ -127,11 +145,17 @@ class ArduinoController(ControllerAbstraction):
         :return: 'Ok' or String containing data
         """
         with self.lock:
-            self._serial.write("{}".encode())
-            response = self._serial.readlines()
+            print(command)
+            self._serial.write(f"{command}".encode())
+            time.sleep(0.2)
+            response = self.read_buffer()
+        print(response)
         # only return the last line
         # todo output to logger when there is no response
-        return response[-1]
+        try:
+            return response[-1].decode()
+        except AttributeError:
+            return response
 
 
 class MicroManagerController(ControllerAbstraction):

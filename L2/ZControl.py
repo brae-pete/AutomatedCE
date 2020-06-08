@@ -15,6 +15,7 @@ def check_z(func):
     """
 
     def wrapper(self, z):
+        print(self.min_z, z, self.max_z)
         if self.min_z < z < self.max_z:
             return func(self, z)
         else:
@@ -63,9 +64,11 @@ class ZAbstraction(ABC):
         self.max_z = 25
 
     def _scale_values(self, z: float):
-        return z / self._scale * self.z_inversion + self._offset
+        "Called on values read from microcontroller"
+        return (z / self._scale * self.z_inversion) + self._offset
 
     def _invert_scale(self, z: float):
+        "Called on values to be sent to the microcontroller"
         return (z - self._offset) * self._scale * self.z_inversion
 
     def get_status(self):
@@ -97,7 +100,12 @@ class ZAbstraction(ABC):
         pass
 
     def wait_for_move(self):
-        pass
+        pos = self.read_z()
+        new_pos = pos+1
+        while np.abs(pos-new_pos)>0.1:
+            pos = new_pos
+            new_pos = self.read_z()
+
 
     @abstractmethod
     def stop(self):
@@ -116,12 +124,24 @@ class ArduinoZ(ZAbstraction, UtilityControl):
     acceleration = 5
     jerk = 0  # If constant acceleration, set jerk equal to 0
 
-    def __init__(self, controller, role):
+    def __init__(self, controller, role, **kwargs):
         super().__init__(controller, role)
-        self._stepper_direction = 1  # 0 For positive/forward motion is towards home
+        self._scale = 1
+        self._offset = 30
+        self.pos = 0
+        self._default_pos = 24.5
+        self.min_z = 0
+        self.max_z = 30
+        settings={'direction':1}
+        if kwargs is not None:
+            settings.update(kwargs)
+        self.z_inversion = settings['direction']  # 0 For positive/forward motion is towards home
+
 
     def startup(self):
         """ on startup we need to go to the home position (raise all the way up)"""
+
+        resp = self.controller.send_command("TESTING12345\n")
         self.homing()
 
     def shutdown(self):
@@ -137,7 +157,12 @@ class ArduinoZ(ZAbstraction, UtilityControl):
     def read_z(self):
         """ Reads the z position"""
         z = self.controller.send_command("M0L?\n")
+        print(f"ans is {z}")
+        while "L?" != z[0:2]:
+            z = self.controller.read_buffer()
+        z = self._scale_values(float(z.strip('L?').strip('\n').strip('\r')))
         self.pos = z
+        print(z)
         return z
 
     def set_home(self):
@@ -149,6 +174,9 @@ class ArduinoZ(ZAbstraction, UtilityControl):
     def go_home(self):
         self.set_z(0)
 
+    def stop(self):
+        self.set_rel_z(0)
+
     def homing(self):
         """
         Sends the microcontroller to the limit switch. Sends the stepper to twice the normally allowed distance so
@@ -159,13 +187,13 @@ class ArduinoZ(ZAbstraction, UtilityControl):
 
         :return:
         """
-        self.controller.send_command("M0G{}{}\n".format(self._stepper_direction, self._stepper_direction))
-        self.max_z *= 2
-        self.set_z(self.max_z)
-        self.wait_for_move()
-        self.set_rel_z(0.1)
-        self.wait_for_move()
-        self.max_z = self.max_z / 2
+        #self.controller.send_command("M0G{}{}\n".format(1, 1))
+
+        #self.wait_for_move()
+        self.max_z = 60
+        self.set_z(59.75)
+        self.max_z = 30
+
 
 
 class SimulatedZ(ZAbstraction, UtilityControl):
