@@ -308,8 +308,15 @@ class KinesisZ(ZAbstraction, UtilityControl):
     """
 
     # Modules needed for Kinesis
-    sys.path.append(r"D:\Software\Kinesis")
+    from L4.FileIO import get_system_var
+    kinesis_path = get_system_var('kinesis')[0]
+    sys.path.append(kinesis_path)
+
     import clr as clr
+
+    # If you cannot load these modules, make sure that the system_var.txt has the correct path for the kinesis software
+    # "C:\\Program Files\\Thorlabs\\Kinesis" is an example path to check. Install Kinesis if not aleady done.
+
     from System import String
     from System import Decimal
     from System import Collections
@@ -337,15 +344,16 @@ class KinesisZ(ZAbstraction, UtilityControl):
         self.DeviceManagerCLI.DeviceManagerCLI.BuildDeviceList()
         self.device = self.IntegratedStepperMotorsCLI.LabJack.CreateLabJack(self._ser_no)
         self.device.Connect(self._ser_no)
+        self.device.LoadMotorConfiguration(self._ser_no)
         self.device.WaitForSettingsInitialized(5000)
-        _ = self.device.LoadMotorDeviceSettings()
+        _ = self.device.MotorDeviceSettings
         self.device.EnableDevice()
         self.device.StartPolling(250)
 
     def _set_velocity(self, velocity: float):
         """ Sets the velocity of the labjack motor"""
         v = velocity
-        self.Decimal(velocity)
+        v = self.Decimal(velocity)
         vel_prms = self.device.GetVelocityParams()
         vel_prms.set_MaxVelocity(v)
         self.device.SetVelocityParams(vel_prms)
@@ -391,9 +399,10 @@ class KinesisZ(ZAbstraction, UtilityControl):
 
     def stop(self):
         """ If stage is moving stop it """
-        status = self.device.get_status()
-        if status.get_IsInMotion():
-            self.device.Stop(1000)
+        status = self.device.get_Status()
+
+        self.device.Stop(0)
+
 
     def _get_travel_direction(self, rel_z):
         dist_up = self.z_inversion * rel_z
@@ -426,6 +435,32 @@ class KinesisZ(ZAbstraction, UtilityControl):
             logging.warning("Please Home Kinesis Labjack")
             return False
         return True
+
+
+    def set_home(self):
+        """
+        Sets the home position
+        :return:
+        """
+        logging.warning("Set home no implemented")
+
+    def go_home(self):
+        """ Moves down until the stage hits the mechanical stop that specifices the 0 mm mark
+         """
+        self.set_z(0)
+
+    def homing(self):
+        """
+        Sends the microcontroller to the limit switch. Sends the stepper to twice the normally allowed distance so
+        that it will hit the limit switch which will stop the motor.
+
+        _stepper_direction refers to if the stepper needs to move forwards or reverse. If stepper moves in opposite
+        direction of the limit switch try changing this value.
+
+        :return:
+        """
+        threading.Thread(target=self.device.Home, args=(60000,)).start()
+
 
 
 class ZControlFactory(UtilityFactory):

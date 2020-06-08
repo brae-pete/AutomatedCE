@@ -20,7 +20,6 @@ NIDAQMX_LOAD = True
 
 try:
     from L1 import dwfconstants
-
     if sys.platform.startswith("win"):
         dwf = cdll.dwf
     elif sys.platform.startswith("darwin"):

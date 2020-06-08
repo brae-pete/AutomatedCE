@@ -1,0 +1,1 @@
+kinesis,"C:\\Program Files\\Thorlabs\\Kinesis"
