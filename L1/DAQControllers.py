@@ -10,13 +10,14 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from queue import Queue
 import numpy as np
-import nidaqmx
-from nidaqmx.constants import TerminalConfiguration
+
 from ctypes import *
 import sys
 
-# Digilent Modules
+# Allow the user to only install the libraries they need. If the libraries aren't available, we won't load the classes
 DIGILENT_LOAD = True
+NIDAQMX_LOAD = True
+
 try:
     from L1 import dwfconstants
 
@@ -26,9 +27,16 @@ try:
         dwf = cdll.LoadLibrary("/Library/Frameworks/dwf.framework/dwf")
     else:
         dwf = cdll.LoadLibrary("libdwf.so")
-except ModuleNotFoundError:
+except OSError:
+    logging.info("Digilent dll Libraries are not downloaded, Digilent devices will not run")
     DIGILENT_LOAD = False
 
+try:
+    import nidaqmx
+    from nidaqmx.constants import TerminalConfiguration
+except ModuleNotFoundError:
+    logging.info("nidaqmx python module is not downloaded, Nidaqmx devices will not run")
+    NIDAQMX_LOAD = False
 
 class DaqAbstraction(ABC):
 
@@ -118,7 +126,7 @@ class DaqAbstraction(ABC):
         """
         Adds a call back function that will be called when the data is collected
         :param func: function object
-        :param chnls: list [ int, int]
+        :param chnls: list of analog input channels
         :param mode: str  [ "RMS" or "Wave" to get the RMS average or the waveform ]
         :param args: any arguments that should be passed
         :return:
@@ -129,7 +137,8 @@ class DaqAbstraction(ABC):
         """
         Copies and sends data to the corresponding callback functions.
         Outputs the data array, the time_data it took to acquire this array, and channels gathered
-        :param data:
+        :param data: array of samples, either ndarray where each col is a channel, or list where each
+        index is a sample
         :param total_samples:
         :return:
         """
@@ -139,13 +148,23 @@ class DaqAbstraction(ABC):
         for callback_info in self._callbacks:
             [func, channels, mode, args] = callback_info
             out_data = []
+
+            # This should be re-written to use numpy arrays only
+            if type(data)== np.ndarray:
+                data = list(data.transpose())
+
+            if len(self._set_ai_channels)==1:
+                data = [data, data]
+
             if mode.upper() == 'RMS':
                 for chan in channels:
-                    out_data.append(np.mean(data[int(chan)]))
+                    idx = self._set_ai_channels.index(chan)
+                    out_data.append(np.mean(data[idx]))
             else:
                 for chan in channels:
-                    out_data.append(np.asarray(data[int(chan)]))
-            threading.Thread(target=func, args=(out_data, time_elapsed, channels, args)).start()
+                    idx = self._set_ai_channels.index(chan)
+                    out_data.append(np.asarray(data[idx]))
+            threading.Thread(target=func, args=(data, time_elapsed, channels, args)).start()
 
     @abstractmethod
     def set_channel_voltage(self, channel: str, voltage: float):
@@ -169,190 +188,238 @@ class DaqAbstraction(ABC):
         pass
 
 
-class NiDaq(DaqAbstraction):
-    """
-    National instrument (NI) control of a digital to analog converter using nidaqmx.
-    NI daqmx uses tasks, which hold channels that can be configured according to
-    the experiment needs.
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._task = nidaqmx.Task()
-
-        self._total_samples = 0
-        self._device = kwargs['Device']
-        self._samples = 0
-        self._do_task = nidaqmx.Task()
-        self._set_do_values = OrderedDict()
-
-    def add_analog_output(self, channel):
+if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
+    class NiDaq(DaqAbstraction):
         """
-        Add channels to the list
-
-        Channels is the identifier string corresponding to the channel on the national instruments analog output
-        Examples may be 'ao0, or ao1'.
-
-        :param channel: str
-        :param kwargs: dict
-        :return:
-        """
-        with self._lock:
-            self._set_ao_channels.append(channel)
-            self._task.ao_channels.add_ao_voltage_chan('/' + self._device + '/' + channel)
-
-    def add_channels(self, channel, **kwargs):
-        """
-        Add channels to the list
-
-        Channels is the identifier string corresponding to the channel on the national instruments analog output
-        Examples may be 'ao0, or ao1'.
-
-        :param channels: str
-        :param kwargs: dict
-        :return:
-        """
-        with self._lock:
-            self._set_ai_channels.append(channel)
-            terminal_config = self._get_terminal_config(kwargs['terminal_config'])
-            self._task.ai_channels.add_ai_voltage_chan('/' + self._device + '/' + channel,
-                                                       terminal_config=terminal_config)
-
-    def start_voltage(self):
-        """
-        When ready to apply to voltages, create a list (in the same order that channels were added to the task)
-        of voltages ranging from current voltage to the set voltage. The ordered list used for channels should
-        ensure that voltage output list matches the order channels were added to the task.
-
-        :return:
-        """
-        write_channels = []
-        with self._lock:
-            for chan in self._set_ao_channels:
-                current_v = self._current_voltages[chan]
-                set_v = self._set_voltages[chan]
-                write_channels.append([current_v, set_v])
-                self._current_voltages[chan] = set_v
-
-            # Slightly different input parameters needed for just a single channel output
-            if len(write_channels) == 1:
-                write_channels = write_channels[0]
-
-            self._task.write(write_channels)
-
-    def _get_terminal_config(self, terminal_config: str):
-        """
-        Returns the appropriate Terminal configuration constant for the analog input terminals.
-        :param terminal_config:
-        :return:
-        """
-        if terminal_config.upper() == "RSE":
-            return TerminalConfiguration.RSE
-        elif terminal_config.upper() == "DIFF":
-            return TerminalConfiguration.DIFFERENTIAL
-        elif terminal_config.upper() == 'PSUEDO':
-            return TerminalConfiguration.PSEUDODIFFERENTIAL
-        else:
-            return TerminalConfiguration.DEFAULT
-
-    def set_sampling_frequency(self, rate):
-        """
-        Sets the sampling frequency in Hz
-        :param rate:
-        :return:
-        """
-        with self._lock:
-            self._rate = rate
-
-    def _configure_timing(self, mode: str):
-        """
-        Configures the timing for the analog input task.
-        National instruments requires that the samples be a multiple of 10 of the sampling rate.
-
-        :return:
+        National instrument (NI) control of a digital to analog converter using nidaqmx.
+        NI daqmx uses tasks, which hold channels that can be configured according to
+        the experiment needs.
         """
 
-        self._samples = int(self._rate / 10)
-        if mode.lower() == 'finite':
-            mode = nidaqmx.constants.AcquisitionType.FINITE
-        else:
-            # For continuous function we use a callback function
-            mode = nidaqmx.constants.AcquisitionType.CONTINUOUS
-            self._func = self._task.register_every_n_samples_acquired_into_buffer_event(self._samples, self._read_data)
-        self._task.timing.cfg_samp_clk_timing(self._rate, samps_per_chan=self._samples, sample_mode=mode)
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            # Init settings
+            settings = {'Device':'Dev1'}
+            if kwargs is not None:
+                settings.update(kwargs)
 
-        return
-
-    def start_measurement(self, mode='continuous'):
-        """
-        When ready to read the measurement, start the task.
-        :return:
-        """
-        with self._lock:
-            self._configure_timing()
+            self._task = nidaqmx.Task()
+            self._ao_task = nidaqmx.Task()
             self._total_samples = 0
-            self._task.start()
+            self._device = settings['Device']
+            self._samples = 0
+            self._do_task = nidaqmx.Task()
+            self._set_do_values = OrderedDict()
+            self._set_ao_voltages=[]
 
-    def stop_measurement(self):
-        """
-        Call to stop a measurement
-        :return:
-        """
-        self._task.stop()
+        def add_analog_output(self, channel):
+            """
+            Add channels to the list
 
-    def _read_data(self, *args):
-        """
-        Read data from the device and start sending it to the callbacks
-        :param args:
-        :return:
-        """
+            Channels is the identifier string corresponding to the channel on the national instruments analog output
+            Examples may be 'ao0, or ao1'.
 
-        try:
-            samples = np.asarray(self._task.read(number_of_samples_per_channel=self._samples))
-        except nidaqmx.errors.DaqError:
-            logging.error('Nidaq did not read samples correctly')
-            return 1
-        with self.lock:
-            self._total_samples += len(samples)
-            self._send_data(samples, self._total_samples)
+            :param channel: str
+            :param kwargs: dict
+            :return:
+            """
+            if channel in self._set_ao_channels:
+                logging.warning("Channel already added")
+                return
+            with self._lock:
+                self._set_ao_channels.append(channel)
+                self._set_ao_voltages.append(0)
+                self._ao_task.ao_channels.add_ao_voltage_chan('/' + self._device + '/' + channel)
 
-    def stop_voltage(self):
-        """ Sets the Voltage to Zero"""
-        output = [0] * len(self.channels)
-        self._task.write(output)
+        def add_analog_input(self, channel: str, volt_range=5, **kwargs):
+            """
+            Add channel to the list
 
-    def add_do_channel(self, channel):
-        """
-        Add a digital output channel. Channel should be a string identifier for the digital output.
-        For NI that inlcues both the port and line numbers:
+            Channels is the identifier string corresponding to the channel on the national instruments analog output
+            Examples may be 'ao0, or ao1'.
 
-        port0/line5 is an appropriate channel id
+            :param channels: str
+            :param kwargs: dict
+            :return:
+            """
+            settings = {'terminal_config':'RSE'}
+            if kwargs is not None:
+                settings.update(kwargs)
+            if channel in self._set_ai_channels:
+                logging.warning("Channel already added")
+                return
+            with self._lock:
+                self._set_ai_channels.append(channel)
+                terminal_config = self._get_terminal_config(settings['terminal_config'])
+                self._task.ai_channels.add_ai_voltage_chan('/' + self._device + '/' + channel,
+                                                           terminal_config=terminal_config,
+                                                           min_val=-volt_range, max_val=volt_range)
 
-        :param channel:
-        :return:
-        """
-        self._do_task.do_channels.add_do_chan('/' + self._device + '/' + channel)
-        self._set_do_values[channel]=False
+        def set_channel_voltage(self, channel: str, voltage: float):
+            """
+            Sets the voltage for a given channel
+            :param voltage: float within -5 to 5 V or whatever the range for the nidaqmx device you are using is
+            :param channel: analog output channel string ao0 or ao1 are common.
+            :return:
+            """
+            assert channel in self._set_ao_channels
+            # Set the DC amplitude
+            idx = self._set_ao_channels.index(channel)
+            self._set_ao_voltages[idx] = voltage
 
-    def set_do_channel(self, channel, value):
-        """
-        Change the desired value for digital output channel. This will not update the actual value until the update/write
-        command is sent.
-        :param channel:
-        :param value:
-        :return:
-        """
-        self._set_do_values[channel] = value
+        def start_voltage(self):
+            """
+            When ready to apply to voltages, create a list (in the same order that channels were added to the task)
+            of voltages ranging from current voltage to the set voltage. The ordered list used for channels should
+            ensure that voltage output list matches the order channels were added to the task.
 
-    def update_do_channels(self):
-        """
-        Updates the digital output channels with the desired set values
-        :return:
-        """
-        self._do_task.write(list(self._set_do_values.values()))
+            :return:
+            """
+            write_channels = []
+            with self._lock:
+                self._ao_task.write(self._set_ao_voltages)
+
+        def _get_terminal_config(self, terminal_config: str):
+            """
+            Returns the appropriate Terminal configuration constant for the analog input terminals.
+            :param terminal_config:
+            :return:
+            """
+            if terminal_config.upper() == "RSE":
+                return TerminalConfiguration.RSE
+            elif terminal_config.upper() == "DIFF":
+                return TerminalConfiguration.DIFFERENTIAL
+            elif terminal_config.upper() == 'PSUEDO':
+                return TerminalConfiguration.PSEUDODIFFERENTIAL
+            else:
+                return TerminalConfiguration.DEFAULT
+
+        def set_sampling_frequency(self, rate):
+            """
+            Sets the sampling frequency in Hz
+            :param rate:
+            :return:
+            """
+            with self._lock:
+                self._rate = rate
+
+        def _configure_timing(self, mode: str):
+            """
+            Configures the timing for the analog input task.
+            National instruments requires that the samples be a multiple of 10 of the sampling rate.
+
+            :return:
+            """
+
+            self._samples = int(self._rate / 10)
+            if mode.lower() == 'finite':
+                mode = nidaqmx.constants.AcquisitionType.FINITE
+            else:
+                # For continuous function we use a callback function
+                mode = nidaqmx.constants.AcquisitionType.CONTINUOUS
+                self._task.register_every_n_samples_acquired_into_buffer_event(self._samples, None)
+                self._func = self._task.register_every_n_samples_acquired_into_buffer_event(self._samples, self._read_data)
+            self._task.timing.cfg_samp_clk_timing(self._rate, samps_per_chan=self._samples, sample_mode=mode)
+
+            return
+
+        def start_measurement(self, mode='continuous'):
+            """
+            When ready to read the measurement, start the task.
+            :return:
+            """
+            with self._lock:
+
+                self._configure_timing(mode=mode)
+                self._total_samples = 0
+                self._task.start()
+
+        def stop_measurement(self):
+            """
+            Call to stop a measurement
+            :return:
+            """
+            self._task.stop()
+
+        def _read_data(self, *args):
+            """
+            Read data from the device and start sending it to the callbacks
+            :param args:
+            :return:
+            """
+
+            try:
+                samples = np.asarray(self._task.read(number_of_samples_per_channel=self._samples))
+            except nidaqmx.errors.DaqError:
+                logging.error('Nidaq did not read samples correctly')
+                return 1
+            with self._lock:
+                self._total_samples += len(samples)
+                self._send_data(samples, self._total_samples)
+                return 0
+
+        def stop_voltage(self):
+            """ Sets the Voltage to Zero"""
+            output = [0] * len(self.channels)
+            self._ao_task.write(output)
+
+        def add_do_channel(self, channel):
+            """
+            Add a digital output channel. Channel should be a string identifier for the digital output.
+            For NI that inlcudes both the port and line numbers:
+
+            port0/line5 is an appropriate channel id
+            p0.5 is also an appropriate channel id for the same channel
+
+            :param channel: string identifier for channel
+            :return:
+            """
+
+            if channel in self._set_do_values.keys():
+                logging.warning("Channel already added")
+                return
+            try:
+                self._do_task.do_channels.add_do_chan('/' + self._device + '/' + channel)
+            except:
+                channel = self.interpret_do_channels(channel)
+                self._do_task.do_channels.add_do_chan('/' + self._device + '/' + channel)
+            self._set_do_values[channel]=False
 
 
-if DIGILENT_LOAD:
+        def set_do_channel(self, channel, value):
+            """
+            Change the desired value for digital output channel. This will not update the actual value until the update/write
+            command is sent.
+            :param channel:
+            :param value:
+            :return:
+            """
+            self._set_do_values[channel] = value
+
+        def update_do_channels(self):
+            """
+            Updates the digital output channels with the desired set values
+            :return:
+            """
+            self._do_task.write(list(self._set_do_values.values()), auto_start=True)
+
+
+        @staticmethod
+        def interpret_do_channels(channel):
+            """
+            Converts digital channel names from abbreviated form to
+            long form that is required by nidaqmx software
+            :param channel: abbreviated channel name (P0.0)
+            :return:  long form channel name (port0\line0)
+            """
+            parts = channel.split('.')
+            port = parts[0].upper().strip('P')
+            line = parts[1]
+            assert port.isnumeric() and line.isnumeric(), f"Digital channel names are incorrect form {channel}"
+            return f"port{port}/line{line}"
+
+
+if DIGILENT_LOAD: # Only create the class if the cdll module is downloaded
     class DigilentDaq(DaqAbstraction):
         """
         Analog input for a Digilent Analog Discovery II
