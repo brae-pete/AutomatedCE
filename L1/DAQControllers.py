@@ -20,6 +20,7 @@ NIDAQMX_LOAD = True
 
 try:
     from L1 import dwfconstants
+
     if sys.platform.startswith("win"):
         dwf = cdll.dwf
     elif sys.platform.startswith("darwin"):
@@ -37,6 +38,7 @@ except ModuleNotFoundError:
     logging.info("nidaqmx python module is not downloaded, Nidaqmx devices will not run")
     NIDAQMX_LOAD = False
 
+
 class DaqAbstraction(ABC):
 
     def __init__(self, **kwargs):
@@ -46,13 +48,12 @@ class DaqAbstraction(ABC):
         self._set_ai_channels = []
         self._set_ao_channels = []
         self._rate = 1000
-        self._total_samples = 0 # used to keep track of time_data
+        self._total_samples = 0  # used to keep track of time_data
         self._set_voltages = {}
         self._current_voltages = {}
         self._lock = threading.Lock()
         self._read_thread = threading.Thread()
         self.id = 'daq'
-
 
         pass
 
@@ -143,18 +144,14 @@ class DaqAbstraction(ABC):
         """
 
         # Get the total time_data elapsed since the start_measurment was last called
-        time_elapsed = total_samples/self._rate
+        time_elapsed = total_samples / self._rate
         for callback_info in self._callbacks:
             [func, channels, mode, args] = callback_info
             out_data = []
 
             # This should be re-written to use numpy arrays only
-            if type(data)== np.ndarray:
-                data = list(data.transpose())
-
-            if len(self._set_ai_channels)==1:
-                data = [data, data]
-
+            if len(self._set_ai_channels) == 1:
+                data = np.concatenate(data,data, axis=1)
             if mode.upper() == 'RMS':
                 for chan in channels:
                     idx = self._set_ai_channels.index(chan)
@@ -163,8 +160,7 @@ class DaqAbstraction(ABC):
                 for chan in channels:
                     idx = self._set_ai_channels.index(chan)
                     out_data.append(np.asarray(data[idx]))
-            threading.Thread(target=func, args=(data, time_elapsed, channels, args)).start()
-
+            threading.Thread(target=func, args=(out_data, time_elapsed, channels, args)).start()
     @abstractmethod
     def set_channel_voltage(self, channel: str, voltage: float):
         pass
@@ -187,7 +183,7 @@ class DaqAbstraction(ABC):
         pass
 
 
-if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
+if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
     class NiDaq(DaqAbstraction):
         """
         National instrument (NI) control of a digital to analog converter using nidaqmx.
@@ -198,7 +194,7 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
             # Init settings
-            settings = {'Device':'Dev1'}
+            settings = {'Device': 'Dev1'}
             if kwargs is not None:
                 settings.update(kwargs)
 
@@ -209,7 +205,8 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
             self._samples = 0
             self._do_task = nidaqmx.Task()
             self._set_do_values = OrderedDict()
-            self._set_ao_voltages=[]
+            self._set_ao_voltages = []
+            self._ai_channels = []
 
         def add_analog_output(self, channel):
             """
@@ -241,18 +238,33 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
             :param kwargs: dict
             :return:
             """
-            settings = {'terminal_config':'RSE'}
+            settings = {'terminal_config': 'RSE'}
             if kwargs is not None:
                 settings.update(kwargs)
             if channel in self._set_ai_channels:
                 logging.warning("Channel already added")
                 return
-            with self._lock:
-                self._set_ai_channels.append(channel)
-                terminal_config = self._get_terminal_config(settings['terminal_config'])
-                self._task.ai_channels.add_ai_voltage_chan('/' + self._device + '/' + channel,
-                                                           terminal_config=terminal_config,
-                                                           min_val=-volt_range, max_val=volt_range)
+
+            self._set_ai_channels.append(channel)
+            terminal_config = self._get_terminal_config(settings['terminal_config'])
+            self._ai_channels.append({'channel': channel, 'terminal_config': terminal_config,
+                                      'volt_range': volt_range})
+
+        def _init_task(self):
+            """
+            Adds the analog input channels to a task
+            :param task:
+            :return:
+            """
+            self._task.close()
+            task = nidaqmx.Task()
+            for settings in self._ai_channels:
+                task.ai_channels.add_ai_voltage_chan('/' + self._device + '/' + settings['channel'],
+                                                     terminal_config=settings['terminal_config'],
+                                                     min_val=-settings['volt_range'],
+                                                     max_val=settings['volt_range'])
+
+            self._task = task
 
         def set_channel_voltage(self, channel: str, voltage: float):
             """
@@ -261,7 +273,7 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
             :param channel: analog output channel string ao0 or ao1 are common.
             :return:
             """
-            assert channel in self._set_ao_channels
+            assert channel in self._set_ao_channels, f"requested: {channel} from {self._set_ao_channels}"
             # Set the DC amplitude
             idx = self._set_ao_channels.index(channel)
             self._set_ao_voltages[idx] = voltage
@@ -316,8 +328,7 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
             else:
                 # For continuous function we use a callback function
                 mode = nidaqmx.constants.AcquisitionType.CONTINUOUS
-                self._task.register_every_n_samples_acquired_into_buffer_event(self._samples, None)
-                self._func = self._task.register_every_n_samples_acquired_into_buffer_event(self._samples, self._read_data)
+                self._task.register_every_n_samples_acquired_into_buffer_event(self._samples, self._read_data)
             self._task.timing.cfg_samp_clk_timing(self._rate, samps_per_chan=self._samples, sample_mode=mode)
 
             return
@@ -328,7 +339,7 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
             :return:
             """
             with self._lock:
-
+                self._init_task()
                 self._configure_timing(mode=mode)
                 self._total_samples = 0
                 self._task.start()
@@ -359,7 +370,7 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
 
         def stop_voltage(self):
             """ Sets the Voltage to Zero"""
-            output = [0] * len(self.channels)
+            output = [0] * len(self._set_ao_voltages)
             self._ao_task.write(output)
 
         def add_do_channel(self, channel):
@@ -382,8 +393,7 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
             except:
                 channel = self.interpret_do_channels(channel)
                 self._do_task.do_channels.add_do_chan('/' + self._device + '/' + channel)
-            self._set_do_values[channel]=False
-
+            self._set_do_values[channel] = False
 
         def set_do_channel(self, channel, value):
             """
@@ -402,6 +412,13 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
             """
             self._do_task.write(list(self._set_do_values.values()), auto_start=True)
 
+        def close(self):
+            """Close all the running tasks"""
+            self.stop_voltage()
+            self._task.close()
+            self._do_task.close()
+            self._ao_task.close()
+
 
         @staticmethod
         def interpret_do_channels(channel):
@@ -417,8 +434,7 @@ if NIDAQMX_LOAD: # Only create the class if the python module is downloaded
             assert port.isnumeric() and line.isnumeric(), f"Digital channel names are incorrect form {channel}"
             return f"port{port}/line{line}"
 
-
-if DIGILENT_LOAD: # Only create the class if the cdll module is downloaded
+if DIGILENT_LOAD:  # Only create the class if the cdll module is downloaded
     class DigilentDaq(DaqAbstraction):
         """
         Analog input for a Digilent Analog Discovery II
@@ -432,8 +448,8 @@ if DIGILENT_LOAD: # Only create the class if the cdll module is downloaded
             self._callbacks = []
             self._samples = 8192
             self._read_flag = threading.Event()
-            self._dio_mask = ['0']*16 # Bit mask for digital inputs outputs enable
-            self._set_do_channels = ['0']*16 # Bit mask for do channel values
+            self._dio_mask = ['0'] * 16  # Bit mask for digital inputs outputs enable
+            self._set_do_channels = ['0'] * 16  # Bit mask for do channel values
             if DIGILENT_LOAD:
                 load = self._init_device()
             else:
@@ -617,7 +633,7 @@ if DIGILENT_LOAD: # Only create the class if the cdll module is downloaded
             channel = int(channel)
             assert type(channel) == int, "Channel must be an Integer"
             # Adjust the maskk and enable the pin
-            self._dio_mask[channel]='1'
+            self._dio_mask[channel] = '1'
             mask = "".join(self._dio_mask)
             dwf.FDwfDigitalIOOutputEnableSet(self.hdwf, c_int(int(mask, base=2)))
 
@@ -637,7 +653,7 @@ if DIGILENT_LOAD: # Only create the class if the cdll module is downloaded
             else:
                 value = '0'
 
-            self._set_do_channels[channel]=value
+            self._set_do_channels[channel] = value
 
         def update_do_channels(self):
             """
