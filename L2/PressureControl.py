@@ -37,7 +37,6 @@ class PressureAbstraction(ABC):
         pass
 
 
-
 class ArduinoPressure(PressureAbstraction, UtilityControl):
     """
     Arduino control class for the Outlet pressure control (Not designed for microchip pressure control).
@@ -73,20 +72,41 @@ class ArduinoPressure(PressureAbstraction, UtilityControl):
         self.release()
 
     def rinse_pressure(self):
+        """Open pressure valve"""
         self.controller.send_command('P0R\n')
         self.state = 'Pressure'
 
     def rinse_vacuum(self):
+        """
+        Open Vacuum valve
+        :return:
+        """
         self.controller.send_command('P0V\n')
         self.state = 'Vacuum'
 
     def release(self):
+        """
+        Open release valve, to bring line to atmospheric pressure
+        :return:
+        """
         self.controller.send_command('P0S\n')
         self.state = 'Release'
 
     def seal(self):
+        """
+        Close all solenoid valves
+        :return:
+        """
         self.controller.send_command('P0C\n')
         self.state = 'Seal'
+
+    def stop(self):
+        """
+        Routine for emergencies, seal off air.
+        :return:
+        """
+        self.seal()
+
 
 
 class SimulatedPressure(PressureAbstraction, UtilityControl):
