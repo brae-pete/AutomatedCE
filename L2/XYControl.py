@@ -58,7 +58,7 @@ class XYAbstraction(ABC):
         return self._velocity
 
     @abstractmethod
-    def get_accleration(self):
+    def get_acceleration(self):
         """
         Micromanager does not have a way to retrieve the Stage acceleration, so we can make an estimate.
 
@@ -218,7 +218,7 @@ class MicroManagerXY(XYAbstraction, UtilityControl):
         """
         self._velocity = velocity
 
-    def get_accleration(self):
+    def get_acceleration(self):
         """
         Return the best guess of the XY stage accerlation
         :return:
@@ -238,7 +238,9 @@ class PriorXY(XYAbstraction, UtilityControl):
 
     def __init__(self, controller, role):
         super().__init__(controller, role)
-
+        self._x_inversion = -1
+        self._y_inversion = -1
+        self._scale = 1000
     def startup(self):
         """Prepare the stage for startup"""
         self.read_xy()
@@ -248,26 +250,31 @@ class PriorXY(XYAbstraction, UtilityControl):
         self.read_xy()
 
     def set_xy(self, xy):
-        """ Set the XY position"""
+        """ Set the XY position in mm"""
         raw_xy = self._invert_scale(xy)
         response = self.controller.send_command("G {},{}\r".format(raw_xy[0], raw_xy[1]))
 
     def read_xy(self):
-        """ Read the XY position """
-        response = self.controller.send_command("P \r".encode()).split(',')
-        xy = [eval(x) for x in response]
+        """ Read the XY position in mm """
+        response = self.controller.send_command("\r").split(',')
+        xy = [eval(x) for x in response[0:2]]
         xy = self._scale_values(xy)
         self.pos = xy
         return xy
 
     def set_rel_xy(self, rel_xy):
-        """ Moves the stage a relative amount"""
+        """ Moves the stage a relative amount in mm"""
         rel_xy = self._invert_scale(rel_xy)
-        rsp = self.controller.send_command("GR {},{}\r".format(rel_xy[0], rel_xy[1]).encode())
+        rsp = self.controller.send_command("GR {},{}\r".format(rel_xy[0], rel_xy[1]))
+
+    def stop(self):
+        """Stops the stage"""
+        self.controller.send_command("K \r")
+        return
 
     def set_home(self):
         """ Sets the current position as home position for the stage """
-        self.controller.send_command("Z \r".encode())
+        self.controller.send_command("Z \r")
         self.read_xy()
 
     def go_home(self):
@@ -280,7 +287,39 @@ class PriorXY(XYAbstraction, UtilityControl):
         :param velocity:
         :return:
         """
-        
+        self.velocity_max = velocity
+        self.controller.send_command('SMS,{:.3f},u \r '.format(velocity*1000))
+        return
+
+    def set_acceleration(self, acceleration):
+        """
+        Sets the max accerlation of the stage in mm/s/s
+        Microcontroller takes um/s/s so we convert that inside this function
+        :param acceleration:
+        :return:
+        """
+        self.acceleration = acceleration
+        self.controller.send_command(f'SAS,{acceleration/1000},u \r')
+        return
+
+    def get_acceleration(self):
+        """
+        Retrieves the acceleration from the Prior Controller
+        Controller sends units in um/s/s, we convert this to mm/s/s
+        :return:
+        """
+        self.acceleration = float(self.controller.send_command('SAS,u \r')) / 1000
+        return self.acceleration
+
+    def get_velocity(self):
+        """
+        Retrieves the velocity from the prior controller
+        Controller reads back speed in um/s, we convert this to mm/s
+        :return:
+        """
+        self.velocity_max = float(self.controller.send_command('SMS,u \r')) / 1000 #
+        return self.velocity_max
+
 
 
 class XYControlFactory(UtilityFactory):
