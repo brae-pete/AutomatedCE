@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import sys
 
 
-def get_digilent_device:
+def get_digilent_device():
     if sys.platform.startswith("win"):
         dwf = cdll.dwf
     elif sys.platform.startswith("darwin"):

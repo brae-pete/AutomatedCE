@@ -7,14 +7,43 @@ from multiprocessing.connection import Listener
 import logging
 import numpy as np
 
-MICROMANAGER_DIRECTORY = r"D:\Micro-Manager-1.4"
+
+# Python 2 Function to get var names
+def get_system_var(*var_names):
+    """
+    Get a variable from the system config file
+    :param var_names: str
+    :return:
+    """
+    HOME = os.getcwd().split("AutomatedCE")[0] + "AutomatedCE"
+
+    # Get the Var file
+    var_path = os.path.join(HOME, "config", "system_var.txt")
+    with open(var_path) as fin:
+        var_lines = fin.readlines()
+
+    var_dict = {}
+
+    for var_str in var_lines:
+        var_list = var_str.split(',')
+        var_dict[var_list[0]] = eval(var_list[1].replace('\n',''))
+
+    response = []
+    for var_name in var_names:
+        if var_name not in var_dict.keys():
+            logging.warning("Variable name does not exist: {}".format(var_name))
+        response.append(var_dict[var_name])
+    return response
+
+MICROMANAGER_DIRECTORY = get_system_var('mmcorepy')[0]
 
 # Add micromanager to the path
 sys.path.append(MICROMANAGER_DIRECTORY)
 try:
     import MMCorePy
 except ModuleNotFoundError:
-    msg = " MMCorePy was not found. It is probable Micromanager directory is not correct. Adjust Line 3 in "
+    msg = " MMCorePy was not found. It is probable Micromanager directory is not correct. Adjust system_var.txt file\n" \
+          "Try C:\\Micro-Manager-1.4 as a place to check"
     msg += os.getcwd() + r"\MicroControlServer.py"
     raise ModuleNotFoundError(msg)
 import numpy as np
@@ -23,6 +52,10 @@ sys.path.append(os.path.relpath(".."))
 cwd = os.getcwd()
 cwd = cwd.split('\\')
 USER = cwd[2]
+
+
+
+
 def log_output(msg, port, mode = 'a'):
     with open(r'py2_log-{}.txt'.format(USER,port), mode) as fout:
         fout.write("{}-{}\n".format(datetime.datetime.now().strftime('%m/%d/%y %H:%M:%S'), msg))

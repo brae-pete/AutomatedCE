@@ -1,1 +1,3 @@
 kinesis,"C:\\Program Files\\Thorlabs\\Kinesis"
+mmcorepy,"C:\\Micro-Manager-1.4"
+python2path,r"C:\Users\NikonTE300CE\Miniconda3\envs\CEpy27\python.exe"

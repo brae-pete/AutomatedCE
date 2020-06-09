@@ -1,7 +1,10 @@
+import os
 from abc import ABC, abstractmethod
 from threading import Lock
 from serial import Serial
 from L1 import MicroControlClient
+
+
 import logging
 import time
 
@@ -145,11 +148,9 @@ class ArduinoController(ControllerAbstraction):
         :return: 'Ok' or String containing data
         """
         with self.lock:
-            print(command)
             self._serial.write(f"{command}".encode())
             time.sleep(0.2)
             response = self.read_buffer()
-        print(response)
         # only return the last line
         # todo output to logger when there is no response
         try:
@@ -166,12 +167,14 @@ class MicroManagerController(ControllerAbstraction):
     files for more information on how the command structure works.
     """
 
-    def __init__(self, port=0, config=r'D:\Scripts\AutomatedCE\config\DemoCam.cfg'):
-        #todo default config using relative path
+    def __init__(self, port=0, config='default'):
+        if config == 'default':
+            config = os.path.abspath(os.path.join(os.getcwd(), '.', 'config/DemoCam.cfg'))
         super().__init__(port)
         self.id = "micromanager"
         self._config = config
         self._mmc = MicroControlClient.MicroControlClient()
+
 
     def open(self):
         """
@@ -219,7 +222,7 @@ class PriorController(ControllerAbstraction):
         self._serial.timeout = 0.5
 
     def open(self):
-        if not self._serial.is_open():
+        if not self._serial.is_open:
             self._serial.port = self.port
             self._serial.open()
 
@@ -252,7 +255,7 @@ class PriorController(ControllerAbstraction):
         return lines
 
     def _read_line(self):
-        return self._serial.read_until('\r'.encode()).decode()
+        return self._serial.read_until('\r'.encode()).decode().strip('\r')
 
 if __name__ == "__main__":
     mmc = MicroManagerController(port = 0, config = r'D:\Scripts\AutomatedCE\config\DemoCam.cfg')

@@ -15,7 +15,6 @@ def check_z(func):
     """
 
     def wrapper(self, z):
-        print(self.min_z, z, self.max_z)
         if self.min_z < z < self.max_z:
             return func(self, z)
         else:
@@ -101,11 +100,10 @@ class ZAbstraction(ABC):
 
     def wait_for_move(self):
         pos = self.read_z()
-        new_pos = pos+1
-        while np.abs(pos-new_pos)>0.1:
+        new_pos = pos + 1
+        while np.abs(pos - new_pos) > 0.1:
             pos = new_pos
             new_pos = self.read_z()
-
 
     @abstractmethod
     def stop(self):
@@ -132,11 +130,10 @@ class ArduinoZ(ZAbstraction, UtilityControl):
         self._default_pos = 24.5
         self.min_z = 0
         self.max_z = 30
-        settings={'direction':1}
+        settings = {'direction': 1}
         if kwargs is not None:
             settings.update(kwargs)
         self.z_inversion = settings['direction']  # 0 For positive/forward motion is towards home
-
 
     def startup(self):
         """ on startup we need to go to the home position (raise all the way up)"""
@@ -157,12 +154,10 @@ class ArduinoZ(ZAbstraction, UtilityControl):
     def read_z(self):
         """ Reads the z position"""
         z = self.controller.send_command("M0L?\n")
-        print(f"ans is {z}")
         while "L?" != z[0:2]:
             z = self.controller.read_buffer()
         z = self._scale_values(float(z.strip('L?').strip('\n').strip('\r')))
         self.pos = z
-        print(z)
         return z
 
     def set_home(self):
@@ -187,19 +182,19 @@ class ArduinoZ(ZAbstraction, UtilityControl):
 
         :return:
         """
-        #self.controller.send_command("M0G{}{}\n".format(1, 1))
+        # self.controller.send_command("M0G{}{}\n".format(1, 1))
 
-        #self.wait_for_move()
+        # self.wait_for_move()
         self.max_z = 60
         self.set_z(59.75)
         self.max_z = 30
-
 
 
 class SimulatedZ(ZAbstraction, UtilityControl):
     velocity_max = 20  # mm/s
     acceleration = 5
     jerk = 0  # If constant acceleration, set jerk equal to 0
+
     def __init__(self, controller, role):
         super().__init__(controller, role)
 
@@ -232,10 +227,12 @@ class PriorZ(ZAbstraction, UtilityControl):
     velocity_max = 20  # mm/s
     acceleration = 5
     jerk = 0  # If constant acceleration, set jerk equal to 0
+
     def __init__(self, controller, role):
         super().__init__(controller, role)
         self.min_z = 0
         self.max_z = 10
+        self._scale = 10
 
     def startup(self):
         """ Do nothing special on start up"""
@@ -247,7 +244,8 @@ class PriorZ(ZAbstraction, UtilityControl):
 
     def read_z(self):
         """ Read the current position"""
-        self.pos = self.controller.send_command("PZ \r")
+        self.pos = float(self.controller.send_command("PZ \r"))
+        self.pos = self._scale_values(self.pos)
         return self.pos
 
     @check_z
@@ -258,7 +256,7 @@ class PriorZ(ZAbstraction, UtilityControl):
 
     def stop(self):
         """ Stop the motor from moving"""
-        self.controller.send_command("D 0 \r")
+        self.controller.send_command("I \r")
 
     def go_home(self):
         """ Go to the 0 position"""
@@ -281,6 +279,7 @@ class MicroManagerZ(ZAbstraction, UtilityControl):
     velocity_max = 20  # mm/s
     acceleration = 5
     jerk = 0  # If constant acceleration, set jerk equal to 0
+
     def __init__(self, controller, role):
         super().__init__(controller, role)
         self.min_z = 0
@@ -323,7 +322,6 @@ class MicroManagerZ(ZAbstraction, UtilityControl):
         :return:
         """
         self.set_rel_z(0)
-
 
 
 class KinesisZ(ZAbstraction, UtilityControl):
@@ -411,7 +409,7 @@ class KinesisZ(ZAbstraction, UtilityControl):
         return self.pos
 
     @check_z
-    def set_z(self, z ):
+    def set_z(self, z):
         """
         Sets the absolute position of the labjack, but will include a backlash calculation/motion. Do not use this
         if the capillary will be within 1mm a hard surface (glass slide, stage, etc...) as it will likely overshoot
@@ -423,14 +421,13 @@ class KinesisZ(ZAbstraction, UtilityControl):
         self.stop()
         # Create a thread that will send the MoveTo command
         if self._home_check():
-            threading.Thread(target = self.device.MoveTo, args =((z),60000)).start()
+            threading.Thread(target=self.device.MoveTo, args=((z), 60000)).start()
 
     def stop(self):
         """ If stage is moving stop it """
         status = self.device.get_Status()
 
         self.device.Stop(0)
-
 
     def _get_travel_direction(self, rel_z):
         dist_up = self.z_inversion * rel_z
@@ -456,14 +453,13 @@ class KinesisZ(ZAbstraction, UtilityControl):
             jog_prms.set_StepSize(distance)
             self.device.SetJogParams(jog_prms)
         if self._home_check():
-            threading.Thread(target = self.device.MoveJog, args=(direction, 60000,)).start()
+            threading.Thread(target=self.device.MoveJog, args=(direction, 60000,)).start()
 
     def _home_check(self):
         if self.device.NeedsHoming:
             logging.warning("Please Home Kinesis Labjack")
             return False
         return True
-
 
     def set_home(self):
         """
@@ -488,7 +484,6 @@ class KinesisZ(ZAbstraction, UtilityControl):
         :return:
         """
         threading.Thread(target=self.device.Home, args=(60000,)).start()
-
 
 
 class ZControlFactory(UtilityFactory):
