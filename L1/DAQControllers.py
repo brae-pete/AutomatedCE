@@ -189,6 +189,15 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
         National instrument (NI) control of a digital to analog converter using nidaqmx.
         NI daqmx uses tasks, which hold channels that can be configured according to
         the experiment needs.
+
+        Config line for the .txt configuration is as follows:
+        controller,name1,nidaqmx
+
+        Channel names consist of the following scheme:
+        ao# -> 'A'nalog 'O'utput followed by the channel number. There are typically 2 analog outputs per pinout.
+        ai# -> 'A'nalog 'I'nput followed by the channel number.
+        p0.0 -> Digital lines, the number before the dot corresponds to the port, and following to the line for the
+                the digital channel. Digital channels can be inputs or outputs.
         """
 
         def __init__(self, **kwargs):

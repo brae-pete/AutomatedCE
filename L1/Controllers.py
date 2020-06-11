@@ -86,8 +86,14 @@ class SimulatedController(ControllerAbstraction):
 
 class ArduinoController(ControllerAbstraction):
     """
-    Controller class to control Arduino microcontroller. Only one daqcontroller class should be created for
-    each microcontroller being used.
+    Controller class to control microcontroller (like the arduino). Only one arduinocontroller class should be created for
+    each microcontroller being used. In other words if the same microcontroller/arduino controls two different utilities,
+    only one arduino controller is needed.
+
+    Config line for the Arduino Controller:
+    controller,name1,arduino,COM#
+
+    Where COM# corresponds to the serial/USB port the arduino/microcontroller is connected to.
     """
     id = 'arduino'
 
@@ -104,6 +110,7 @@ class ArduinoController(ControllerAbstraction):
         """
         if not self._serial.is_open:
             self._serial.port = self.port
+            logging.info(f"PORT: {self.port}")
             self._serial.open()
             old_to = self._serial.timeout
             self._serial.timeout=10
@@ -212,6 +219,12 @@ class PriorController(ControllerAbstraction):
     """
     Controller class to control devices using a Prior microcontroller. Prior commands are reported in the user manual
     for a given microcontroller.
+
+    Config line for the prior controller:
+    controller,name1,prior,COM#
+
+    Where com# corresponds to the serial port the controller is connected to.
+
     """
 
     def __init__(self, port):

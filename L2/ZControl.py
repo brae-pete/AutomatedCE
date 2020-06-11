@@ -334,7 +334,7 @@ class KinesisZ(ZAbstraction, UtilityControl):
     """
 
     # Modules needed for Kinesis
-    from L4.FileIO import get_system_var
+    from L1.Util import get_system_var
     kinesis_path = get_system_var('kinesis')[0]
     sys.path.append(kinesis_path)
 
@@ -358,7 +358,7 @@ class KinesisZ(ZAbstraction, UtilityControl):
 
     def __init__(self, controller: Controllers.ControllerAbstraction, role: str):
         super().__init__(controller, role)
-        self._ser_no = controller
+        self._ser_no = controller.port
         self._lock = threading.Lock()
 
     def set_serial(self, ser_no):
@@ -426,7 +426,6 @@ class KinesisZ(ZAbstraction, UtilityControl):
     def stop(self):
         """ If stage is moving stop it """
         status = self.device.get_Status()
-
         self.device.Stop(0)
 
     def _get_travel_direction(self, rel_z):

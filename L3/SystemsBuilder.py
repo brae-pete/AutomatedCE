@@ -75,10 +75,10 @@ class ControllerBuilder(Builder):
         super().__init__(ControlledObjects())
 
     def add_arduino(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.ArduinoController(settings[2])
+        self.constructed_object.fields[settings[1]] = Controllers.ArduinoController(settings[3])
 
     def add_simulated(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.SimulatedController(settings[2])
+        self.constructed_object.fields[settings[1]] = Controllers.SimulatedController(settings[3])
 
     def add_micromanager(self, settings):
         if len(settings) < 4:
@@ -86,12 +86,19 @@ class ControllerBuilder(Builder):
         self.constructed_object.fields[settings[1]] = Controllers.MicroManagerController(settings[2], settings[3])
 
     def add_prior(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.PriorController(settings[2])
+        self.constructed_object.fields[settings[1]] = Controllers.PriorController(settings[3])
 
     def add_digilent(self, settings):
         self.constructed_object.fields[settings[1]] = DAQControllers.DigilentDaq()
 
+    def add_nidaqmx(self, settings):
+        self.constructed_object.fields[settings[1]] = DAQControllers.NiDaq()
 
+    def add_kinesis(self, settings):
+        controller = Controllers.SimulatedController()
+        controller.id ='kinesis'
+        controller.port = settings[3]
+        self.constructed_object.fields[settings[1]] = controller
 class UtilityBuilder(Builder):
     """
     Builds the utilities Systems object. A separate add_<utility-type> function should be included for each type of
@@ -209,6 +216,10 @@ class ConcreteDirector(Director):
                 self._controller_builder.add_prior(settings)
             elif control_type == 'digilent':
                 self._controller_builder.add_digilent(settings)
+            elif control_type == 'nidaqmx':
+                self._controller_builder.add_nidaqmx(settings)
+            elif control_type == 'kinesis':
+                self._controller_builder.add_kinesis(settings)
             else:
                 raise ValueError('Entered invalid controller: {}'.format(control_type))
         return self._controller_builder.get_object()
