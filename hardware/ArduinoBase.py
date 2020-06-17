@@ -94,7 +94,9 @@ class ArduinoBase:
         try:
             # logging.info(response)
             #response = float(response.strip("\n".encode()))
-            self.pos = pos = float(response)
+            z = float(response.decode().strip('L?').strip('\n').strip('\r'))
+
+            self.pos = pos = float(z)
         except ValueError:
             return self.pos, offset
         return pos, offset

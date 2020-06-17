@@ -1955,7 +1955,7 @@ class CE_TE300Seattle(BaseSystem):
         # Hardware Class Objects: These are all (and should remain) the base classes
         self.xy_stage_control = XYControl.PriorControl(com="COM9")
         self.z_stage_control = ZStageControl.ThorLabs()
-        self.outlet_control = OutletControl.ArduinoOutlet(com="COM8", invt=-1, home_dir=False)
+        self.outlet_control = OutletControl.ArduinoOutlet(com="COM8", invt=1, home_dir=False)
         # These are shared resources for the outlet arduino
         arduino_1=self.outlet_control.arduino
         arduino_1_lock = self.outlet_control.lock

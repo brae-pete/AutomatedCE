@@ -451,6 +451,7 @@ class MethodScreenController:
         self._form_data = []
         self._populating_table = False
         self._well_labels = ['None']
+        self._travel_maximum = 50
 
         self.screen.image_view.setSceneRect(0, 0, 512, 512)
         self.screen.image_frame.controller = self
@@ -522,7 +523,7 @@ class MethodScreenController:
         self.screen.insert_table.setItem(row_count, 4, blank_duration)
 
         inlet_travel = QtWidgets.QDoubleSpinBox()
-        inlet_travel.setMaximum(25)
+        inlet_travel.setMaximum(self._travel_maximum)
         inlet_travel.setMinimum(0)
         if inlet_travel_input:
             inlet_travel.setValue(inlet_travel_input)
@@ -532,7 +533,7 @@ class MethodScreenController:
         self.screen.insert_table.setCellWidget(row_count, 9, inlet_travel)
 
         inlet_pos = QtWidgets.QDoubleSpinBox()
-        inlet_pos.setMaximum(25)
+        inlet_pos.setMaximum(self._travel_maximum)
         inlet_pos.setMinimum(0)
         if inlet_pos_input:
             inlet_pos.setValue(inlet_pos_input)

@@ -346,7 +346,6 @@ void pressureTalk(){
     digitalWrite(SOLENOID1,HIGH);
     digitalWrite(SOLENOID2,HIGH);
     digitalWrite(SOLENOID3, LOW);
-    Serial.println("All OPEN");
   } else if (inputString[2]=='C'){
     digitalWrite(SOLENOID1, LOW);
     digitalWrite(SOLENOID2, LOW);

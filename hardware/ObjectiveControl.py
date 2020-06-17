@@ -204,7 +204,7 @@ class PriorControl(ObjectiveControl, PriorController):
             if self.home:
                 self.pos = set_z
                 return
-            go_to = self.inversion * set_z *10
+            go_to = self._inv
             self.ser.write("GZ {} \r".format(go_to).encode())
             self.read_lines()
 

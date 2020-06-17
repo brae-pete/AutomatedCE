@@ -599,7 +599,6 @@ class PowerStep(ZStageControl):
             if self.home:
                 self.pos = 0
                 return
-            self.arduino.go_home(self.home_dir)
             self.max_z+=25
             self.set_z(50)
             self.wait_for_move()

@@ -243,11 +243,20 @@ class PriorControl(XYControl, PriorController):
     x_inversion = 1
     y_inversion = 1
 
-    def __init__(self, com="COM5", lock=threading.RLock()):
+    def __init__(self, com="COM9", lock=threading.RLock()):
 
         self.lock = lock
         self.port = com
         self.open()
+
+        # Reset the acceleration, velocity, and microsteps
+        self.ser.write("SAS 100\r".encode())
+        self._read_lines()
+        self.ser.write("SMS 80\r".encode())
+        self._read_lines()
+        self.ser.write("SS 25\r".encode())
+        self._read_lines()
+
 
     def open(self):
         self.prior_open()
@@ -285,8 +294,8 @@ class PriorControl(XYControl, PriorController):
                 pos = [x / self.scale for x in pos]
                 pos[0] *= self.x_inversion
                 pos[1] *= self.y_inversion
-            except:
-                print(pos)
+            except Exception as e:
+                print(e)
                 print("STOPPING")
                 return [0,0]
         self.pos = pos
@@ -357,7 +366,7 @@ class PriorControl(XYControl, PriorController):
 
 
 def main():
-    mc = MicroControl()
+    mc = PriorControl()
     return mc
 
 

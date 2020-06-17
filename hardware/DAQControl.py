@@ -204,7 +204,7 @@ class NI_ADC(ADC, NIDAQ_USB):
             samples = np.asarray(self.task.read(number_of_samples_per_channel=self.samples))
             self._samples = samples
         except nidaqmx.errors.DaqError as e:
-            logging.error(e)d
+            logging.error(e)
             return 1
 
         with self.data_lock:
