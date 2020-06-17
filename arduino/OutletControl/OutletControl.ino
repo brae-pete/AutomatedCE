@@ -26,9 +26,12 @@
 #define STCK_PIN_2 9
 #define nSTBY_nRESET_PIN_2 8
 #define nBUSY_PIN_2 4
-#define flag_2 3
+#define flag_2 2
 
-
+#define LED_R A0
+#define LED_G A1
+#define LED_B A2
+#define LIMIT 3
 // powerSTEP library instance, parameters are distance from the end of a daisy-chain
 // of drivers, !CS pin, !STBY/!Reset pin
 
@@ -40,20 +43,24 @@ powerSTEP driver_2(0, nCS_PIN_2, nSTBY_nRESET_PIN_2, nBUSY_PIN_2);
 // Set up variables for motors
 int outlet_div = 32;
 // Set variables for Pressure
-int SOLENOID2 = 39;
-int SOLENOID1 = 41;
-int SOLENOID3 = 43;
-int LED_R = 31;
-int LED_G = 33;
-int LED_B = 35;
+int SOLENOID1 = 4;
+int SOLENOID2 = 6;
+int SOLENOID3 = 7;
+
+
 byte dir = B0;
 //SERIAL 
 String inputString = "";   // a String to hold incoming data
 int inputCount = 0;
 bool stringComplete = false;  // whether the string is complete
 bool inversion = 0;
+unsigned long switch_time = 0;
+bool first = true;
 
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
+
+
+
 
 void setup() 
 {
@@ -73,6 +80,13 @@ void setup()
   pinMode(SOLENOID1, OUTPUT);
   pinMode(SOLENOID2, OUTPUT);
   pinMode(SOLENOID3, OUTPUT);
+
+  pinMode(LIMIT, INPUT);
+  pinMode(LIMIT, INPUT_PULLUP);  // set pull-up on analog pin 0 
+  //digitalWrite(LIMIT, HIGH);
+  pinMode(A5, OUTPUT);
+  digitalWrite(A5,LOW);
+
 
   // Reset powerSTEP and set CS
   digitalWrite(nSTBY_nRESET_PIN_2, HIGH);
@@ -117,7 +131,7 @@ void setup()
   driver_2.setSlewRate(SR_980V_us); // faster may give more torque (but also EM noise),
                                   // options are: 114, 220, 400, 520, 790, 980(V/us)
                                   
-  driver_2.setOCThreshold(8); // over-current threshold for the 2.8A NEMA23 motor
+  driver_2.setOCThreshold(2); // over-current threshold for the 2.8A NEMA23 motor
                             // used in testing. If your motor stops working for
                             // no apparent reason, it's probably this. Start low
                             // and increase until it doesn't trip, then maybe
@@ -151,17 +165,31 @@ void setup()
   driver_2.setDecKVAL(128);
   driver_2.setHoldKVAL(32);
 
-  driver_2.setParam(ALARM_EN, 0xCF); // disable ADC UVLO (divider not populated),
+  driver_2.setParam(ALARM_EN, 0x8F); // disable ADC UVLO (divider not populated),
                                    // disable stall detection (not configured),
                                    // disable switch (not using as hard stop)
 
   driver_2.getStatus(); // clears error flags
 
-  Serial.println(F("Initialisation 2 complete"));
   
+  attachInterrupt(digitalPinToInterrupt(LIMIT),interrupt_home, LOW);
+  Serial.println("INIT");
 }
 
-
+void interrupt_home(){
+  unsigned long temp_time = millis();
+  if (temp_time-switch_time >100){
+    driver_2.hardStop();
+    driver_2.getStatus(); // clears error flags
+    switch_time = temp_time;
+    driver_2.resetPos();
+    float steps_per_mm = (200. * outlet_div / 0.75);
+    long steps = long(-.25*steps_per_mm);
+    driver_2.goTo(steps);
+    //Serial.println("Pause:");
+    first = true;
+  }
+}
 void serialCheck() {
   while (Serial.available()) {
     char inChar = (char)Serial.read();
@@ -184,7 +212,6 @@ bool checkHome(){
   //Serial.println(sw_val);
   driver_2.getStatus(); // clears error flags
   bool at_home = (sw_val==4);
-  Serial.println(at_home);
   return at_home;
 }
 
@@ -213,10 +240,9 @@ void moveMotor(){
   //#Serial.print(" To Location: ");
   //Serial.println(steps);
   float steps_per_mm = (200. * outlet_div / 0.75);
-  Serial.println(steps_per_mm);   
   long steps = long(mm_pos*steps_per_mm);
-  Serial.println(steps);
   driver_2.goTo(steps);
+  Serial.println("OK");
 }
 
 void motorHomePosition(){
@@ -233,7 +259,6 @@ void motorHomePosition(){
   char user_dir = inputString[2];
   //Serial.println("Starting Move...");
   byte dir = B0;
-  Serial.println(user_dir);
   if (user_dir=='1'){
    dir = true;
    Serial.println("HEY!");
@@ -289,6 +314,7 @@ void getMotorPos(){
   long steps = driver_2.getPos();
   float steps_per_mm = (200. * outlet_div / 0.75);
   float return_steps = float(float(steps)/steps_per_mm);
+  Serial.print("L?");
   Serial.println(return_steps,3);
 }
 
@@ -296,14 +322,12 @@ void setHome(){
   int chnl = atoi(inputString[1]);
   char user_dir = inputString[3];
   //Serial.println("Starting Move...");
-  Serial.println(user_dir);
   if (user_dir=='1'){
    inversion = true;
   } else{
     inversion = false;
   }
   //Serial.print("Setting Home Position for channel: ");
-  Serial.println(chnl);
   driver_2.resetPos();
 }
 
@@ -311,7 +335,6 @@ void setAccel(){
   int chnl = atoi(inputString[1]);
   String location = inputString.substring(3,9);
   int stepspersec2 = location.toInt();
-  Serial.println(stepspersec2);
   driver_2.setAcc(stepspersec2); // full steps/s^2 acceleration
   driver_2.setDec(stepspersec2); // full steps/s^2 deceleration
 }
