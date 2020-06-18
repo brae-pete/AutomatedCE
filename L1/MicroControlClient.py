@@ -21,7 +21,9 @@ o_cwd = os.getcwd()
 cwd = o_cwd.split('\\')
 USER = cwd[2]
 
-PYTHON2_PATH = get_system_var('python2path') # r"D:\Software\MiniConda\envs\CEpy27\python.exe"
+conda_path = sys.executable.split('CEpy37')[0]
+PYTHON2_PATH = os.path.join(conda_path, get_system_var('python2path')[0]) # r"\CEpy27\python.exe"
+
 config = os.path.abspath(os.path.join(os.getcwd(), '.', 'config/DemoCam.cfg'))
 SERVER_FILE = os.path.abspath(os.path.join(os.getcwd(), '.', 'L1/MicroControlServer.py'))
 print(SERVER_FILE)

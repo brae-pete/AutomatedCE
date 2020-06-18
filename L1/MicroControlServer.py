@@ -43,7 +43,7 @@ try:
     import MMCorePy
 except ModuleNotFoundError:
     msg = " MMCorePy was not found. It is probable Micromanager directory is not correct. Adjust system_var.txt file\n" \
-          "Try C:\\Micro-Manager-1.4 as a place to check"
+          "Try C:\\Program Files\\Micro-Manager-1.4 as a place to check"
     msg += os.getcwd() + r"\MicroControlServer.py"
     raise ModuleNotFoundError(msg)
 import numpy as np

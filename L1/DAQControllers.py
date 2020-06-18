@@ -148,10 +148,12 @@ class DaqAbstraction(ABC):
         for callback_info in self._callbacks:
             [func, channels, mode, args] = callback_info
             out_data = []
+            self._debug = data
 
             # This should be re-written to use numpy arrays only
             if len(self._set_ai_channels) == 1:
-                data = np.concatenate(data,data, axis=1)
+                data = np.asarray([data,data])
+
             if mode.upper() == 'RMS':
                 for chan in channels:
                     idx = self._set_ai_channels.index(chan)
@@ -159,7 +161,7 @@ class DaqAbstraction(ABC):
             else:
                 for chan in channels:
                     idx = self._set_ai_channels.index(chan)
-                    out_data.append(np.asarray(data[idx]))
+                    out_data.append(data[idx])
             threading.Thread(target=func, args=(out_data, time_elapsed, channels, args)).start()
     @abstractmethod
     def set_channel_voltage(self, channel: str, voltage: float):
@@ -397,9 +399,9 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             if channel in self._set_do_values.keys():
                 logging.warning("Channel already added")
                 return
-            try:
+            if 'PORT' in channel.upper():
                 self._do_task.do_channels.add_do_chan('/' + self._device + '/' + channel)
-            except:
+            else:
                 channel = self.interpret_do_channels(channel)
                 self._do_task.do_channels.add_do_chan('/' + self._device + '/' + channel)
             self._set_do_values[channel] = False

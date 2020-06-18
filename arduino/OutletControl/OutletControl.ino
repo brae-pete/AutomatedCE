@@ -55,6 +55,7 @@ int inputCount = 0;
 bool stringComplete = false;  // whether the string is complete
 bool inversion = 0;
 unsigned long switch_time = 0;
+unsigned long switch_hi_time = 0;
 bool first = true;
 
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
@@ -82,10 +83,12 @@ void setup()
   pinMode(SOLENOID3, OUTPUT);
 
   pinMode(LIMIT, INPUT);
-  pinMode(LIMIT, INPUT_PULLUP);  // set pull-up on analog pin 0 
+  //pinMode(LIMIT, INPUT_PULLUP);  // set pull-up on analog pin 0 
   //digitalWrite(LIMIT, HIGH);
   pinMode(A5, OUTPUT);
+  pinMode(A4, OUTPUT);
   digitalWrite(A5,LOW);
+  digitalWrite(A4, HIGH);
 
 
   // Reset powerSTEP and set CS
@@ -171,24 +174,38 @@ void setup()
 
   driver_2.getStatus(); // clears error flags
 
-  
   attachInterrupt(digitalPinToInterrupt(LIMIT),interrupt_home, LOW);
+
+
   Serial.println("INIT");
 }
 
 void interrupt_home(){
   unsigned long temp_time = millis();
-  if (temp_time-switch_time >100){
+
+  if (first and (temp_time-switch_time > 2000)){
     driver_2.hardStop();
     driver_2.getStatus(); // clears error flags
     switch_time = temp_time;
     driver_2.resetPos();
     float steps_per_mm = (200. * outlet_div / 0.75);
-    long steps = long(-.25*steps_per_mm);
+    long steps = long(-1.25*steps_per_mm);
     driver_2.goTo(steps);
     //Serial.println("Pause:");
-    first = true;
+    first = false;
+    attachInterrupt(digitalPinToInterrupt(LIMIT),interrupt_home_hi, HIGH);
+    switch_time = temp_time;
   }
+
+}
+
+
+void interrupt_home_hi(){
+  unsigned long temp_time = millis();
+  first = true;
+  //Serial.println("HI");
+  attachInterrupt(digitalPinToInterrupt(LIMIT),interrupt_home, LOW);
+
 }
 void serialCheck() {
   while (Serial.available()) {

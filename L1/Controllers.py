@@ -1,7 +1,9 @@
 import os
+import threading
 from abc import ABC, abstractmethod
 from threading import Lock
 from serial import Serial
+import pycromanager
 from L1 import MicroControlClient
 
 
@@ -164,6 +166,62 @@ class ArduinoController(ControllerAbstraction):
             return response[-1].decode()
         except AttributeError:
             return response
+
+class PycromanagerController(ControllerAbstraction):
+    """
+    Controller class for the Pycromanager library. This doesn't require a python2 server and will likely have more
+    support going forward.
+    """
+
+    def __init__(self, port =0, config ='default'):
+        if config == 'default':
+            config = os.path.abspath(os.path.join(os.getcwd(), '.', 'config/DemoCam.cfg'))
+        super().__init__(port)
+        self.id = "pycromanager"
+        self._config = config
+        self._bridge = pycromanager.Bridge()
+        self.core =  self._bridge.get_core()
+
+    def open(self):
+        """
+        Opens the pycromanager core using configuration file
+        """
+        self.core.load_system_configuration(self._config)
+
+    def close(self):
+        """
+        Closes the pycromanager resources.
+        """
+        self.core.unload_all_devices()
+
+    def reset(self):
+        self.close()
+        self.open()
+
+    def send_command(self, command):
+        """
+        All commands are available to access from the core object, and this
+        is not necessary to call methods from the core.
+        """
+        return None
+
+    @staticmethod
+    def get_list(java_list):
+        python_list = [java_list.get(x) for x in range(java_list.capacity())]
+        return python_list
+
+    def get_device_name(self,id='XY'):
+        """Finds the appropriate device name
+        XY = XY drive for the Nikon instruments.
+        """
+        keys = {'XY':'xy'}
+        devices = self.get_list(self.core.get_loaded_devices())
+        key = keys[id]
+        for name in devices:
+            if key in name.lower():
+                return name
+        else:
+            return 'ERR: {} not found {}'.format(key, devices)
 
 
 class MicroManagerController(ControllerAbstraction):

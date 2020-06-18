@@ -117,7 +117,8 @@ class XYAbstraction(ABC):
         return self.set_xy(self.home)
 
     def stop(self):
-        return self.set_rel_xy(0, 0)
+        logging.warning("STOP not implemented")
+        return self.set_rel_xy([0,0])
 
     def get_status(self):
         """Get the position of the XY stage, satisfies the utility control get_status command"""
@@ -132,6 +133,9 @@ class XYAbstraction(ABC):
         prev_pos = self.read_xy()
         current_pos = [prev_pos[0] + 1, prev_pos[1]]
         # Update position while moving
+        st = time.time()
+        while prev_pos == current_pos and time.time()-st < 3:
+            time.sleep(0.1)
         while abs(prev_pos[0] - current_pos[0]) > tolerance or abs(prev_pos[1] - current_pos[1]) > tolerance:
             time.sleep(0.05)
             prev_pos = current_pos
@@ -139,12 +143,94 @@ class XYAbstraction(ABC):
         return current_pos
 
 
+class PycromanagerXY(XYAbstraction, UtilityControl):
+
+    def get_velocity(self):
+        """ Velocity and acceleration are not accessible"""
+        return None
+
+    def get_acceleration(self):
+        """ Velocity and acceleration are not accessible"""
+
+        return None
+
+    def set_acceleration(self, acceleration):
+        """ Velocity and acceleration are not accessible"""
+        self.acceleration = acceleration
+
+    def set_velocity(self, velocity):
+        """ Velocity and acceleration are not accesible"""
+        self.velocity_max = velocity
+
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
+        self._dev_name = 'N/A'
+        self._scale = 1000  # Micromanager records units in um
+        self._x_inversion = -1
+        self._y_inversion = -1
+        self.lock = self.controller.lock
+
+
+
+    def startup(self):
+        """
+        Get the device name after the configuration has been loaded.
+        """
+        with self.lock:
+            self._dev_name = self.controller.get_device_name('XY')
+
+    def shutdown(self):
+        """
+        Don't move, just stay here
+        """
+        pass
+
+    def get_status(self):
+        return self.pos
+
+    def read_xy(self):
+        """
+        Reads the X and Y position of the stage and returns that as a list in mm.
+        The Nikon eclipse is not super well supported XY stage so we must request X and Y separately.
+        """
+        with self.lock:
+            x = self.controller.core.get_x_position()
+            y = self.controller.core.get_y_position()
+        self.pos = self._scale_values([x,y])
+        return self.pos
+
+    def set_xy(self, xy):
+        """Given a set of coordinates in mm, Stage will move to those coordinates"""
+        raw_xy  = self._invert_scale(xy)
+        with self.lock:
+            self.controller.core.set_xy_position(self._dev_name, raw_xy[0], raw_xy[1])
+
+    def set_rel_xy(self, rel_xy):
+        """
+        Given a relative set of coordinates in mm, move the xy stage by that amount.
+        """
+        raw_xy = self._invert_scale(rel_xy)
+        with self.lock:
+            self.controller.core.set_relative_xy_position(self._dev_name, raw_xy[0], raw_xy[1])
+
+    def set_home(self):
+        """
+        Sets the current position as home
+        """
+        with self.lock:
+            self.controller.core.set_origin_xy(self._dev_name)
+
+
+
+
 class MicroManagerXY(XYAbstraction, UtilityControl):
 
     def __init__(self, controller, role):
         super().__init__(controller, role)
         self._dev_name = 'N/A'
-        self._scale = 0.001 # Micromanager records units in um
+        self._scale = 1000 # Micromanager records units in um
+        self._x_inversion = -1
+        self._y_inversion = -1
 
     def _get_xy_device(self):
         """

@@ -1,5 +1,6 @@
 import logging
 import sys
+import os
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -7,6 +8,16 @@ import numpy as np
 
 from L1 import Controllers
 from L2.Utility import UtilityControl, UtilityFactory
+from L1.Util import get_system_var
+
+kinesis_path = get_system_var('kinesis')[0]
+if not os.path.isdir(kinesis_path):
+    kinesis_load = False
+    logging.warning("Path to Thorlabs Kinesis was not found. \n Change System Config setting if thorlabs"
+                    " is needed. ")
+else:
+
+    kinesis_load = True
 
 
 def check_z(func):
@@ -271,6 +282,60 @@ class PriorZ(ZAbstraction, UtilityControl):
         logging.warning("Homing not implemented")
 
 
+class PycromanagerZ(ZAbstraction, UtilityControl):
+    """
+    Pycromanager for the objective or z-focus. It has not been tested with other Z stages on micromanager.
+    """
+
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
+        self.min_z = -0.01
+        self.max_z = 10.01
+        self._scale = 1000
+        self.lock = controller.lock
+
+    def startup(self):
+        """ Do nothing special on start up"""
+        self.set_z(0)
+
+    def shutdown(self):
+        """ Do nothing special on shutdown """
+        pass
+
+    def read_z(self):
+        """ Read the current position in mm"""
+        with self.lock:
+            self.pos = self._scale_values(self.controller.core.get_position())
+        return self.pos
+
+    @check_z
+    def set_z(self, z):
+        """ Set the absolute position, given z in mm"""
+        z = self._invert_scale(z)
+        with self.lock:
+            self.controller.core.set_position(z)
+
+    def go_home(self):
+        """ Go to the 0 position"""
+        self.set_z(0)
+
+    def set_home(self):
+        """ Set the home position"""
+        logging.warning("Set home not implemented")
+
+    def homing(self):
+        """ Go to the hardware homing point"""
+        logging.warning("Homing not implemented")
+
+    def stop(self):
+        """
+        Stop the hardware
+        :return:
+        """
+        logging.warning("STOP not implemented")
+        self.set_rel_z(0)
+
+
 class MicroManagerZ(ZAbstraction, UtilityControl):
     """ This admittedly is only for the objective, or Z-focus. It has not been tested with other Z-stages on
     micromanager.
@@ -324,165 +389,166 @@ class MicroManagerZ(ZAbstraction, UtilityControl):
         self.set_rel_z(0)
 
 
-class KinesisZ(ZAbstraction, UtilityControl):
-    """
-    Kinesis Controller
-
-    Contains all the libraries used to control Thorlabs labjack using Kinesis.
-    For simulations, you can create a hardware componenet using the Kinesis Simulator application and
-    use the corresponding SerialNumber for your simulated hardware id.
-    """
-
-    # Modules needed for Kinesis
-    from L1.Util import get_system_var
-    kinesis_path = get_system_var('kinesis')[0]
-    sys.path.append(kinesis_path)
-
-    import clr as clr
-
-    # If you cannot load these modules, make sure that the system_var.txt has the correct path for the kinesis software
-    # "C:\\Program Files\\Thorlabs\\Kinesis" is an example path to check. Install Kinesis if not aleady done.
-
-    from System import String
-    from System import Decimal
-    from System import Collections
-
-    clr.AddReference("Thorlabs.MotionControl.Controls")
-    clr.AddReference("Thorlabs.MotionControl.DeviceManagerCLI")
-    clr.AddReference("Thorlabs.MotionControl.GenericMotorCLI")
-    clr.AddReference("Thorlabs.MotionControl.IntegratedStepperMotorsCLI")
-
-    from Thorlabs.MotionControl import DeviceManagerCLI
-    from Thorlabs.MotionControl import GenericMotorCLI
-    from Thorlabs.MotionControl import IntegratedStepperMotorsCLI
-
-    def __init__(self, controller: Controllers.ControllerAbstraction, role: str):
-        super().__init__(controller, role)
-        self._ser_no = controller.port
-        self._lock = threading.Lock()
-
-    def set_serial(self, ser_no):
-        """Set the serial number for the device"""
-        self._ser_no = ser_no
-
-    def _open(self):
-        """ Opens the device resources"""
-        self.DeviceManagerCLI.DeviceManagerCLI.BuildDeviceList()
-        self.device = self.IntegratedStepperMotorsCLI.LabJack.CreateLabJack(self._ser_no)
-        self.device.Connect(self._ser_no)
-        self.device.LoadMotorConfiguration(self._ser_no)
-        self.device.WaitForSettingsInitialized(5000)
-        _ = self.device.MotorDeviceSettings
-        self.device.EnableDevice()
-        self.device.StartPolling(250)
-
-    def _set_velocity(self, velocity: float):
-        """ Sets the velocity of the labjack motor"""
-        v = velocity
-        v = self.Decimal(velocity)
-        vel_prms = self.device.GetVelocityParams()
-        vel_prms.set_MaxVelocity(v)
-        self.device.SetVelocityParams(vel_prms)
-
-    def startup(self):
+if kinesis_load:
+    class KinesisZ(ZAbstraction, UtilityControl):
         """
-        Open the hardware on startup
-        :return:
+        Kinesis Controller
+
+        Contains all the libraries used to control Thorlabs labjack using Kinesis.
+        For simulations, you can create a hardware componenet using the Kinesis Simulator application and
+        use the corresponding SerialNumber for your simulated hardware id.
         """
-        self._open()
-        self._set_velocity(3.5)
 
-    def shutdown(self):
-        """
-        Close the hardware on shutdown
-        :return:
-        """
-        self._close()
+        # Modules needed for Kinesis
+        from L1.Util import get_system_var
+        kinesis_path = get_system_var('kinesis')[0]
+        sys.path.append(kinesis_path)
 
-    def _close(self):
-        self.device.Disconnect()
+        import clr as clr
 
-    def read_z(self):
-        """ Read the Z information from the labjack"""
-        with self._lock:
-            self.pos = self._scale_values(float(str(self.device.DevicePosition)))
-        return self.pos
+        # If you cannot load these modules, make sure that the system_var.txt has the correct path for the kinesis software
+        # "C:\\Program Files\\Thorlabs\\Kinesis" is an example path to check. Install Kinesis if not aleady done.
 
-    @check_z
-    def set_z(self, z):
-        """
-        Sets the absolute position of the labjack, but will include a backlash calculation/motion. Do not use this
-        if the capillary will be within 1mm a hard surface (glass slide, stage, etc...) as it will likely overshoot
-        and break the capillary
-        :param z:
-        :return:
-        """
-        z = self.Decimal(self._invert_scale(z))
-        self.stop()
-        # Create a thread that will send the MoveTo command
-        if self._home_check():
-            threading.Thread(target=self.device.MoveTo, args=((z), 60000)).start()
+        from System import String
+        from System import Decimal
+        from System import Collections
 
-    def stop(self):
-        """ If stage is moving stop it """
-        status = self.device.get_Status()
-        self.device.Stop(0)
+        clr.AddReference("Thorlabs.MotionControl.Controls")
+        clr.AddReference("Thorlabs.MotionControl.DeviceManagerCLI")
+        clr.AddReference("Thorlabs.MotionControl.GenericMotorCLI")
+        clr.AddReference("Thorlabs.MotionControl.IntegratedStepperMotorsCLI")
 
-    def _get_travel_direction(self, rel_z):
-        dist_up = self.z_inversion * rel_z
-        if dist_up < 0:
-            direction = self.GenericMotorCLI.MotorDirection.Backward
-        else:
-            direction = self.GenericMotorCLI.MotorDirection.Forward
-        return direction
+        from Thorlabs.MotionControl import DeviceManagerCLI
+        from Thorlabs.MotionControl import GenericMotorCLI
+        from Thorlabs.MotionControl import IntegratedStepperMotorsCLI
 
-    def set_rel_z(self, rel_z):
-        """
-        Sets a relative amount to move, this uses a jog function and does not deal with backlash like set _z. Use this
-        for when the capillary is near a hard surface.
-        :param rel_z: float
-        :return:
-        """
-        # Kinesis Jog command requires distance to travel and the direction
-        direction = self._get_travel_direction(rel_z)
-        distance = self.Decimal(float(np.abs(rel_z)))
-        self.stop()
-        jog_prms = self.device.GetJogParams()
-        if distance != jog_prms.get_StepSize():
-            jog_prms.set_StepSize(distance)
-            self.device.SetJogParams(jog_prms)
-        if self._home_check():
-            threading.Thread(target=self.device.MoveJog, args=(direction, 60000,)).start()
+        def __init__(self, controller: Controllers.ControllerAbstraction, role: str):
+            super().__init__(controller, role)
+            self._ser_no = controller.port
+            self._lock = threading.Lock()
 
-    def _home_check(self):
-        if self.device.NeedsHoming:
-            logging.warning("Please Home Kinesis Labjack")
-            return False
-        return True
+        def set_serial(self, ser_no):
+            """Set the serial number for the device"""
+            self._ser_no = ser_no
 
-    def set_home(self):
-        """
-        Sets the home position
-        :return:
-        """
-        logging.warning("Set home no implemented")
+        def _open(self):
+            """ Opens the device resources"""
+            self.DeviceManagerCLI.DeviceManagerCLI.BuildDeviceList()
+            self.device = self.IntegratedStepperMotorsCLI.LabJack.CreateLabJack(self._ser_no)
+            self.device.Connect(self._ser_no)
+            self.device.LoadMotorConfiguration(self._ser_no)
+            self.device.WaitForSettingsInitialized(5000)
+            _ = self.device.MotorDeviceSettings
+            self.device.EnableDevice()
+            self.device.StartPolling(250)
 
-    def go_home(self):
-        """ Moves down until the stage hits the mechanical stop that specifices the 0 mm mark
-         """
-        self.set_z(0)
+        def _set_velocity(self, velocity: float):
+            """ Sets the velocity of the labjack motor"""
+            v = velocity
+            v = self.Decimal(velocity)
+            vel_prms = self.device.GetVelocityParams()
+            vel_prms.set_MaxVelocity(v)
+            self.device.SetVelocityParams(vel_prms)
 
-    def homing(self):
-        """
-        Sends the microcontroller to the limit switch. Sends the stepper to twice the normally allowed distance so
-        that it will hit the limit switch which will stop the motor.
+        def startup(self):
+            """
+            Open the hardware on startup
+            :return:
+            """
+            self._open()
+            self._set_velocity(3.5)
 
-        _stepper_direction refers to if the stepper needs to move forwards or reverse. If stepper moves in opposite
-        direction of the limit switch try changing this value.
+        def shutdown(self):
+            """
+            Close the hardware on shutdown
+            :return:
+            """
+            self._close()
 
-        :return:
-        """
-        threading.Thread(target=self.device.Home, args=(60000,)).start()
+        def _close(self):
+            self.device.Disconnect()
+
+        def read_z(self):
+            """ Read the Z information from the labjack"""
+            with self._lock:
+                self.pos = self._scale_values(float(str(self.device.DevicePosition)))
+            return self.pos
+
+        @check_z
+        def set_z(self, z):
+            """
+            Sets the absolute position of the labjack, but will include a backlash calculation/motion. Do not use this
+            if the capillary will be within 1mm a hard surface (glass slide, stage, etc...) as it will likely overshoot
+            and break the capillary
+            :param z:
+            :return:
+            """
+            z = self.Decimal(self._invert_scale(z))
+            self.stop()
+            # Create a thread that will send the MoveTo command
+            if self._home_check():
+                threading.Thread(target=self.device.MoveTo, args=((z), 60000)).start()
+
+        def stop(self):
+            """ If stage is moving stop it """
+            status = self.device.get_Status()
+            self.device.Stop(0)
+
+        def _get_travel_direction(self, rel_z):
+            dist_up = self.z_inversion * rel_z
+            if dist_up < 0:
+                direction = self.GenericMotorCLI.MotorDirection.Backward
+            else:
+                direction = self.GenericMotorCLI.MotorDirection.Forward
+            return direction
+
+        def set_rel_z(self, rel_z):
+            """
+            Sets a relative amount to move, this uses a jog function and does not deal with backlash like set _z. Use this
+            for when the capillary is near a hard surface.
+            :param rel_z: float
+            :return:
+            """
+            # Kinesis Jog command requires distance to travel and the direction
+            direction = self._get_travel_direction(rel_z)
+            distance = self.Decimal(float(np.abs(rel_z)))
+            self.stop()
+            jog_prms = self.device.GetJogParams()
+            if distance != jog_prms.get_StepSize():
+                jog_prms.set_StepSize(distance)
+                self.device.SetJogParams(jog_prms)
+            if self._home_check():
+                threading.Thread(target=self.device.MoveJog, args=(direction, 60000,)).start()
+
+        def _home_check(self):
+            if self.device.NeedsHoming:
+                logging.warning("Please Home Kinesis Labjack")
+                return False
+            return True
+
+        def set_home(self):
+            """
+            Sets the home position
+            :return:
+            """
+            logging.warning("Set home no implemented")
+
+        def go_home(self):
+            """ Moves down until the stage hits the mechanical stop that specifices the 0 mm mark
+             """
+            self.set_z(0)
+
+        def homing(self):
+            """
+            Sends the microcontroller to the limit switch. Sends the stepper to twice the normally allowed distance so
+            that it will hit the limit switch which will stop the motor.
+
+            _stepper_direction refers to if the stepper needs to move forwards or reverse. If stepper moves in opposite
+            direction of the limit switch try changing this value.
+
+            :return:
+            """
+            threading.Thread(target=self.device.Home, args=(60000,)).start()
 
 
 class ZControlFactory(UtilityFactory):
