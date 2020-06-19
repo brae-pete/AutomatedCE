@@ -212,7 +212,7 @@ class ViewOptions:
 
         if text == '1':  # Load system config
             file_path = filedialog.askopenfilename()
-            if file_path != -1:
+            if file_path != -1 and file_path != "":
                 self.system.load_config(file_path)
                 return f"Config {file_path} loaded" + self.system_menu
             return self.system_menu
@@ -222,7 +222,7 @@ class ViewOptions:
             return 'Controllers Opened \n\n\n' + self.system_menu
 
         elif text == '3':  # Initialize Hardware
-            self.system.initialize_hardware()
+            self.system.startup_utilities()
             return 'System Initialized \n\n\n' + self.system_menu
 
         elif text == '4': # Enter XY Stage Menu

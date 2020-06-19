@@ -3,6 +3,7 @@ This file contains the code necessary to run automated control over a capillary 
 
 """
 import os
+import string
 import threading
 import time
 from queue import Queue
@@ -39,6 +40,7 @@ def get_standard_unit(value):
             value[0] *= units[value[1]]
     return value[0]
 
+
 class Step:
     """
     Standardize data object containing all the information needed for a given automation step
@@ -58,8 +60,6 @@ class Step:
 
         # Read step
         self.read_line(line)
-
-
 
     @staticmethod
     def _get_true_false(value):
@@ -231,7 +231,6 @@ class BasicTemplateShape(object):
         return zz
 
 
-
 class Well(BasicTemplateShape):
 
     def __init__(self, line):
@@ -353,14 +352,12 @@ class Template(object):
             zz += ledge.get_intersection(xx, yy)
         return zz
 
-    def get_max_ledge(self, xx,yy):
+    def get_max_ledge(self, xx, yy):
         z_max = -1
         for _, ledge in self.ledges.items():
             if ledge.height > z_max:
                 z_max = ledge.height
         return z_max
-
-
 
 
 class AutoRun:
@@ -418,13 +415,13 @@ class AutoRun:
         """
         rep_style = self.repetition_style.lower()
         self.repetitions = int(self.repetitions)
-        if rep_style == 'sequence': # run through all methods in the list before repeating
+        if rep_style == 'sequence':  # run through all methods in the list before repeating
             for rep in range(self.repetitions):
                 for method in self.methods:
                     for step in method.method_steps:
                         self._queue.put((step, rep))
 
-        elif rep_style == 'method': # repeat each method before moving to the next method in the list
+        elif rep_style == 'method':  # repeat each method before moving to the next method in the list
             for method in self.methods:
                 for rep in range(self.repetitions):
                     for step in method:
@@ -452,17 +449,18 @@ class AutoRun:
 
             # Move the System Safely
             if self.safe_enabled:
-                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, visual=False).move()
+                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1).move()
             else:
                 state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1).move()
-            self.error_message(state,"System Move")
+
+            self.error_message(state, "System Move")
 
             # Move the inlet
             self.system.outlet_z.set_z(step.outlet_height)
 
             # Wait for both Z Stages to stop moving
             state = self.system.inlet_z.wait_for_target(xyz1[2])
-            self.error_message(state,"Inlet Move Down")
+            self.error_message(state, "Inlet Move Down")
 
             state = self.system.outlet_z.wait_for_target(step.outlet_height)
             self.error_message(state, "Outlet Move Down")
@@ -591,7 +589,7 @@ class GateSpecial:
         """
         self.gates.append((ratio, well_name, peak1, peaks))
 
-    def check_gates(self, time_data:np.ndarray, rfu_data:np.ndarray):
+    def check_gates(self, time_data: np.ndarray, rfu_data: np.ndarray):
         """
         Checks if there are any gates whose requirements are met by the electropherogram data.
         Peak areas are time and baseline corrected from the Electropherograms module.
@@ -610,11 +608,126 @@ class GateSpecial:
             # Get the area of the remaining peaks
             for peak_start, peak_stop in peaks:
                 total_area += Electropherogram.get_corrected_peak_area(time_data, rfu_data, peak_start, peak_stop)
-            if peak1_area/total_area < ratio:
+            if peak1_area / total_area < ratio:
                 self.target = well_name
                 return True
         self.target = ""
         return False
+
+
+class TemplateMaker:
+
+    def __init__(self):
+        """
+        :param system: L3 System object for CE Systems
+        """
+        self.wells = {}
+        self.ledges = {}
+        self.dimensions = []
+        self.header = ""
+
+    def add_array(self, label, xy1, xy2, rows, columns, diameter, shape='circle'):
+        """
+        Adds an array of vials. Vials will have label with incrementing number after the name.
+         Adds to the dictionary  of wells.
+        :param label: identifer to be used for these wells ("Inlet, Sample, etc...")
+        :param xy1: xy position of the first well
+        :param xy2: xy position of the second well
+        :param rows: how many rows (y direction) for the array
+        :param cols: how many columns (x direction) for the array
+        :param diameter: diameter of the wells
+        :param shape: type of shape to create an array of (circle currenlty only shape supported)
+        """
+
+        x1, y1 = xy1
+        x2, y2 = xy2
+        delta_x = (x2 - x1) / columns
+        delta_y = (y2 - y1) / rows
+
+        for x, letter in zip(range(1, columns + 1), string.ascii_lowercase):
+            for y in range(rows):
+                center = [x1 + delta_x * x, y1 + delta_y * y]
+
+                name = self.get_original_name(f"{label}_{letter}{y}")
+                self.wells[name] = [shape, diameter, center]
+
+    def get_original_name(self, name, type='well'):
+        """
+        Returns a unique name for dictionary of wells
+        :param name: name to check if it is unique
+        :return: unique name
+        """
+        original_name = name
+        idx = 0
+        types = {'well': self.wells, 'ledge': self.ledges}
+        while name in types[type].keys():
+            name = original_name + f"{idx}"
+        return name
+
+    def add_well(self, name, xy1, size, shape):
+        """
+        Adds a well to the dictionary
+        :param name: well label, should be unique otherwise a number will be appended.
+        :param xy1: xy position of the center of the well
+        :param size: the size of the shape, either a tuple for rectangles, or float for circles
+        :param shape: type of shape to add
+        :return:
+        """
+
+        name = self.get_original_name(name)
+        self.wells[name] = [shape, size, xy1]
+
+    def add_ledge(self, name, xy1, size, shape, height):
+        """
+        Adds a ledge to the dictionary.
+        :param name: ledge label, should be unique otherwise a number will be appended to make it unique
+        :param xy1: xy position of the ledge shape
+        :param size: size of the ledge
+        :param shape: shape of the ledge
+        :param height: height of the ledge
+        :return:
+        """
+        name = self.get_original_name(name)
+        self.ledges[name] = [shape, size, xy1, height]
+
+    def save_to_file(self, filepath):
+        """
+        Saves the template information, including template dimensions, well information, and ledge information
+        to a Template File
+        :param filepath: filepath to save the file
+        :param header: String of header information, hash '#' symbol will be appended to each new line character.
+        :return: True if successful, False if missing dimensions
+        """
+        if not self.dimensions:
+            logging.warning("No dimensions set, please set dimensions")
+            return False
+
+        with open(filepath, 'w') as f_out:
+            f_out.write(self.header.replace('\n', '\n#'))
+            f_out.write("\n")
+            f_out.write("DIMENSIONS\n Left X\tLower Y\tRight X\tUpper Y\n")
+            x1, y1, x2, y2 = self.dimensions
+            f_out.write(f"{x1}\t{y1}\t{x2}\t{y2}\n")
+            f_out.write("WELLS\nName\tShape\tSize\tXY\n")
+            for name, info in self.wells.items():
+                shape, size, xy1 = info
+                f_out.write(f"{name}\t{shape}\t{size}\t{xy1}\n")
+            f_out.write("LEDGES\nName\tShape\tSize\tXY\nHeight\n")
+            for name, info in self.ledges.items():
+                shape, size, xy, height = info
+                f_out.write(f"{name}\t{shape}\t{size}\t{xy}\t{height}\n")
+        return True
+
+    def add_dimension(self, left_x, lower_y, right_x, upper_y):
+        """
+        Adds dimensions for the overall template
+        :param left_x:
+        :param lower_y:
+        :param right_x:
+        :param upper_y:
+        :return:
+        """
+        self.dimensions = [left_x, lower_y, right_x, upper_y]
 
 
 class AutoSpecial:

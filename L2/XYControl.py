@@ -185,8 +185,11 @@ class PycromanagerXY(XYAbstraction, UtilityControl):
         """
         Get the device name after the configuration has been loaded.
         """
+
         with self.lock:
             self._dev_name = self.controller.get_device_name('XY')
+        logging.info(f"XY Stage Started {self._dev_name}")
+
 
     def shutdown(self):
         """

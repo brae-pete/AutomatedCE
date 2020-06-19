@@ -344,7 +344,7 @@ class SystemAbstraction(ABC):
 
     def __init__(self):
         self.controllers = {}
-
+        self.utilities = {}
     def load_config(self, config_file="Default"):
         """
         Load the controllers and utitily objects, and assign them to the CE System utilities.
@@ -361,7 +361,8 @@ class SystemAbstraction(ABC):
         # Update the class utility properties
         for key, value in utilities.items():
             self.__setattr__(key, value)
-
+        print(utilities)
+        self.utilities = utilities
         self.controllers = director.get_controllers()
 
     def open_controllers(self):
@@ -380,6 +381,25 @@ class SystemAbstraction(ABC):
         for name, controller in self.controllers.items():
             controller.close()
 
+    def startup_utilities(self):
+        """
+        Initializes the hardware Utility resources.
+        :return:
+        """
+
+        for name, utility in self.utilities.items():
+            if utility is None:
+                logging.info(f"{name} not configured.")
+                continue
+            utility.startup()
+
+    def shutdown_utilities(self):
+        """
+        Puts utility objects in their shutdown state
+        :return:
+        """
+        for _, utility in self.utilities.items():
+            utility.shutdown()
 
 class CESystem(SystemAbstraction):
     """

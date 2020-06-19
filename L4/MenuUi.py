@@ -193,7 +193,7 @@ class PopupWindow(ABC):
 class StringWindow(PopupWindow):
     def __init__(self, msg, ui_master, exit_value=None):
         super().__init__(msg, ui_master, exit_value)
-        self.input = ttk.Entry()
+        self.input = ttk.Entry(self.top)
         self.input.pack()
         self.enter.pack()
         self.input.focus_set()
@@ -216,7 +216,7 @@ class IntegerWindow(PopupWindow):
 
     def __init__(self, msg, ui_master, exit_value=None):
         super().__init__(msg, ui_master, exit_value)
-        self.input = ttk.Spinbox(ui_master, increment=1, format="%6.0f")
+        self.input = ttk.Spinbox(self.top, increment=1, format="%6.0f")
         self.input.pack()
         self.input.focus_set()
 
@@ -228,7 +228,7 @@ class OptionWindow(PopupWindow):
 
     def __init__(self, msg, ui_master, options, exit_value=None):
         super().__init__(msg, ui_master, exit_value)
-        self.input = ttk.Combobox(values=options)
+        self.input = ttk.Combobox(self.top,values=options)
         self.input.focus_set()
 
     def get_value(self):
