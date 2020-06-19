@@ -2,11 +2,13 @@
 This file contains the code necessary to run automated control over a capillary electrophoresis system.
 
 """
+import os
 import threading
 import time
 from queue import Queue
 from L3.SystemsBuilder import CESystem
 from L4 import Util, Trajectory, FileIO, Electropherogram
+from L1.Util import get_system_var
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
@@ -229,6 +231,7 @@ class BasicTemplateShape(object):
         return zz
 
 
+
 class Well(BasicTemplateShape):
 
     def __init__(self, line):
@@ -350,6 +353,15 @@ class Template(object):
             zz += ledge.get_intersection(xx, yy)
         return zz
 
+    def get_max_ledge(self, xx,yy):
+        z_max = -1
+        for _, ledge in self.ledges.items():
+            if ledge.height > z_max:
+                z_max = ledge.height
+        return z_max
+
+
+
 
 class AutoRun:
     """
@@ -373,23 +385,28 @@ class AutoRun:
         self.is_running = threading.Event()
         self.traced_thread = Util.TracedThread()
         self.traced_thread.name = 'AutoRun'
-        self.data_dir = FileIO.get_system_var('data_dir')[0]
+        self.data_dir = get_system_var('data_dir')[0]
+        self.safe_enabled = False
 
-    def add_method(self, method_file=r'D:\Scripts\AutomatedCE\config\method-test.txt'):
+    def add_method(self, method_file=r'default'):
         """
         Adds a method using a method config file to define the steps
         :param method_file: path to method config file
         :return:
         """
+        if method_file.lower() == "default":
+            method_file = os.path.abspath(os.path.join(os.getcwd(), '..', 'config\\method-test.txt'))
         self.methods.append(Method(method_file))
 
-    def set_template(self, template_file=r'D:\Scripts\AutomatedCE\config\template-test.txt'):
+    def set_template(self, template_file=r'default'):
         """
         Sets the template that should be used. Uses a template config file to definen the well positions and
         ledge heights.
         :param template_file: path to template config file
         :return:
         """
+        if template_file.lower() == "default":
+            template_file = os.path.abspath(os.path.join(os.getcwd(), '..', 'config\\template-test.txt'))
         self.template = Template(template_file)
 
     def start_run(self):
@@ -418,6 +435,10 @@ class AutoRun:
         self.traced_thread.start()
         self.is_running.set()
 
+    def error_message(self, state, process):
+        if not state:
+            logging.error("Error while moving during {}. Aborting".format(process))
+
     def _run(self):
         """
         Makes the individual step calls for a compiled method sequence.
@@ -430,10 +451,21 @@ class AutoRun:
             xyz0, xyz1 = self._get_move_positions(step, rep)
 
             # Move the System Safely
-            Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, visual=False).move()
+            if self.safe_enabled:
+                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, visual=False).move()
+            else:
+                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1).move()
+            self.error_message(state,"System Move")
 
             # Move the inlet
             self.system.outlet_z.set_z(step.outlet_height)
+
+            # Wait for both Z Stages to stop moving
+            state = self.system.inlet_z.wait_for_target(xyz1[2])
+            self.error_message(state,"Inlet Move Down")
+
+            state = self.system.outlet_z.wait_for_target(step.outlet_height)
+            self.error_message(state, "Outlet Move Down")
 
             # Run the special command for injections here
             after_special = True  # change this to false if we don't need to run the timed part of the step after

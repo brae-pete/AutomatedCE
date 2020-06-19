@@ -32,7 +32,7 @@ def get_system_var(*var_names):
 
     response = []
     for var_name in var_names:
-        assert var_name in var_dict.keys(), f"{var_name} is not a var in system_config.txt"
+        assert var_name in var_dict.keys(), f"{var_name} is not a var in system_var.txt"
         response.append(var_dict[var_name])
 
     return response

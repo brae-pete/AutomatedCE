@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -12,7 +13,7 @@ def get_system_var(*var_names):
     :return:
     """
     # Get the Var file
-    var_path = os.path.join(HOME, "config", "system_var.txt")
+    var_path = os.path.join(HOME, "var", "system_var.txt")
     with open(var_path) as fin:
         var_lines = fin.readlines()
 
@@ -24,7 +25,10 @@ def get_system_var(*var_names):
 
     response = []
     for var_name in var_names:
-        assert var_name in var_dict.keys(), f"{var_name} is not a var in system_config.txt"
-        response.append(var_dict[var_name])
+        if not var_name in var_dict.keys():
+            logging.warning(f"{var_name} is not a var in system_config.txt")
+            response.append("NA")
+        else:
+            response.append(var_dict[var_name])
 
     return response

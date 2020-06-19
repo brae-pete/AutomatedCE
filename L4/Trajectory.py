@@ -13,15 +13,62 @@ from scipy import optimize
 from L3.SystemsBuilder import CESystem
 from L4 import AutomatedControl
 import matplotlib.pyplot as plt
+from abc import ABC, abstractmethod
 
-
-class SafeMove:
-
-    def __init__(self, system, template, xyz0, xyz1, visual=False):
+class Move(ABC):
+    def __init__(self, system, template, xyz0, xyz1):
         self.system = system
         self.template = template
         self.xyz0 = xyz0
         self.xyz1 = xyz1
+
+    @abstractmethod
+    def move(self):
+        """
+        Logic to move from one location to the next in a CE run should be called here
+        """
+
+
+class SafeMove(Move):
+
+    def __init__(self, system, template, xyz0, xyz1):
+        super().__init__(system, template, xyz0, xyz1)
+
+    def move(self):
+        """
+        Moves the XY Stage and Inlet Z stage in a systematic way. It caclulates the highest ledge on the template
+        and uses that as the safe transfer height
+
+        Move in this order:
+        Move the Z Stage up
+        Move the XY Stage across
+        Move the Z Stage Down
+        """
+        x0,y0,z0 = self.xyz0
+        x1,y1,z1 = self.xyz1
+        transfer_height = self.template.get_max_ledge()
+
+        # Move the Z stage, wait for the target height to be reached
+        self.system.inlet_z.set_z(transfer_height)
+        if not self.system.inlet_z.wait_for_target(transfer_height):
+            return False
+
+        # Move the XY Stage
+        self.system.xy_stage.set_xy([x1,y1])
+        # Return false if the stage did not move
+        if not self.system.xy_stage.wait_for_xy_target([x1,y1]):
+            return False
+
+        # Move the Z Stage back down
+        self.system.inlet_z.set_z(z1)
+        return True
+
+
+
+class StepMove(Move):
+
+    def __init__(self, system, template, xyz0, xyz1, visual=False):
+        super().__init__(system, template, xyz0, xyz1)
         self.visual = visual
         self.display_data = {}
 

@@ -29,13 +29,12 @@ class XYAbstraction(ABC):
         self._x_inversion = 1
         self._y_inversion = 1
         self.pos = [0, 0]
-        self._acceleration = 10 # mm/s2
-        self._velocity = 5 # mm/s
+        self._acceleration = 10  # mm/s2
+        self._velocity = 5  # mm/s
         self.velocity_max = 5
         self.acceleration = 20
         self.jerk = 5
         self.home = [0, 0]
-
 
     def _scale_values(self, xy):
         xy = [x / self._scale for x in xy]
@@ -118,7 +117,7 @@ class XYAbstraction(ABC):
 
     def stop(self):
         logging.warning("STOP not implemented")
-        return self.set_rel_xy([0,0])
+        return self.set_rel_xy([0, 0])
 
     def get_status(self):
         """Get the position of the XY stage, satisfies the utility control get_status command"""
@@ -134,13 +133,25 @@ class XYAbstraction(ABC):
         current_pos = [prev_pos[0] + 1, prev_pos[1]]
         # Update position while moving
         st = time.time()
-        while prev_pos == current_pos and time.time()-st < 3:
+        while prev_pos == current_pos and time.time() - st < 3:
             time.sleep(0.1)
         while abs(prev_pos[0] - current_pos[0]) > tolerance or abs(prev_pos[1] - current_pos[1]) > tolerance:
             time.sleep(0.05)
             prev_pos = current_pos
             current_pos = self.read_xy()
         return current_pos
+
+    def wait_for_xy_target(self, xy, tol=0.1, timeout = 30):
+        """
+        Wait for the XY stage to reach the target allowing for some tolerance (mm)
+        """
+        st = time.time()
+        for idx, dim in enumerate(xy):
+            while abs(self.read_xy()[idx] - dim) > 0.1:
+                time.sleep(0.25)
+                if time.time()-st > timeout:
+                    return False
+        return True
 
 
 class PycromanagerXY(XYAbstraction, UtilityControl):
@@ -170,8 +181,6 @@ class PycromanagerXY(XYAbstraction, UtilityControl):
         self._y_inversion = -1
         self.lock = self.controller.lock
 
-
-
     def startup(self):
         """
         Get the device name after the configuration has been loaded.
@@ -196,12 +205,12 @@ class PycromanagerXY(XYAbstraction, UtilityControl):
         with self.lock:
             x = self.controller.core.get_x_position()
             y = self.controller.core.get_y_position()
-        self.pos = self._scale_values([x,y])
+        self.pos = self._scale_values([x, y])
         return self.pos
 
     def set_xy(self, xy):
         """Given a set of coordinates in mm, Stage will move to those coordinates"""
-        raw_xy  = self._invert_scale(xy)
+        raw_xy = self._invert_scale(xy)
         with self.lock:
             self.controller.core.set_xy_position(self._dev_name, raw_xy[0], raw_xy[1])
 
@@ -221,14 +230,12 @@ class PycromanagerXY(XYAbstraction, UtilityControl):
             self.controller.core.set_origin_xy(self._dev_name)
 
 
-
-
 class MicroManagerXY(XYAbstraction, UtilityControl):
 
     def __init__(self, controller, role):
         super().__init__(controller, role)
         self._dev_name = 'N/A'
-        self._scale = 1000 # Micromanager records units in um
+        self._scale = 1000  # Micromanager records units in um
         self._x_inversion = -1
         self._y_inversion = -1
 
@@ -327,6 +334,7 @@ class PriorXY(XYAbstraction, UtilityControl):
         self._x_inversion = -1
         self._y_inversion = -1
         self._scale = 1000
+
     def startup(self):
         """Prepare the stage for startup"""
         self.read_xy()
@@ -374,7 +382,7 @@ class PriorXY(XYAbstraction, UtilityControl):
         :return:
         """
         self.velocity_max = velocity
-        self.controller.send_command('SMS,{:.3f},u \r '.format(velocity*1000))
+        self.controller.send_command('SMS,{:.3f},u \r '.format(velocity * 1000))
         return
 
     def set_acceleration(self, acceleration):
@@ -385,7 +393,7 @@ class PriorXY(XYAbstraction, UtilityControl):
         :return:
         """
         self.acceleration = acceleration
-        self.controller.send_command(f'SAS,{acceleration/1000},u \r')
+        self.controller.send_command(f'SAS,{acceleration / 1000},u \r')
         return
 
     def get_acceleration(self):
@@ -403,9 +411,8 @@ class PriorXY(XYAbstraction, UtilityControl):
         Controller reads back speed in um/s, we convert this to mm/s
         :return:
         """
-        self.velocity_max = float(self.controller.send_command('SMS,u \r')) / 1000 #
+        self.velocity_max = float(self.controller.send_command('SMS,u \r')) / 1000  #
         return self.velocity_max
-
 
 
 class XYControlFactory(UtilityFactory):
@@ -416,6 +423,8 @@ class XYControlFactory(UtilityFactory):
             return MicroManagerXY(controller, role)
         elif controller.id == 'prior':
             return PriorXY(controller, role)
+        elif controller.id == 'pycromanager':
+            return PycromanagerXY(controller, role)
         else:
             return None
 

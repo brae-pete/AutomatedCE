@@ -116,6 +116,20 @@ class ZAbstraction(ABC):
             pos = new_pos
             new_pos = self.read_z()
 
+    def wait_for_target(self, z, timeout=30):
+        """
+        :param z: target height in mm to wait for
+        :param timeout: time to wait before returning False
+
+        :return : True or False depending if the target was reached
+        """
+        st = time.time()
+        while self.read_z() < z - 0.1:
+            time.sleep(0.25)
+            if time.time() - st > timeout:
+                return False
+        return True
+
     @abstractmethod
     def stop(self):
         """
@@ -566,6 +580,8 @@ class ZControlFactory(UtilityFactory):
             return KinesisZ(controller, role)
         elif controller.id == 'simulator':
             return SimulatedZ(controller, role)
+        elif controller.id == 'pycromanager':
+            return PycromanagerZ(controller, role)
         else:
             return None
 
