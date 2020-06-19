@@ -12,7 +12,7 @@ cd \path\to\env\txtfile\
 
 conda create --name CEpy37 --file barracuda-env.txt
 conda activate CEpy37
-python -m pip install opencv_python nidaqmx onnx onnx_tf pythonnnet
+python -m pip install opencv_python nidaqmx
 conda deactivate
 ~~~
 
