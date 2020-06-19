@@ -29,25 +29,11 @@ If you are using PyCharm (Python IDE) you can open the BarracudaQt project folde
 
 ### Micromanager Installation (if using Micromangaer to control hardware and/or get images)
 
-Download micromanager from https://micro-manager.org/
+Install the latest version of Micro-Manager 2 (https://micro-manager.org/wiki/Version_2.0)
 
-In the Anaconda prompt create a separate python environment to control micromanger. At the time the CE instrument was created micromanager did not have python 3 support. In order to use micromanager we create a separate subprocess in python 2 and transfer data and commands back and port over using the multiprocessing module. 
+Open Mincro-Manager 2, and under Tools>>Options select the box titled "Run on Server 4762".
 
-Create the separate python environment for micromanager. 
-
-~~~
-conda create --name CEpy27 python=2.7
-conda activate CEpy27
-conda install numpy
-conda deactivate
-~~~
-
-Under the config folder. Place the configuration file for your stage, camera, or whatever hardware object you wish to use Micro-Manager for. Config files for Nikon Eclipse Ti, QCam3, and CoolSnap (PVCam) are already present. 
-
-Under Hardware>>MicroControlClient.py change the PYTHON2_PATH variable to the python 2 executable for the CEpy27 environment.
-For example a common location will be: "C:\Users\UserName\Miniconda3\envs\CEPy27\python"
-
-Also in the same file you will need to update the filepath for the MicroControlServer.py file. This probably could be fixed in the future to where it found it automatically
+Before you open the controller for pycromanager, make sure Micro-Manager 2 is running. 
 
 ### Thorlabs Kinesis
 
