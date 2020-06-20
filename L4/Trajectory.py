@@ -29,7 +29,7 @@ class Move(ABC):
         """
 
 
-class SafeMove(Move):
+class StepMove(Move):
 
     def __init__(self, system, template, xyz0, xyz1):
         super().__init__(system, template, xyz0, xyz1)
@@ -54,9 +54,10 @@ class SafeMove(Move):
             return False
 
         # Move the XY Stage
+        print("Coordinates are: ",x1,y1)
         self.system.xy_stage.set_xy([x1,y1])
         # Return false if the stage did not move
-        if not self.system.xy_stage.wait_for_xy_target([x1,y1]):
+        if not self.system.xy_stage.wait_for_xy_target([x1, y1]):
             return False
 
         # Move the Z Stage back down
@@ -65,7 +66,7 @@ class SafeMove(Move):
 
 
 
-class StepMove(Move):
+class SafeMove(Move):
 
     def __init__(self, system, template, xyz0, xyz1, visual=False):
         super().__init__(system, template, xyz0, xyz1)
@@ -131,6 +132,7 @@ class StepMove(Move):
         if self.visual:
             self.visualize(xx, yy, ledge_z, zz, zz_decrease, xy_stage_delay, z_stage_down_delay)
 
+        return True
     def visualize(self, xx, yy, ledge_z, zz, zz_decrease, xy_delay, z_delay):
         self.display_data['xx'] = xx
         self.display_data['yy'] = yy

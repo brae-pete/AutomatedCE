@@ -34,6 +34,8 @@ def get_standard_unit(value):
     units = {'cm': 10, 'kv': 1000, 'min': 60}
     # Get Height (Assume mm and s)
     value = value.split(' ')
+    assert value[0] != '', "Check method, one or more fields left blank on a step."
+
     value[0] = eval(value[0])
     if len(value) > 1:
         if value[1] in units.keys():
@@ -180,6 +182,7 @@ class BasicTemplateShape(object):
         :return:
         """
         # remove white space
+        line = line.replace('[','').replace(']','')
         line = line.split('\t')
         line = [x.rstrip().lstrip() for x in line]
 
@@ -352,7 +355,7 @@ class Template(object):
             zz += ledge.get_intersection(xx, yy)
         return zz
 
-    def get_max_ledge(self, xx, yy):
+    def get_max_ledge(self):
         z_max = -1
         for _, ledge in self.ledges.items():
             if ledge.height > z_max:
@@ -364,7 +367,7 @@ class AutoRun:
     """
     Class that organizes and starts the calls for an automated Run
     """
-    template: Template
+
 
     def __init__(self, system: CESystem()):
         """
@@ -384,7 +387,8 @@ class AutoRun:
         self.traced_thread.name = 'AutoRun'
         self.data_dir = get_system_var('data_dir')[0]
         self.safe_enabled = False
-
+        self.template = None
+        self.template: Template
     def add_method(self, method_file=r'default'):
         """
         Adds a method using a method config file to define the steps
@@ -413,6 +417,7 @@ class AutoRun:
         :param rep_style:
         :return:
         """
+        assert self.template is not None, "Template has not been defined"
         rep_style = self.repetition_style.lower()
         self.repetitions = int(self.repetitions)
         if rep_style == 'sequence':  # run through all methods in the list before repeating
@@ -424,7 +429,7 @@ class AutoRun:
         elif rep_style == 'method':  # repeat each method before moving to the next method in the list
             for method in self.methods:
                 for rep in range(self.repetitions):
-                    for step in method:
+                    for step in method.method_steps:
                         self._queue.put((step, rep))
 
         self.traced_thread = Util.TracedThread(target=self._run)

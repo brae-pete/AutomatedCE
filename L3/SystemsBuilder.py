@@ -345,14 +345,14 @@ class SystemAbstraction(ABC):
     def __init__(self):
         self.controllers = {}
         self.utilities = {}
-    def load_config(self, config_file="Default"):
+    def load_config(self, config_file="default"):
         """
         Load the controllers and utitily objects, and assign them to the CE System utilities.
         :param config_file:
         :return:
         """
-        if config_file == "Default":
-            config_file = os.path.abspath(os.path.join(os.getcwd(), '..', 'config\\test-system.cfg'))
+        if config_file.lower() == "default":
+            config_file = os.path.abspath(os.path.join(os.getcwd(), 'config\\test-system.cfg'))
 
         director = ConcreteDirector()
         director.construct(config_file)
