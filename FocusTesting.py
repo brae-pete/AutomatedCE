@@ -208,7 +208,7 @@ class CellFocusAuxillary(ZStackData):
 
     Records position of the xy, objective_height, img_folder into a pandas dataframe (exported to csv).
 
-    Images are organized into folders based off of the time of acquisition.
+    Images are organized into folders based off of the time_data of acquisition.
     """
 
     _focus_dir = os.getcwd() + "\\focus_data"
