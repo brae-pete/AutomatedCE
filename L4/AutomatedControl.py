@@ -182,7 +182,7 @@ class BasicTemplateShape(object):
         :return:
         """
         # remove white space
-        line = line.replace('[','').replace(']','')
+        line = line.replace('[', '').replace(']', '')
         line = line.split('\t')
         line = [x.rstrip().lstrip() for x in line]
 
@@ -368,7 +368,6 @@ class AutoRun:
     Class that organizes and starts the calls for an automated Run
     """
 
-
     def __init__(self, system: CESystem()):
         """
         Creates and AutoRun object that groups templates and methods together and coordinates the actions on a
@@ -389,6 +388,8 @@ class AutoRun:
         self.safe_enabled = False
         self.template = None
         self.template: Template
+        self.path_information = PathTrace()
+
     def add_method(self, method_file=r'default'):
         """
         Adds a method using a method config file to define the steps
@@ -410,7 +411,7 @@ class AutoRun:
             template_file = os.path.abspath(os.path.join(os.getcwd(), '..', 'config\\template-test.txt'))
         self.template = Template(template_file)
 
-    def start_run(self):
+    def start_run(self, simulated=False):
         """
         Start a run. This creates a thread-safe queue object and sets the run flag.
         A run can be created in two style types. The first will run
@@ -432,7 +433,7 @@ class AutoRun:
                     for step in method.method_steps:
                         self._queue.put((step, rep))
 
-        self.traced_thread = Util.TracedThread(target=self._run)
+        self.traced_thread = Util.TracedThread(target=self._run, args=(simulated,))
         self.traced_thread.name = 'AutoRun'
         self.traced_thread.start()
         self.is_running.set()
@@ -441,7 +442,7 @@ class AutoRun:
         if not state:
             logging.error("Error while moving during {}. Aborting".format(process))
 
-    def _run(self):
+    def _run(self, simulated=False):
         """
         Makes the individual step calls for a compiled method sequence.
         :return:
@@ -450,25 +451,28 @@ class AutoRun:
             (step, rep) = self._queue.get()
 
             # Get the move positions
-            xyz0, xyz1 = self._get_move_positions(step, rep)
+            xyz0, xyz1, well_name = self._get_move_positions(step, rep)
 
+            self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
+            self.path_information.append(f"Preparing for move to well {well_name}")
             # Move the System Safely
             if self.safe_enabled:
-                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1).move()
+                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated, self.path_information).move()
             else:
-                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1).move()
-
+                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated, self.path_information).move()
             self.error_message(state, "System Move")
 
             # Move the inlet
-            self.system.outlet_z.set_z(step.outlet_height)
+            self.path_information.append(f"Outlet Height set to {step.outlet_height} mm")
+            if not simulated:
+                self.system.outlet_z.set_z(step.outlet_height)
 
-            # Wait for both Z Stages to stop moving
-            state = self.system.inlet_z.wait_for_target(xyz1[2])
-            self.error_message(state, "Inlet Move Down")
+                # Wait for both Z Stages to stop moving
+                state = self.system.inlet_z.wait_for_target(xyz1[2])
+                self.error_message(state, "Inlet Move Down")
 
-            state = self.system.outlet_z.wait_for_target(step.outlet_height)
-            self.error_message(state, "Outlet Move Down")
+                state = self.system.outlet_z.wait_for_target(step.outlet_height)
+                self.error_message(state, "Outlet Move Down")
 
             # Run the special command for injections here
             after_special = True  # change this to false if we don't need to run the timed part of the step after
@@ -477,12 +481,13 @@ class AutoRun:
 
             # Run the timed step
             if after_special:
-                self._timed_step(step)
-
+                self._timed_step(step, simulated)
             # Output the electropherogram data
             if step.data:
                 file_path = FileIO.get_data_filename(step.name, self.data_dir)
-                FileIO.OutputElectropherogram(self.system, file_path)
+                self.path_information.append(f"Saving Data to {file_path}")
+                if not simulated:
+                    FileIO.OutputElectropherogram(self.system, file_path)
 
     def _get_move_positions(self, step, rep):
         """
@@ -500,9 +505,9 @@ class AutoRun:
         z = step.inlet_height
         xyz1 = [x, y, z]
 
-        return xyz0, xyz1
+        return xyz0, xyz1, step.well_location[rep % len(step.well_location)]
 
-    def _timed_step(self, step):
+    def _timed_step(self, step, simulated):
         """
         Run a timed step, applying the pressure, vacuum, and voltage as specified by the step
         :param step:
@@ -512,25 +517,32 @@ class AutoRun:
         st = time.time()
 
         # Apply Hydrodynamic Forces
-        if step.pressure:
-            self.system.outlet_pressure.rinse_pressure()
-        elif step.vacuum:
-            self.system.outlet_pressure.rinse_vacuum()
-        else:
-            self.system.outlet_pressure.release()
+        self.path_information.append(f"Pressure state changed to {step.pressure}, Vaccuum state changed to {step.vacuum}")
+        if not simulated:
+            if step.pressure:
+                self.system.outlet_pressure.rinse_pressure()
+            elif step.vacuum:
+                self.system.outlet_pressure.rinse_vacuum()
+            else:
+                self.system.outlet_pressure.release()
 
         # Apply Electrokinetic Forces
-        self.system.high_voltage.set_voltage(step.voltage, channel='default')
-        self.system.high_voltage.start()
-        self.system.detector.start()
-        logging.info("Starting timed run at {}".format(time.time() - st))
+        self.path_information.append(f"Voltage set to {step.voltage}")
+        if not simulated:
+            self.system.high_voltage.set_voltage(step.voltage, channel='default')
+            self.system.high_voltage.start()
+            self.system.detector.start()
+
+        self.path_information.append("Timed run for {} s".format(step.time))
         # Wait while running
-        while time.time() - st < step.time and self.is_running.is_set():
+        while time.time() - st < step.time and self.is_running.is_set() and not simulated:
             time.sleep(0.05)
 
         # Stop applying the forces
-        self.system.high_voltage.stop()
-        self.system.detector.stop()
+        self.path_information.append(f"Stopping timed run after {time.time()-st} s")
+        if not simulated:
+            self.system.high_voltage.stop()
+            self.system.detector.stop()
         logging.info("Stopping timed run at {}".format(time.time() - st))
         threading.Thread(target=self.system.outlet_pressure.stop, name='PressureStop').start()
 
@@ -545,6 +557,44 @@ class AutoRun:
         self.traced_thread.kill()
         self.traced_thread.join()
         self.system.stop_ce()
+
+
+class PathTrace:
+    """
+    Stores the path (all moves and positions) of the current run and calls the assined callbacks when new information
+    is added to the history.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._callbacks = []
+        self.path = []
+
+    def add_callback(self, function):
+        """
+        New callback function is added to the list of callbacks
+        :param function: function to call, should accept single string parameter
+        """
+        self._callbacks.append(function)
+
+    def append(self, information: str):
+        """
+        Adds new piece of information to the list of path information. Sends the information to the callbacks.
+        :param information:
+        :return:
+        """
+        self.path.append(information)
+        for fnc in self._callbacks:
+            fnc(information)
+
+    def extend(self, data):
+        """
+        Adds multiple bits of data to the list of path information, sends the information to the callbacks
+        :param data: list of string information to be added
+        :return:
+        """
+        for information in data:
+            self.append(data)
 
 
 class GateSpecial:

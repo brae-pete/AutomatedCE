@@ -16,23 +16,24 @@ import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 
 class Move(ABC):
-    def __init__(self, system, template, xyz0, xyz1):
+    def __init__(self, system, template, xyz0, xyz1, simulated=False, path_information=[]):
         self.system = system
         self.template = template
         self.xyz0 = xyz0
         self.xyz1 = xyz1
-
+        self.simulated = simulated
+        self.path_information = path_information
     @abstractmethod
     def move(self):
         """
         Logic to move from one location to the next in a CE run should be called here
         """
-
+        pass
 
 class StepMove(Move):
 
-    def __init__(self, system, template, xyz0, xyz1):
-        super().__init__(system, template, xyz0, xyz1)
+    def __init__(self, system, template, xyz0, xyz1, simulated, path_information):
+        super().__init__(system, template, xyz0, xyz1, simulated,  path_information)
 
     def move(self):
         """
@@ -44,32 +45,38 @@ class StepMove(Move):
         Move the XY Stage across
         Move the Z Stage Down
         """
+
         x0,y0,z0 = self.xyz0
         x1,y1,z1 = self.xyz1
         transfer_height = self.template.get_max_ledge()
 
         # Move the Z stage, wait for the target height to be reached
-        self.system.inlet_z.set_z(transfer_height)
-        if not self.system.inlet_z.wait_for_target(transfer_height):
-            return False
+        self.path_information.append(f"Moving capillary Z stage to {transfer_height} mm")
+        if not self.simulated:
+            self.system.inlet_z.set_z(transfer_height)
+            if not self.system.inlet_z.wait_for_target(transfer_height):
+                return False
 
         # Move the XY Stage
-        print("Coordinates are: ",x1,y1)
-        self.system.xy_stage.set_xy([x1,y1])
-        # Return false if the stage did not move
-        if not self.system.xy_stage.wait_for_xy_target([x1, y1]):
-            return False
+        self.path_information.append(f"Moving Stage to {x1},{y1} mm")
+        if not self.simulated:
+            self.system.xy_stage.set_xy([x1,y1])
+            # Return false if the stage did not move
+            if not self.system.xy_stage.wait_for_xy_target([x1, y1]):
+                return False
 
         # Move the Z Stage back down
-        self.system.inlet_z.set_z(z1)
+        self.path_information.append(f"Moving capillary Z stage to {z1}")
+        if not self.simulated:
+            self.system.inlet_z.set_z(z1)
         return True
 
 
 
 class SafeMove(Move):
 
-    def __init__(self, system, template, xyz0, xyz1, visual=False):
-        super().__init__(system, template, xyz0, xyz1)
+    def __init__(self, system, template, xyz0, xyz1, simulated, path_information, visual=False):
+        super().__init__(system, template, xyz0, xyz1, simulated, path_information)
         self.visual = visual
         self.display_data = {}
 
@@ -110,7 +117,9 @@ class SafeMove(Move):
 
         # Move the XY stage (only after the capillary has increased its height sufficiently)
         st = time.time()
-        self.system.xy_stage.set_xy([x1, y1])
+        self.path_information.append(f"Moving xy stage to {x1},{y1} mm")
+        if not self.simulated:
+            self.system.xy_stage.set_xy([x1, y1])
         zz_decrease = [0]
         # Determine the decrease move step delay (moving down from our max point to final point)
         z_stage_down_delay = 0
@@ -119,20 +128,25 @@ class SafeMove(Move):
             z_stage_down_delay = self.get_delay(ledge_z, zz_decrease, increasing=False)
             while time.time() - st < z_stage_down_delay:
                 time.sleep(0.01)
-            self.system.inlet_z.set_z(z1)
+            self.path_information.append(f"Moving capillary Z stage to {z1}")
+            if not self.simulated:
+                self.system.inlet_z.set_z(z1)
 
         # We may have to lower the outlet if the user overrode the ledge height for the current location
         if z1 != self.xyz1[2]:
             time_xy = len(xx) / 1000
             while time.time() - st < time_xy:
                 time.sleep(0.01)
-            self.system.inlet_z.set_z(self.xyz1[2])
+            self.path_information.append(f"Moving capillary Z stage to {self.xyz1[2]}")
+            if not self.simulated:
+                self.system.inlet_z.set_z(self.xyz1[2])
 
         # Record data if necessary
         if self.visual:
             self.visualize(xx, yy, ledge_z, zz, zz_decrease, xy_stage_delay, z_stage_down_delay)
 
         return True
+
     def visualize(self, xx, yy, ledge_z, zz, zz_decrease, xy_delay, z_delay):
         self.display_data['xx'] = xx
         self.display_data['yy'] = yy

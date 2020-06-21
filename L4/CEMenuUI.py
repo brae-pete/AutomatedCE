@@ -15,6 +15,7 @@ class MainMenu(mui.Menu):
         2. Config Menu
         3. Start Run
         4. Stop CE
+        5. Simulate Run
         
         """
 
@@ -23,6 +24,7 @@ class MainMenu(mui.Menu):
         self.options = self.main_menu_options
         self.system = CESystem()
         self.auto_run = AutomatedControl.AutoRun(self.system)
+        self.auto_run.path_information.add_callback(print)
         self.view = None  # type: tkinter.Tk
 
         # Define Submenus
@@ -46,6 +48,9 @@ class MainMenu(mui.Menu):
         elif text == "4":
             self.system.stop_ce()
             self.auto_run.stop_run()
+        elif text == "5":
+            self.auto_run.start_run(simulated=True)
+
 
         return self
 
