@@ -209,8 +209,10 @@ class FloatWindow(PopupWindow):
         self.enter.pack()
 
     def get_value(self):
-        self.value = float(self.input.get())
-
+        try:
+            self.value = float(self.input.get())
+        except ValueError:
+            return None
 
 class IntegerWindow(PopupWindow):
 

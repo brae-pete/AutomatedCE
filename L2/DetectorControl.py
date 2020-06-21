@@ -168,7 +168,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
     def __init__(self, controller: DaqAbstraction,role,  channel):
         super().__init__(controller, role)
         self.daqcontroller.add_analog_input(channel)
-        self.daqcontroller.add_callback(self.add_data, channel, 'waveform', [])
+        self.daqcontroller.add_callback(self.add_data, [channel], 'waveform', [])
 
     def set_oversample_frequency(self, sampling_frequency, final_frequency):
         """

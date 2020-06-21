@@ -441,8 +441,8 @@ if __name__ == "__main__":
     main.system.load_config()
     main.system.open_controllers()
     main.system.startup_utilities()
-    main.auto_run.add_method(os.path.abspath(os.path.join(os.getcwd(),'var/method-test.txt')))
-    main.auto_run.set_template(os.path.abspath(os.path.join(os.getcwd(), 'var/SimpleTemplate.txt')))
+    #main.auto_run.add_method(os.path.abspath(os.path.join(os.getcwd(),'var/method-test.txt')))
+    #main.auto_run.set_template(os.path.abspath(os.path.join(os.getcwd(), 'var/SimpleTemplate.txt')))
 
     # Start the GUI part
     app = mui.Application(master=root, main_menu=main)
