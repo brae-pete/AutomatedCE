@@ -217,11 +217,11 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
 
         with self._lock:
             if filter_type == 'butter':
-                filtered = butter_lowpass_filter(self.rfu, kwargs)
+                filtered = butter_lowpass_filter(self.rfu.copy(), kwargs)
             elif filter_type == 'savgol':
-                filtered = savgol_filter(self.rfu, kwargs)
+                filtered = savgol_filter(self.rfu.copy(), kwargs)
             else:
-                filtered = self.rfu
+                filtered = self.rfu.copy()
             return {'time_data': self.time.copy(), 'rfu': filtered}
 
     def add_data(self, incoming_data, time_elapsed, *args):
@@ -231,9 +231,10 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         :param args:
         :return:
         """
-
+        print("LOG DATA")
         with self._lock:
             if self._oversample:
+                print("Oversampled Data")
                 self._add_oversampled_data(incoming_data[0], self._sampling_f / self._final_f)
             else:
                 self.rfu = np.append(self.rfu, incoming_data[0])
@@ -273,6 +274,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         Stops the daq controller  measurement process
         :return:
         """
+        self._copy_data=self.get_data()
         self.daqcontroller.stop_measurement()
 
     def startup(self):

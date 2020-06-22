@@ -543,7 +543,8 @@ class AutoRun:
         if not simulated:
             self.system.high_voltage.stop()
             self.system.detector.stop()
-        logging.info("Stopping timed run at {}".format(time.time() - st))
+
+        self.path_information.append("Stopping timed run at {}".format(time.time() - st))
         threading.Thread(target=self.system.outlet_pressure.stop, name='PressureStop').start()
 
     def stop_run(self):
