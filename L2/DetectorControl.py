@@ -29,8 +29,8 @@ def butter_lowpass_filter(data, kwargs):
         return b, a
 
     settings = {'cutoff': 3, 'fs': 10, 'order': 5, 'padlen': 24, 'padtype': 'constant'}
-    for key, value in kwargs.items():
-        settings.key = value
+    settings.update(kwargs)
+
     b, a = butter_lowpass(settings['cutoff'], settings['fs'], order=settings['order'])
     y = signal.filtfilt(b, a, data, padlen=settings['padlen'], padtype=settings['padtype'])
 
@@ -74,9 +74,9 @@ class DetectorAbstraction(ABC):
         self.rfu = np.asarray([])
         self.time = np.asarray([])
         self._lock = threading.Lock()
-        self._sampling_f = 1000
+        self._sampling_f = 10000
         self._final_f = 10
-        self._oversample = False
+        self._oversample = True
         self._oversample_buffer = np.asarray([])
         self._filter_type = [None, None]
 
@@ -231,10 +231,8 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         :param args:
         :return:
         """
-        print("LOG DATA")
         with self._lock:
             if self._oversample:
-                print("Oversampled Data")
                 self._add_oversampled_data(incoming_data[0], self._sampling_f / self._final_f)
             else:
                 self.rfu = np.append(self.rfu, incoming_data[0])
