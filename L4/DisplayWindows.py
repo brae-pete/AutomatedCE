@@ -13,7 +13,7 @@ from L3.SystemsBuilder import CESystem
 from skimage.exposure import adjust_gamma
 
 
-class DisplayAbstraction(ABC):
+class MicroscopeDisplayAbstraction(ABC):
     """
     Each Display should have a few basic commands.
 
@@ -64,7 +64,7 @@ class DisplayAbstraction(ABC):
         """
 
 
-class MatplotlibDisplay(DisplayAbstraction):
+class PLTMicroscopeDisplay(MicroscopeDisplayAbstraction):
 
     def __init__(self, system: CESystem):
         super().__init__(system)
@@ -96,7 +96,7 @@ class MatplotlibDisplay(DisplayAbstraction):
     def live_image(self):
         self.system.camera.continuous_snap()
         if self._ani_func is None:
-            self._ani_func = animation.FuncAnimation(self.fig, self._update, interval =100, blit=True)
+            self._ani_func = animation.FuncAnimation(self.fig, self._update, interval=100, blit=True)
 
     def stop_live_image(self):
         self.system.camera.stop()
@@ -119,3 +119,85 @@ class MatplotlibDisplay(DisplayAbstraction):
             return self.im,
 
 
+class CEDisplayAbstraction(ABC):
+    """
+    Displays the CE electropherogram and updates as the plot updates.
+    """
+
+    def __init__(self, detector):
+        """
+        Creates a CE display object with the following properities.
+        lock: threading lock to access data and plots in a thread safe way
+        detector: Detector object from the Utilities folder that contains a get_data function.
+        :param detector: Detector object from Utilities that contains the processed data
+        """
+        self.lock = threading.Lock()
+        self.detector = detector
+
+    @abstractmethod
+    def show(self):
+        """
+        Displays the window containing the electropherogram
+        :return:
+        """
+
+    @abstractmethod
+    def start_live_view(self):
+        """
+        Starts updating the plot's live view
+        :return:
+        """
+
+    @abstractmethod
+    def stop_live_view(self):
+        """
+        Stops updating the plots live view
+        :return:
+        """
+
+    @abstractmethod
+    def add_trace(self, filename, **kwargs):
+        """
+        Adds an electropherogram trace from previously acquired data
+        :return:
+        """
+
+    @abstractmethod
+    def remove_trace(self, **kwargs):
+        """
+        Removes all electropherogram traces from the plots
+        :param kwargs:
+        :return:
+        """
+
+
+class PLTCEDisplay(CEDisplayAbstraction):
+
+    def __init__(self, detector):
+        super().__init__(detector)
+        self.fig = None
+        self.img_ax = None
+        self.show()
+
+    def show(self):
+        """
+        Creates a matplot figure and defines the figure and image axes.
+        :return:
+        """
+        self.fig = fig = plt.figure()
+        gs = fig.add_gridspec(10, 1)
+        self.img_ax = fig.add_subplot(gs[0:9])
+        self.img_ax.set_title("CE Live View")
+        plt.show()
+
+    def start_live_view(self):
+        pass
+
+    def stop_live_view(self):
+        pass
+
+    def add_trace(self, filename, **kwargs):
+        pass
+
+    def remove_trace(self, **kwargs):
+        pass

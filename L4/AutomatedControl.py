@@ -768,7 +768,7 @@ class TemplateMaker:
             for name, info in self.wells.items():
                 shape, size, xy1 = info
                 f_out.write(f"{name}\t{shape}\t{size}\t{xy1}\n")
-            f_out.write("LEDGES\nName\tShape\tSize\tXY\nHeight\n")
+            f_out.write("LEDGES\nName\tShape\tSize\tXY\tHeight\n")
             for name, info in self.ledges.items():
                 shape, size, xy, height = info
                 f_out.write(f"{name}\t{shape}\t{size}\t{xy}\t{height}\n")

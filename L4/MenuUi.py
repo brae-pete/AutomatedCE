@@ -248,7 +248,7 @@ class Application(ttk.Frame):
         # Set up the main menu and set our object to the main_menu view property
         self.menu = main_menu
         self.menu.view = self.master
-
+        self._main = main_menu
         self.root = tkinter.Tk()
         self.pack()
         self.create_widgets(self.menu)

@@ -74,7 +74,7 @@ class DetectorAbstraction(ABC):
         self.rfu = np.asarray([])
         self.time = np.asarray([])
         self._lock = threading.Lock()
-        self._sampling_f = 10000
+        self._sampling_f = 100000
         self._final_f = 10
         self._oversample = True
         self._oversample_buffer = np.asarray([])
@@ -169,6 +169,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         super().__init__(controller, role)
         self.daqcontroller.add_analog_input(channel)
         self.daqcontroller.add_callback(self.add_data, [channel], 'waveform', [])
+        self.set_oversample_frequency(100000,10)
 
     def set_oversample_frequency(self, sampling_frequency, final_frequency):
         """
@@ -251,6 +252,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         """
         self._oversample_buffer = np.append(self._oversample_buffer, data)
         sample_n = int(sample_n)
+        print(sample_n)
         while len(self._oversample_buffer) >= sample_n:
             self.rfu = np.append(self.rfu, np.mean(self._oversample_buffer[0:sample_n]))
             self._oversample_buffer = np.delete(self._oversample_buffer, np.s_[0:sample_n])
