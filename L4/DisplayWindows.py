@@ -1,6 +1,7 @@
 """
 Modules for displaying images from a microscope. Live or snapped.
 """
+import logging
 import queue
 import threading
 from abc import ABC, abstractmethod
@@ -124,15 +125,17 @@ class CEDisplayAbstraction(ABC):
     Displays the CE electropherogram and updates as the plot updates.
     """
 
-    def __init__(self, detector):
+    def __init__(self, detector, voltage_supply):
         """
         Creates a CE display object with the following properities.
         lock: threading lock to access data and plots in a thread safe way
         detector: Detector object from the Utilities folder that contains a get_data function.
         :param detector: Detector object from Utilities that contains the processed data
+        :param voltage_supply: Power supply object from utilities that contains current and voltage information
         """
         self.lock = threading.Lock()
         self.detector = detector
+        self.voltage_supply = voltage_supply
 
     @abstractmethod
     def show(self):
@@ -156,7 +159,7 @@ class CEDisplayAbstraction(ABC):
         """
 
     @abstractmethod
-    def add_trace(self, filename, **kwargs):
+    def add_trace(self, time_data, rfu_data, **kwargs):
         """
         Adds an electropherogram trace from previously acquired data
         :return:
@@ -173,10 +176,12 @@ class CEDisplayAbstraction(ABC):
 
 class PLTCEDisplay(CEDisplayAbstraction):
 
-    def __init__(self, detector):
-        super().__init__(detector)
+    def __init__(self, detector, voltage_supply):
+        super().__init__(detector, voltage_supply)
         self.fig = None
-        self.img_ax = None
+        self.plot_axes = []
+        self._ani_func = None
+        self._artists = []
         self.show()
 
     def show(self):
@@ -186,18 +191,76 @@ class PLTCEDisplay(CEDisplayAbstraction):
         """
         self.fig = fig = plt.figure()
         gs = fig.add_gridspec(10, 1)
-        self.img_ax = fig.add_subplot(gs[0:9])
-        self.img_ax.set_title("CE Live View")
-        plt.show()
+        ax1 = fig.add_subplot(gs[0:9])
+        ax2 = ax1.twinx()
+        ax1.set_ylabel('PMT (V)')
+        ax2.set_ylabel('Current (uA)')
+        self._artists = []
+        self._artists.append(ax1.plot([0], [0], c='forestgreen')[0])
+        self._artists.append(ax2.plot([0], [0], c='darkorange')[0])
+        self.plot_axes = [ax1, ax2]
+        ax1.set_title("CE Live View")
+        plt.show(block=False)
 
     def start_live_view(self):
-        pass
+        """
+        Create the animation function which will update automatically as long
+        as there is a reference to it.
+        :return:
+        """
+        if self._ani_func is None:
+            self._ani_func = animation.FuncAnimation(self.fig, self._animate, interval=500, blit=False)
+        logging.debug("Started")
+        self.fig.canvas.draw()
 
     def stop_live_view(self):
-        pass
+        """
+        Stop the animation function
+        being updated.
+        :return:
+        """
+        self._ani_func.event_source.stop()
+        self._ani_func = None
 
-    def add_trace(self, filename, **kwargs):
-        pass
+    def add_trace(self, time_data, rfu_data, **kwargs):
+        """
+        Adds electropherogram with a given filename to the plot.
+        Adds to the list of artists (beyond the first two default artists)
+        :param time_data: list of time points to plot
+        :param rfu_data: list of fluorescent data points to plot
+        :param kwargs: matplotlib plot keywords
+        :return:
+        """
+        settings = {'label': 'trace'}
+        settings.update(**kwargs)
+        with self.lock:
+            ax1 = self.plot_axes[0]
+            self._artists.append(ax1.plot(time_data, rfu_data, **settings)[0])
 
     def remove_trace(self, **kwargs):
-        pass
+        """
+        Removes all auxillary traces from the electropherograms
+        :param kwargs:
+        :return:
+        """
+        with self.lock:
+            self._artists = self._artists[0:2]
+
+    def _animate(self, *args):
+        """
+        Gets data from the detector and plots it on the plotting axes.
+        Data object from detector is a dictionary with keys being either Time or RFU
+
+        :param args:
+        :return: list of artists for animation function
+        """
+
+        data = self.detector.get_data()
+        power_data = self.voltage_supply.get_data()
+        ax1, ax2 = self.plot_axes[0:2]
+        ax1.set_xlim(min(data['time_data']),max(data['time_data']))
+        ax1.set_ylim(min(data['rfu'])*0.95, max(data['rfu']*1.05))
+        ax2.set_ylim(min(power_data['current'])*0.95, max(power_data['current'])*1.05)
+        self._artists[0].set_data(data['time_data'], data['rfu'])
+        self._artists[1].set_data(power_data['time_data'], power_data['current'])
+        return self._artists

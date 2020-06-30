@@ -252,7 +252,6 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         """
         self._oversample_buffer = np.append(self._oversample_buffer, data)
         sample_n = int(sample_n)
-        print(sample_n)
         while len(self._oversample_buffer) >= sample_n:
             self.rfu = np.append(self.rfu, np.mean(self._oversample_buffer[0:sample_n]))
             self._oversample_buffer = np.delete(self._oversample_buffer, np.s_[0:sample_n])

@@ -112,6 +112,13 @@ class Menu(ABC):
         else:
             return False, self
 
+    def setup(self):
+        """
+        Any code that may need the root application reference can be executed inside the setup method
+        :return:
+        """
+        pass
+
 
 # Some helpful entry windows
 def get_float_value(msg:str, root:tkinter.Tk, exit_value=None):
@@ -171,6 +178,8 @@ def get_options_value(msg:str, root:tkinter.Tk, options: list, exit_value=None):
     return window.value
 
 
+
+
 class PopupWindow(ABC):
 
     def __init__(self, msg, ui_master, exit_value=None):
@@ -205,7 +214,6 @@ class FloatWindow(PopupWindow):
         self.input = ttk.Spinbox(self.top, increment=0.1, format="%9.3f")
         self.input.pack()
         self.input.focus_set()
-
         self.enter.pack()
 
     def get_value(self):
@@ -252,6 +260,7 @@ class Application(ttk.Frame):
         self.root = tkinter.Tk()
         self.pack()
         self.create_widgets(self.menu)
+        self.menu.setup()
 
     def create_widgets(self, menu):
         self.message = tkinter.Text(self)
