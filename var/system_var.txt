@@ -1,2 +1,1 @@
-python2path,r"CEpy27\python.exe"
-data_dir,"Default"
+kinesis,"C:\\Program Files\\Thorlabs\\Kinesis"

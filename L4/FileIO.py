@@ -92,14 +92,17 @@ class OutputElectropherogram:
         :param system:
         :return:
         """
-        system.detector.stop()
         detector_data = system.detector.get_data()
         power_data = system.high_voltage.get_data()
         power_time = power_data['time_data']
         detector_time = detector_data['time_data']
         # We need a power data to be as long as the detector data, so we add in one more time_data pair to be sure
-        if max(power_time) < max(detector_time):
+        # thus replace the start and stop of the power time to match the detector time if the detector time has
+        # more data points
+        if power_time[-1] < detector_time[-1]:
             power_time[-1] = detector_time[-1]
+        if power_time[0] > detector_time[0]:
+            power_time[0] = detector_time[0]
 
         # We need to interpolate data values from the power supply (Power supply may not be sampled at the same rate)
         if len(power_time) > 0:
@@ -107,6 +110,7 @@ class OutputElectropherogram:
                 if len(power_data[channel])>3:
                     fx = interp1d(power_time, power_data[channel], kind='cubic')
                     power_data[channel] = fx(detector_time)
+
                 else:
                     power_data[channel] = np.pad(power_data[channel], (0, len(detector_time)-len(power_data[channel])),
                                                  'edge')

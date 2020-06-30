@@ -164,8 +164,10 @@ class ArduinoController(ControllerAbstraction):
         # todo output to logger when there is no response
         try:
             return response[-1].decode()
-        except AttributeError:
+        except AttributeError or IndexError:
             return response
+
+
 
 class PycromanagerController(ControllerAbstraction):
     """
