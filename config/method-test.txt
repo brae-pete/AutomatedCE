@@ -4,5 +4,5 @@
 METHOD									
 name	location	outlet_height	inlet_height	pressure	vacuum	voltage	time	special	data
 rinse	well_1	-4 cm	7 mm	1	0	0.0 kV	6 s		0
-pressure	well_2	 -5 cm	15 mm	0	0	0.5 kV	0.25 min		0
-separate	sample_1	-3 cm	6	0	0	15	0	manual_cell	1
+pressure	well_2	 -5 cm	15 mm	0	0	0.5 kV	6 s		0
+separate	sample_1	-3 cm	6	0	0	6 s	0	manual_cell	1

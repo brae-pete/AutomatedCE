@@ -483,7 +483,7 @@ class AutoRun:
 
             # Run the special command for injections here
             if step.special == "manual_cell":
-                state = self.wait_to_continue('manual_cell', "press continue when ready")
+                state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
                 self.error_message(state,"Manual Cell Injection")
 
             after_special = True  # change this to false if we don't need to run the timed part of the step after
@@ -492,7 +492,7 @@ class AutoRun:
 
             # Run the timed step
             if after_special:
-                self._timed_step(step, simulated)
+                self.timed_step(step, simulated)
             # Output the electropherogram data
             if step.data:
                 file_path = FileIO.get_data_filename(step.name, self.data_dir)
@@ -518,7 +518,7 @@ class AutoRun:
 
         return xyz0, xyz1, step.well_location[rep % len(step.well_location)]
 
-    def _timed_step(self, step, simulated):
+    def timed_step(self, step, simulated):
         """
         Run a timed step, applying the pressure, vacuum, and voltage as specified by the step
         :param step:
@@ -567,10 +567,10 @@ class AutoRun:
         """
         # Kill the thread using the trace and wait till the thread has been killed before continuing
         self.traced_thread.kill()
-        self.traced_thread.join()
+
         self.system.stop_ce()
 
-    def wait_to_continue(self, key, message):
+    def wait_to_continue(self, key, message, step, simulated):
         """Calls the continue_callbacks  for the user to set the continue_event before continuing
         There are two methods that could be employed. The first is the callback may return True when ready
         to continue or None or False when the run should be aborted. The callback should take a string that can
@@ -583,12 +583,12 @@ class AutoRun:
 
         # Check if we can run the callback message
         if key in self.continue_callbacks.keys():
-            resp = self.continue_callbacks[key](message)
-            if resp is None or resp is False:
-                return False
-            elif resp:
-                return True
-
+            resp = self.continue_callbacks[key](message,step, simulated)
+            if type(resp) is bool:
+                if resp is False:
+                    return False
+                elif resp:
+                    return True
         # otherwise use the flag
         while not self.continue_event.is_set():
             time.sleep(0.2)

@@ -1,6 +1,9 @@
+import logging
+import queue
 import time
 import tkinter
-from tkinter import filedialog
+from queue import Queue
+from tkinter import filedialog, ttk
 from tkinter import messagebox
 from L4 import MenuUi as mui
 from L3.SystemsBuilder import CESystem
@@ -27,14 +30,20 @@ class MainMenu(mui.Menu):
         self.auto_run = AutomatedControl.AutoRun(self.system)
         self.auto_run.path_information.add_callback(print)
         self.view = None  # type: tkinter.Tk
-
+        self.menu = None
         # Define Submenus
         self.system_menu = SystemMenu(self, self)
         self.config_menu = ConfigMenu(self, self)
 
+    def setup(self):
         # Assign Callbacks
         self.auto_run.continue_callbacks['manual_cell'] = lambda msg: messagebox.askokcancel(
             "Manual Cell Lysis and Loading", msg)
+
+        self.menu = ManualCellPopup(self.view, None,None,True, self.auto_run, self.system)
+        self.auto_run.continue_callbacks['manual_cell'] = lambda message, step, simulation:self.menu.update_step(message, step, simulation)
+        self.menu.top.withdraw()
+
 
     def interpret(self, text: str):
         """
@@ -433,6 +442,103 @@ class NewTemplateMenu(mui.Menu):
         return self
 
 
+class ManualCellPopup:
+
+    def __init__(self, ui_parent, msg, step,simulated, auto_run:AutomatedControl.AutoRun, system:CESystem):
+        top = self.top = tkinter.Toplevel(ui_parent)
+        self.parent = ui_parent
+        self.event = auto_run.continue_event
+        self.auto_run = auto_run
+        self.system = system
+        self.step = step
+        self.simulated = simulated
+
+        # We will need to use a Queue to let the parent window when to show this window
+        self.parent.after(100, self.check_show)
+        self.queue = Queue()
+
+        # Create the widgets
+        self.label = ttk.Label(top, text=msg)
+        self.label.pack()
+        self.hold = tkinter.IntVar()
+        self.hold_btn = ttk.Checkbutton(top, text='Hold and Load',
+                              variable=self.hold)
+        self.hold_btn.pack()
+        self.timed_btn = ttk.Button(top, text='Timed Load', command =self.timed_injection)
+        self.timed_btn.pack()
+        self.fire_btn = ttk.Button(top, text='Fire', command=self.fire)
+        self.fire_btn.pack()
+        self.continue_btn1 = ttk.Button(top, text='Continue', command=self.close_and_continue)
+        self.continue_btn1.pack()
+
+        self.top.protocol("WM_DELETE_WINDOW", self.exit)
+        self.hold.trace("w",self.hold_injection)
+        self.total_time = 0
+        self._last_hold_start_time = time.time()
+
+    def check_show(self, *args):
+        if not self.queue.empty():
+            try:
+                req = self.queue.get_nowait()
+
+                if req == 'show':
+                    self.top.deiconify()
+                elif req == 'hide':
+                    self.top.withdraw()
+            except queue.Empty:
+                logging.debug("Request is empty")
+        self.parent.after(100, self.check_show)
+
+    def fire(self, *args):
+        self.system.lysis_laser.laser_fire()
+
+    def timed_injection(self, *args):
+        """
+        Runs a timed injection
+        :param args:
+        :return:
+        """
+        self.auto_run.timed_step(self.step, simulated=self.simulated)
+
+    def hold_injection(self, *args):
+        """
+        Checks if the state is 0 or 1
+        :param args:
+        :return:
+        """
+        if self.hold.get() == 1:
+            self._last_hold_start_time = time.time()
+            if not self.simulated:
+                self.system.high_voltage.set_voltage(self.step.voltage)
+                self.system.high_voltage.start()
+                self.system.outlet_pressure.release()
+                time.sleep(0.2)
+                self.system.lysis_laser.laser_fire()
+
+        else:
+            if not self.simulated:
+                self.system.high_voltage.stop()
+                self.system.outlet_pressure.seal()
+            self.total_time += (time.time()-self._last_hold_start_time)
+
+    def close_and_continue(self):
+        """Close the window and set the continue event"""
+        self.event.set()
+        self.queue.put('hide')
+
+    def exit(self):
+        """When the window closes check if the event has been set, if not stop the run"""
+
+        if not self.event.is_set():
+
+            self.auto_run.stop_run()
+        self.queue.put('hide')
+
+    def update_step(self, message, step, simulation):
+        self.step = step
+        self.simulated = simulation
+        self.queue.put('show')
+
 if __name__ == "__main__":
 
     import os
@@ -447,8 +553,8 @@ if __name__ == "__main__":
     main.system.load_config()
     main.system.open_controllers()
     main.system.startup_utilities()
-    #main.auto_run.add_method(os.path.abspath(os.path.join(os.getcwd(),'var/method-test.txt')))
-    #main.auto_run.set_template(os.path.abspath(os.path.join(os.getcwd(), 'var/SimpleTemplate.txt')))
+    main.auto_run.add_method(os.path.abspath(os.path.join(os.getcwd(),'config/method-test.txt')))
+    main.auto_run.set_template(os.path.abspath(os.path.join(os.getcwd(), 'config/template-test.txt')))
 
     # Start the GUI part
     app = mui.Application(master=root, main_menu=main)
