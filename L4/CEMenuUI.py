@@ -1,6 +1,7 @@
 import time
 import tkinter
 from tkinter import filedialog
+from tkinter import messagebox
 from L4 import MenuUi as mui
 from L3.SystemsBuilder import CESystem
 from L4 import AutomatedControl
@@ -30,6 +31,10 @@ class MainMenu(mui.Menu):
         # Define Submenus
         self.system_menu = SystemMenu(self, self)
         self.config_menu = ConfigMenu(self, self)
+
+        # Assign Callbacks
+        self.auto_run.continue_callbacks['manual_cell'] = lambda msg: messagebox.askokcancel(
+            "Manual Cell Lysis and Loading", msg)
 
     def interpret(self, text: str):
         """
@@ -415,6 +420,7 @@ class NewTemplateMenu(mui.Menu):
             info = mui.get_string_value('Enter any Notes for this Template: ', view)
             self._new_template.header = info
             return self
+
         elif text == '6':  # Set the sequence style
             file_path = filedialog.asksaveasfilename(defaultextension = ".txt")
             if file_path != -1 and file_path != "":

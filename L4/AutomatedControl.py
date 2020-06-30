@@ -382,6 +382,8 @@ class AutoRun:
         self.repetition_style = 'method'
         self._queue = Queue()
         self.is_running = threading.Event()
+        self.continue_event = threading.Event()
+        self.continue_callbacks = {}
         self.traced_thread = Util.TracedThread()
         self.traced_thread.name = 'AutoRun'
         self.data_dir = get_system_var('data_dir')[0]
@@ -419,8 +421,11 @@ class AutoRun:
         :return:
         """
         assert self.template is not None, "Template has not been defined"
+        # Get repeition settings
         rep_style = self.repetition_style.lower()
         self.repetitions = int(self.repetitions)
+        # Reset the queue and add the method steps according to repetition style
+        self._queue = Queue()
         if rep_style == 'sequence':  # run through all methods in the list before repeating
             for rep in range(self.repetitions):
                 for method in self.methods:
@@ -433,6 +438,7 @@ class AutoRun:
                     for step in method.method_steps:
                         self._queue.put((step, rep))
 
+        # Create a traced thread we can kill on demand
         self.traced_thread = Util.TracedThread(target=self._run, args=(simulated,))
         self.traced_thread.name = 'AutoRun'
         self.traced_thread.start()
@@ -441,6 +447,7 @@ class AutoRun:
     def error_message(self, state, process):
         if not state:
             logging.error("Error while moving during {}. Aborting".format(process))
+            self.stop_run()
 
     def _run(self, simulated=False):
         """
@@ -475,6 +482,10 @@ class AutoRun:
                 self.error_message(state, "Outlet Move Down")
 
             # Run the special command for injections here
+            if step.special == "manual_cell":
+                state = self.wait_to_continue('manual_cell', "press continue when ready")
+                self.error_message(state,"Manual Cell Injection")
+
             after_special = True  # change this to false if we don't need to run the timed part of the step after
 
             # Run the special for Gating the separation here (get peak areas and set the next collection well)
@@ -558,6 +569,30 @@ class AutoRun:
         self.traced_thread.kill()
         self.traced_thread.join()
         self.system.stop_ce()
+
+    def wait_to_continue(self, key, message):
+        """Calls the continue_callbacks  for the user to set the continue_event before continuing
+        There are two methods that could be employed. The first is the callback may return True when ready
+        to continue or None or False when the run should be aborted. The callback should take a string that can
+        be used to display the message.
+
+        The second method is to wait for the continue_event flag to be set then continue the run.
+        """
+        # Clear the flag
+        self.continue_event.clear()
+
+        # Check if we can run the callback message
+        if key in self.continue_callbacks.keys():
+            resp = self.continue_callbacks[key](message)
+            if resp is None or resp is False:
+                return False
+            elif resp:
+                return True
+
+        # otherwise use the flag
+        while not self.continue_event.is_set():
+            time.sleep(0.2)
+        return True
 
 
 class PathTrace:

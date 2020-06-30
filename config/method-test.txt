@@ -3,6 +3,6 @@
 "# Default units for outlet is cm, for inlet is mm, for voltage is kV for time is seconds, you may enter in cm, mm, kv, s, min to specify other units"""""""									
 METHOD									
 name	location	outlet_height	inlet_height	pressure	vacuum	voltage	time	special	data
-rinse	"10_a0,10_a2,10_c0"	-4 cm	7 mm	1	0	0.0 kV	6 s		0
-pressure	10_c3	 -5 cm	15 mm	0	0	0.5 kV	0.25 min		0
-separate	10_b6	-3 cm	6	0	0	15	0		1
+rinse	well_1	-4 cm	7 mm	1	0	0.0 kV	6 s		0
+pressure	well_2	 -5 cm	15 mm	0	0	0.5 kV	0.25 min		0
+separate	sample_1	-3 cm	6	0	0	15	0	manual_cell	1
