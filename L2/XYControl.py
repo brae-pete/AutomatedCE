@@ -186,10 +186,9 @@ class PycromanagerXY(XYAbstraction, UtilityControl):
         Get the device name after the configuration has been loaded.
         """
 
-        with self.lock:
-            self._dev_name = self.controller.get_device_name('XY')
+        self._dev_name = self.controller.send_command(self.controller.get_device_name,
+                                                      args=('XY',))
         logging.info(f"XY Stage Started {self._dev_name}")
-
 
     def shutdown(self):
         """
@@ -205,32 +204,33 @@ class PycromanagerXY(XYAbstraction, UtilityControl):
         Reads the X and Y position of the stage and returns that as a list in mm.
         The Nikon eclipse is not super well supported XY stage so we must request X and Y separately.
         """
-        with self.lock:
-            x = self.controller.core.get_x_position()
-            y = self.controller.core.get_y_position()
+        x = self.controller.send_command(self.controller.core.get_x_position)
+        y = self.controller.send_command(self.controller.core.get_y_position)
         self.pos = self._scale_values([x, y])
         return self.pos
 
     def set_xy(self, xy):
         """Given a set of coordinates in mm, Stage will move to those coordinates"""
         raw_xy = self._invert_scale(xy)
-        with self.lock:
-            self.controller.core.set_xy_position(self._dev_name, raw_xy[0], raw_xy[1])
+        ans = self.controller.send_command(self.controller.core.set_xy_position,
+                                           args=(self._dev_name, round(raw_xy[0]), round(raw_xy[1])))
+
 
     def set_rel_xy(self, rel_xy):
         """
         Given a relative set of coordinates in mm, move the xy stage by that amount.
         """
         raw_xy = self._invert_scale(rel_xy)
-        with self.lock:
-            self.controller.core.set_relative_xy_position(self._dev_name, raw_xy[0], raw_xy[1])
+        ans = self.controller.send_command(self.controller.core.set_relative_xy_position,
+                                           args=(self._dev_name, raw_xy[0], raw_xy[1]))
+
 
     def set_home(self):
         """
         Sets the current position as home
         """
-        with self.lock:
-            self.controller.core.set_origin_xy(self._dev_name)
+
+        ans = self.controller.send_command(self.controller.core.set_origin_xy, args=(self._dev_name))
 
 
 class MicroManagerXY(XYAbstraction, UtilityControl):
@@ -353,7 +353,9 @@ class PriorXY(XYAbstraction, UtilityControl):
 
     def read_xy(self):
         """ Read the XY position in mm """
-        response = self.controller.send_command("\r").split(',')
+        response = ['R']
+        while response[0]=='R':
+            response = self.controller.send_command("\r").split(',')
         xy = [eval(x) for x in response[0:2]]
         xy = self._scale_values(xy)
         self.pos = xy

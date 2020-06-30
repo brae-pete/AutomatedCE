@@ -164,8 +164,10 @@ class ArduinoController(ControllerAbstraction):
         # todo output to logger when there is no response
         try:
             return response[-1].decode()
-        except AttributeError:
+        except AttributeError or IndexError:
             return response
+
+
 
 class PycromanagerController(ControllerAbstraction):
     """
@@ -173,14 +175,15 @@ class PycromanagerController(ControllerAbstraction):
     support going forward.
     """
 
-    def __init__(self, port =0, config ='default'):
-        if config == 'default':
+    def __init__(self, port =0, config ='default', **kwargs):
+        if config.lower() == 'default':
             config = os.path.abspath(os.path.join(os.getcwd(), '.', 'config/DemoCam.cfg'))
         super().__init__(port)
         self.id = "pycromanager"
         self._config = config
         self._bridge = pycromanager.Bridge()
         self.core =  self._bridge.get_core()
+        self._delay_time = 0.05
 
     def open(self):
         """
@@ -198,12 +201,32 @@ class PycromanagerController(ControllerAbstraction):
         self.close()
         self.open()
 
-    def send_command(self, command):
+    def send_command(self, command, **kwargs):
         """
         All commands are available to access from the core object, and this
         is not necessary to call methods from the core.
+        Command is the function that will be called.
+        args is a list of arguments to unpack into the function call
         """
-        return None
+        settings = {'args': ()}
+        settings.update(**kwargs)
+        with self.lock:
+            args = settings['args']
+
+            try:
+                ans = command(*args)
+            except Exception as e:
+
+                if e.args[0].find('java.lang.Exception: Error in device "XY": (Error message unavailable)') >= 0:
+                    print("XY Stage could not keep up, try again...")
+                    time.sleep(self._delay_time*2)
+                    ans = command(*args)
+                else:
+                    raise e
+
+            time.sleep(self._delay_time)
+
+        return ans
 
     @staticmethod
     def get_list(java_list):

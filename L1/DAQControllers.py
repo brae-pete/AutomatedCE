@@ -48,6 +48,7 @@ class DaqAbstraction(ABC):
         self._set_ai_channels = []
         self._set_ao_channels = []
         self._rate = 1000
+        self._samples = 100
         self._total_samples = 0  # used to keep track of time_data
         self._set_voltages = {}
         self._current_voltages = {}
@@ -195,7 +196,6 @@ class SimulatedDaq(DaqAbstraction):
         if kwargs is not None:
             settings.update(kwargs)
         self._total_samples = 0
-        self._samples = 0
         self._set_do_values = OrderedDict()
         self._set_ao_voltages = []
         self._ai_channels = []
@@ -299,7 +299,7 @@ class SimulatedDaq(DaqAbstraction):
         """
 
         time_p = np.linspace(self._total_samples, self._total_samples+self._samples, self._samples, endpoint=False)
-        samples = [ np.cos(np.sum(time_p, i/self._samples * 2 * np.pi)) for i in self._ai_channels]
+        samples = [ np.cos(np.add(np.divide(time_p,(2*np.pi)), i/self._samples * 2 * np.pi)) for i in range(len(self._ai_channels))]
         samples = np.asarray(samples)
         self._total_samples += self._samples
         while time.time()-self._start_time < self._total_samples/self._samples:
@@ -383,7 +383,7 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             self._ao_task = nidaqmx.Task()
             self._total_samples = 0
             self._device = settings['Device']
-            self._samples = 0
+            self._samples = 100
             self._do_task = nidaqmx.Task()
             self._set_do_values = OrderedDict()
             self._set_ao_voltages = []

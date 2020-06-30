@@ -1,3 +1,4 @@
+import time
 import tkinter
 from tkinter import filedialog
 from L4 import MenuUi as mui
@@ -14,6 +15,7 @@ class MainMenu(mui.Menu):
         2. Config Menu
         3. Start Run
         4. Stop CE
+        5. Simulate Run
         
         """
 
@@ -22,6 +24,7 @@ class MainMenu(mui.Menu):
         self.options = self.main_menu_options
         self.system = CESystem()
         self.auto_run = AutomatedControl.AutoRun(self.system)
+        self.auto_run.path_information.add_callback(print)
         self.view = None  # type: tkinter.Tk
 
         # Define Submenus
@@ -45,6 +48,9 @@ class MainMenu(mui.Menu):
         elif text == "4":
             self.system.stop_ce()
             self.auto_run.stop_run()
+        elif text == "5":
+            self.auto_run.start_run(simulated=True)
+
 
         return self
 
@@ -79,7 +85,7 @@ class SystemMenu(mui.Menu):
 
         if text == '1':  # Load system config
             file_path = filedialog.askopenfilename()
-            if file_path != -1:
+            if file_path != -1 and file_path != "":
                 self.master.system.load_config(file_path)
                 self.header = f"Config {file_path} loaded"
             return self
@@ -290,7 +296,7 @@ class ConfigMenu(mui.Menu):
 
         if text == '1':  # Add a method file
             file_path = filedialog.askopenfilename()
-            if file_path != -1:
+            if file_path != -1 and file_path != "":
                 auto_run.add_method(file_path)
                 self.header = f"Method {file_path} loaded"
 
@@ -301,7 +307,7 @@ class ConfigMenu(mui.Menu):
 
         elif text == '3':  # Set the template file
             file_path = filedialog.askopenfilename()
-            if file_path != -1:
+            if file_path != -1 and file_path != "":
                 auto_run.set_template(file_path)
                 self.header = f"Method {file_path} loaded"
 
@@ -410,7 +416,7 @@ class NewTemplateMenu(mui.Menu):
             self._new_template.header = info
             return self
         elif text == '6':  # Set the sequence style
-            file_path = filedialog.asksaveasfilename(filetypes=".txt")
+            file_path = filedialog.asksaveasfilename(defaultextension = ".txt")
             if file_path != -1 and file_path != "":
                 self._new_template.save_to_file(file_path)
             return self
@@ -422,12 +428,21 @@ class NewTemplateMenu(mui.Menu):
 
 
 if __name__ == "__main__":
+
+    import os
+
+    resp = os.getcwd()
+    os.chdir(os.path.abspath(os.path.join(os.getcwd(), '..')))
+    print(f"new directory is: {os.getcwd()}")
     main = MainMenu()
     root = tkinter.Tk()
 
     # Skip to the step we want
     main.system.load_config()
     main.system.open_controllers()
+    main.system.startup_utilities()
+    #main.auto_run.add_method(os.path.abspath(os.path.join(os.getcwd(),'var/method-test.txt')))
+    #main.auto_run.set_template(os.path.abspath(os.path.join(os.getcwd(), 'var/SimpleTemplate.txt')))
 
     # Start the GUI part
     app = mui.Application(master=root, main_menu=main)

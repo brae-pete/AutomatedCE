@@ -29,7 +29,7 @@ def check_z(func):
         if self.min_z < z < self.max_z:
             return func(self, z)
         else:
-            logging.warning("z-set is not within bounds for z-stage {}".format(self.role))
+            logging.warning(f"z-set {z} mm is not within bounds for z-stage {self.role}")
 
     return wrapper
 
@@ -65,13 +65,13 @@ class ZAbstraction(ABC):
     def __init__(self, controller: Controllers.ControllerAbstraction, role: str):
         self.controller = controller
         self.role = role
-        self._scale = 1
+        self._scale = .10
         self.z_inversion = 1
         self._offset = 0
         self.pos = 0
         self._default_pos = 24.5
-        self.min_z = 0
-        self.max_z = 25
+        self.min_z = -0.1
+        self.max_z = 25.5
 
     def _scale_values(self, z: float):
         "Called on values read from microcontroller"
@@ -149,12 +149,12 @@ class ArduinoZ(ZAbstraction, UtilityControl):
 
     def __init__(self, controller, role, **kwargs):
         super().__init__(controller, role)
-        self._scale = 1
-        self._offset = 30
+        self._scale = 0.1
+        self._offset = 300
         self.pos = 0
-        self._default_pos = 24.5
-        self.min_z = 0
-        self.max_z = 30
+        self._default_pos = 245
+        self.min_z = 0.0
+        self.max_z = 300
         settings = {'direction': 1}
         if kwargs is not None:
             settings.update(kwargs)
@@ -210,9 +210,11 @@ class ArduinoZ(ZAbstraction, UtilityControl):
         # self.controller.send_command("M0G{}{}\n".format(1, 1))
 
         # self.wait_for_move()
-        self.max_z = 60
-        self.set_z(59.75)
-        self.max_z = 30
+        old_min, old_max = self.min_z, self.max_z
+
+        self.max_z = 600
+        self.set_z(590.75)
+        self.max_z = self.max_z
 
 
 class SimulatedZ(ZAbstraction, UtilityControl):
@@ -310,7 +312,7 @@ class PycromanagerZ(ZAbstraction, UtilityControl):
 
     def startup(self):
         """ Do nothing special on start up"""
-        self.set_z(0)
+        self.set_z(0.0)
 
     def shutdown(self):
         """ Do nothing special on shutdown """
@@ -440,6 +442,9 @@ if kinesis_load:
             super().__init__(controller, role)
             self._ser_no = controller.port
             self._lock = threading.Lock()
+            self._scale = 1
+            self.min_z = -10
+            self.max_z = 500
 
         def set_serial(self, ser_no):
             """Set the serial number for the device"""
@@ -548,9 +553,8 @@ if kinesis_load:
             logging.warning("Set home no implemented")
 
         def go_home(self):
-            """ Moves down until the stage hits the mechanical stop that specifices the 0 mm mark
-             """
-            self.set_z(0)
+            """ Moves down until the Zstage reaches its home position. """
+            threading.Thread(target=self.device.Home, args=(60000,)).start()
 
         def homing(self):
             """
