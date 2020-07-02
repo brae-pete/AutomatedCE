@@ -732,12 +732,14 @@ class TemplateMaker:
 
         x1, y1 = xy1
         x2, y2 = xy2
-        delta_x = (x2 - x1) / columns
-        delta_y = (y2 - y1) / rows
+        delta_x = (x2 - x1) / (columns-1)
+        delta_y = (y2 - y1) / (rows-1)
 
         for x, letter in zip(range(1, columns + 1), string.ascii_lowercase):
             for y in range(rows):
-                center = [x1 + delta_x * x, y1 + delta_y * y]
+                # X starts with 1 so we need to account for that
+                # Y starts with 0
+                center = [x1 + delta_x * (x-1), y1 + delta_y * y]
 
                 name = self.get_original_name(f"{label}_{letter}{y}")
                 self.wells[name] = [shape, diameter, center]

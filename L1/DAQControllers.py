@@ -503,7 +503,7 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             :return:
             """
 
-            self._samples = int(self._rate / 10)
+            self._samples = int(10**(np.round(np.log10(self._rate))-1))
             if mode.lower() == 'finite':
                 mode = nidaqmx.constants.AcquisitionType.FINITE
             else:
