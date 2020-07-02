@@ -5,10 +5,14 @@ import tkinter
 from queue import Queue
 from tkinter import filedialog, ttk
 from tkinter import messagebox
+import matplotlib
+
 from L4 import MenuUi as mui
 from L3.SystemsBuilder import CESystem
-from L4 import AutomatedControl
+from L4 import AutomatedControl, DisplayWindows
 from L2 import ZControl  # just for type hints
+
+matplotlib.use("TkAgg")
 
 
 class MainMenu(mui.Menu):
@@ -31,9 +35,11 @@ class MainMenu(mui.Menu):
         self.auto_run.path_information.add_callback(print)
         self.view = None  # type: tkinter.Tk
         self.menu = None
+        self.ce_display = None
         # Define Submenus
         self.system_menu = SystemMenu(self, self)
         self.config_menu = ConfigMenu(self, self)
+
 
     def setup(self):
         # Assign Callbacks
@@ -58,6 +64,8 @@ class MainMenu(mui.Menu):
         elif text == "2":
             return self.config_menu
         elif text == "3":
+            self.ce_display =  DisplayWindows.PLTCEDisplay(self.system)
+            self.ce_display.start_live_view()
             self.auto_run.start_run()
         elif text == "4":
             self.system.stop_ce()
@@ -558,8 +566,8 @@ if __name__ == "__main__":
     main.system.load_config()
     main.system.open_controllers()
     main.system.startup_utilities()
-    #main.auto_run.add_method(os.path.abspath(os.path.join(os.getcwd(),'config/method-test.txt')))
-    #main.auto_run.set_template(os.path.abspath(os.path.join(os.getcwd(), 'config/template-test.txt')))
+    main.auto_run.add_method(os.path.abspath(os.path.join(os.getcwd(),'var/method-test.txt')))
+    main.auto_run.set_template(os.path.abspath(os.path.join(os.getcwd(), 'var/80WellTemplate.txt')))
     main.system.load_config(r"C:\Users\NikonTE300CE\Desktop\Barracuda\AutomatedCE\var\TE300.cfg")
     main.system.open_controllers()
     main.system.startup_utilities()

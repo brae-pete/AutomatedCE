@@ -167,7 +167,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
 
     def __init__(self, controller: DaqAbstraction,role,  channel):
         super().__init__(controller, role)
-        self.daqcontroller.add_analog_input(channel)
+        self.daqcontroller.add_analog_input(channel, terminal_config="DIFF")
         self.daqcontroller.add_callback(self.add_data, [channel], 'waveform', [])
         self.set_oversample_frequency(80000,8)
 
@@ -228,6 +228,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
     def add_data(self, incoming_data, time_elapsed, *args):
         """
         Adds incoming data and oversample filters it as necessary
+        :param time_elapsed:
         :param incoming_data: should be a list of numpy arrays
         :param args:
         :return:

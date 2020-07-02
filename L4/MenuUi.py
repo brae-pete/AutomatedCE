@@ -32,7 +32,8 @@ MainMenu
 import tkinter
 from tkinter import ttk
 from abc import ABC, abstractmethod
-
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 class Menu(ABC):
     """
@@ -178,6 +179,13 @@ def get_options_value(msg:str, root:tkinter.Tk, options: list, exit_value=None):
     return window.value
 
 
+class GraphWindow:
+
+    def __init__(self, figure, parent):
+        self.top = tkinter.Toplevel(parent)
+        self.canvas = FigureCanvasTkAgg(figure, self.top)
+        self.canvas.get_tk_widget().pack(expand=True)
+        self.canvas._tkcanvas.pack( expand=True)
 
 
 class PopupWindow(ABC):

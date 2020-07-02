@@ -125,7 +125,7 @@ class CEDisplayAbstraction(ABC):
     Displays the CE electropherogram and updates as the plot updates.
     """
 
-    def __init__(self, detector, voltage_supply):
+    def __init__(self, system):
         """
         Creates a CE display object with the following properities.
         lock: threading lock to access data and plots in a thread safe way
@@ -134,8 +134,7 @@ class CEDisplayAbstraction(ABC):
         :param voltage_supply: Power supply object from utilities that contains current and voltage information
         """
         self.lock = threading.Lock()
-        self.detector = detector
-        self.voltage_supply = voltage_supply
+        self.system=system
 
     @abstractmethod
     def show(self):
@@ -176,8 +175,8 @@ class CEDisplayAbstraction(ABC):
 
 class PLTCEDisplay(CEDisplayAbstraction):
 
-    def __init__(self, detector, voltage_supply):
-        super().__init__(detector, voltage_supply)
+    def __init__(self, system:CESystem):
+        super().__init__(system)
         self.fig = None
         self.plot_axes = []
         self._ani_func = None
@@ -195,6 +194,7 @@ class PLTCEDisplay(CEDisplayAbstraction):
         ax2 = ax1.twinx()
         ax1.set_ylabel('PMT (V)')
         ax2.set_ylabel('Current (uA)')
+        ax2.set_ylim(-10,100)
         self._artists = []
         self._artists.append(ax1.plot([0], [0], c='forestgreen')[0])
         self._artists.append(ax2.plot([0], [0], c='darkorange')[0])
@@ -255,12 +255,16 @@ class PLTCEDisplay(CEDisplayAbstraction):
         :return: list of artists for animation function
         """
 
-        data = self.detector.get_data()
-        power_data = self.voltage_supply.get_data()
+        data = self.system.detector.get_data()
+        power_data = self.system.high_voltage.get_data()
         ax1, ax2 = self.plot_axes[0:2]
-        ax1.set_xlim(min(data['time_data']),max(data['time_data']))
-        ax1.set_ylim(min(data['rfu'])*0.95, max(data['rfu']*1.05))
-        ax2.set_ylim(min(power_data['current'])*0.95, max(power_data['current'])*1.05)
+        try:
+            ax1.set_xlim(min(data['time_data']),max(data['time_data']))
+            ax1.set_ylim(min(data['rfu'])*0.95, max(data['rfu']*1.05))
+            #ax2.set_ylim(min(power_data['current'])*0.95, max(power_data['current'])*1.05)
+        except ValueError:
+            logging.warning("No data to plot")
+            return self._artists
         self._artists[0].set_data(data['time_data'], data['rfu'])
         self._artists[1].set_data(power_data['time_data'], power_data['current'])
         return self._artists
