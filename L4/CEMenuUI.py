@@ -64,7 +64,7 @@ class MainMenu(mui.Menu):
         elif text == "2":
             return self.config_menu
         elif text == "3":
-            self.ce_display =  DisplayWindows.PLTCEDisplay(self.system)
+            self.ce_display =  DisplayWindows.TkCEDisplay(self.system, self.view)
             self.ce_display.start_live_view()
             self.auto_run.start_run()
         elif text == "4":

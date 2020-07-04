@@ -73,7 +73,7 @@ class DetectorAbstraction(ABC):
         self.role = role
         self.rfu = np.asarray([])
         self.time = np.asarray([])
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._sampling_f = 100000
         self._final_f = 10
         self._oversample = True
@@ -215,15 +215,19 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         :return:
         """
         filter_type, kwargs = self._filter_type
+        locked = self._lock.acquire(timeout=0.2)
+        if not locked:
+            return None
 
-        with self._lock:
-            if filter_type == 'butter':
-                filtered = butter_lowpass_filter(self.rfu.copy(), kwargs)
-            elif filter_type == 'savgol':
-                filtered = savgol_filter(self.rfu.copy(), kwargs)
-            else:
-                filtered = self.rfu.copy()
-            return {'time_data': self.time.copy(), 'rfu': filtered}
+        if filter_type == 'butter':
+            filtered = butter_lowpass_filter(self.rfu.copy(), kwargs)
+        elif filter_type == 'savgol':
+            filtered = savgol_filter(self.rfu.copy(), kwargs)
+        else:
+            filtered = self.rfu.copy()
+        self._lock.release()
+
+        return {'time_data': self.time.copy(), 'rfu': filtered}
 
     def add_data(self, incoming_data, time_elapsed, *args):
         """

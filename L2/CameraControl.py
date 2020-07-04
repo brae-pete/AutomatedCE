@@ -115,7 +115,7 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         :return:
         """
         if not self._get_running():
-            self.controller.send_command(self.controller.core.start_continuous_sequence_acquisition, args=(1,))
+            self.controller.send_command(self.controller.core.start_continuous_sequence_acquisition, args=(1.0,))
             self._continuous_running.set()
             self._continuous_thread = threading.Thread(target=self._sequence_update)
             self._continuous_thread.start()
@@ -154,7 +154,7 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         :param exposure:
         :return:
         """
-        exposure = int(exposure)
+        exposure = float(exposure)
         self.controller.send_command(self.controller.core.set_exposure, args=(exposure,))
         return True
 
@@ -239,7 +239,7 @@ class MicroManagerCamera(CameraAbstraction, UtilityControl):
         self.controller.send_command('camera,stop_continuous\n')
         self._continuous_running.clear()
 
-    def set_exposure(self, exposure: int):
+    def set_exposure(self, exposure: float):
         """
         Sets the camera exposure in milliseconds
         :param exposure:
@@ -282,6 +282,8 @@ class CameraFactory(UtilityFactory):
     def build_object(self, controller, role, *args):
         if controller.id == 'micromanager':
             return MicroManagerCamera(controller, role)
+        elif controller.id == "pycromanager":
+            return PycromanagerControl(controller, role)
         else:
             return None
 
