@@ -145,7 +145,7 @@ class DaqAbstraction(ABC):
         """
 
         # Get the total time_data elapsed since the start_measurment was last called
-        time_elapsed = total_samples / self._rate
+        time_elapsed = total_samples/self._rate
         for callback_info in self._callbacks:
             [func, channels, mode, args] = callback_info
             out_data = []
@@ -503,7 +503,7 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             :return:
             """
 
-            self._samples = int(self._rate / 10)
+            self._samples = int(10**(np.round(np.log10(self._rate))-1))
             if mode.lower() == 'finite':
                 mode = nidaqmx.constants.AcquisitionType.FINITE
             else:
@@ -545,7 +545,7 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
                 logging.error('Nidaq did not read samples correctly')
                 return 1
             with self._lock:
-                self._total_samples += len(samples)
+                self._total_samples += samples.shape[1]
                 self._send_data(samples, self._total_samples)
                 return 0
 

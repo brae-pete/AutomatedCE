@@ -144,8 +144,26 @@ class UtilityBuilder(Builder):
         self.constructed_object.fields[role] = self._xy_factory.build_object(controller, role)
 
     def add_z(self, controller, settings):
+        """
+         Add a Z stage to the configuration.
+         Settings order: Utility, controller_id, zstage, *key, *value
+
+         keywords:
+         invert: -1 to invert the direction \n
+         scale: what to scale the microcontroller values by to get mm \n
+         offset: when the controller is homed, what offset should be added to the home position \n
+         default: default height to move to after homing \n
+         min_z :lowest height to move to \n
+         max_z: highest height oto move to \n
+
+        :param controller:
+        :param settings:
+        :return:
+        """
         role = settings[3]
-        self.constructed_object.fields[role] = self._z_factory.build_object(controller, role)
+        options = settings[4:]
+        kwargs = {options[key]: options[key + 1] for key in range(0,len(options), 2)}
+        self.constructed_object.fields[role] = self._z_factory.build_object(controller, role, **kwargs)
 
     def add_high_voltage(self, controller, settings):
         role = settings[3]
@@ -345,6 +363,7 @@ class SystemAbstraction(ABC):
     def __init__(self):
         self.controllers = {}
         self.utilities = {}
+
     def load_config(self, config_file="default"):
         """
         Load the controllers and utitily objects, and assign them to the CE System utilities.
@@ -400,6 +419,7 @@ class SystemAbstraction(ABC):
         """
         for _, utility in self.utilities.items():
             utility.shutdown()
+
 
 class CESystem(SystemAbstraction):
     """
