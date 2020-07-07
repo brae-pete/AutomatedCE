@@ -32,6 +32,8 @@
 #define LED_G A1
 #define LED_B A2
 #define LIMIT 3
+#define STEPS_PER_REV  400.
+#define MM_PER_REV  1.5
 // powerSTEP library instance, parameters are distance from the end of a daisy-chain
 // of drivers, !CS pin, !STBY/!Reset pin
 
@@ -57,7 +59,7 @@ bool inversion = 0;
 unsigned long switch_time = 0;
 unsigned long switch_hi_time = 0;
 bool first = true;
-
+float steps_per_mm = (STEPS_PER_REV * outlet_div /MM_PER_REV);
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
 
@@ -188,8 +190,7 @@ void interrupt_home(){
     driver_2.getStatus(); // clears error flags
     switch_time = temp_time;
     driver_2.resetPos();
-    float steps_per_mm = (200. * outlet_div / 0.75);
-    long steps = long(-1.25*steps_per_mm);
+    long steps = long(-5*steps_per_mm);
     driver_2.goTo(steps);
     //Serial.println("Pause:");
     first = false;
@@ -256,7 +257,6 @@ void moveMotor(){
   //#Serial.print(inputString[1]);
   //#Serial.print(" To Location: ");
   //Serial.println(steps);
-  float steps_per_mm = (200. * outlet_div / 0.75);
   long steps = long(mm_pos*steps_per_mm);
   driver_2.goTo(steps);
   Serial.println("OK");
@@ -329,7 +329,7 @@ void getMotorPos(){
   //Serial.print(chnl);
   //Serial.println(": ");
   long steps = driver_2.getPos();
-  float steps_per_mm = (200. * outlet_div / 0.75);
+  
   float return_steps = float(float(steps)/steps_per_mm);
   Serial.print("L?");
   Serial.println(return_steps,3);
