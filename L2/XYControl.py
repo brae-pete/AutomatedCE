@@ -37,12 +37,14 @@ class XYAbstraction(ABC):
         self.home = [0, 0]
 
     def _scale_values(self, xy):
+        xy = xy[:]
         xy = [x / self._scale for x in xy]
         xy[0] *= self._x_inversion
         xy[1] *= self._y_inversion
         return xy
 
     def _invert_scale(self, xy):
+        xy = xy[:]
         xy[0] *= self._x_inversion
         xy[1] *= self._y_inversion
         xy = [x * self._scale for x in xy]

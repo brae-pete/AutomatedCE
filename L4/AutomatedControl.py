@@ -183,6 +183,7 @@ class BasicTemplateShape(object):
         """
         # remove white space
         line = line.replace('[', '').replace(']', '')
+        line = line.replace('(','').replace(')','')
         line = line.split('\t')
         line = [x.rstrip().lstrip() for x in line]
 
