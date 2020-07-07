@@ -104,6 +104,7 @@ class ArduinoController(ControllerAbstraction):
         self._serial = Serial()
         self._serial.baudrate = 1000000
         self._serial.timeout = 0.5
+        self._delay=0.2
 
     def open(self):
         """
@@ -158,7 +159,7 @@ class ArduinoController(ControllerAbstraction):
         """
         with self.lock:
             self._serial.write(f"{command}".encode())
-            time.sleep(0.2)
+            time.sleep(self._delay)
             response = self.read_buffer()
         # only return the last line
         # todo output to logger when there is no response
@@ -183,7 +184,7 @@ class PycromanagerController(ControllerAbstraction):
         self._config = config
         self._bridge = pycromanager.Bridge()
         self.core =  self._bridge.get_core()
-        self._delay_time = 0.05
+        self._delay_time = 0.075
 
     def open(self):
         """
