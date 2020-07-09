@@ -3,7 +3,7 @@ import os
 from abc import ABC, abstractmethod
 from L1 import Controllers, DAQControllers
 from L2 import PressureControl, XYControl, ZControl, HighVoltageControl, DetectorControl, LaserControl, \
-    FilterWheelControl, ShutterControl, CameraControl
+    FilterWheelControl, ShutterControl, CameraControl, LightControl
 
 
 class Director(ABC):
@@ -134,6 +134,7 @@ class UtilityBuilder(Builder):
         self._filter_wheel_factory = FilterWheelControl.FilterWheelFactory()
         self._shutter_factory = ShutterControl.ShutterFactory()
         self._camera_factory = CameraControl.CameraFactory()
+        self._rgb_factory = LightControl.RGBControlFactory()
 
     def add_pressure(self, controller, settings):
         role = settings[3]
@@ -188,6 +189,10 @@ class UtilityBuilder(Builder):
     def add_camera(self, controller, settings):
         role = settings[3]
         self.constructed_object.fields[role] = self._camera_factory.build_object(controller, role)
+
+    def add_rgb(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._rgb_factory.build_object(controller, role)
 
 
 class ConcreteDirector(Director):
@@ -287,6 +292,8 @@ class ConcreteDirector(Director):
                 self._utility_builder.add_shutter(controller, settings)
             elif utility_type == 'camera':
                 self._utility_builder.add_camera(controller, settings)
+            elif utility_type == 'rgb':
+                self._utility_builder.add_rgb(controller,settings)
             else:
                 raise ValueError('Entered invalid utility: {}'.format(utility_type))
 
@@ -445,6 +452,7 @@ class CESystem(SystemAbstraction):
         self.high_voltage = HighVoltageControl.HighVoltageAbstraction
         self.detector = DetectorControl.DetectorAbstraction
         self.lysis_laser = LaserControl.LaserAbstraction
+        self.inlet_rgb = LightControl.RGBAbstraction
 
     def stop_ce(self):
         """

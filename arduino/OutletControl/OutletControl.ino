@@ -28,12 +28,13 @@
 #define nBUSY_PIN_2 4
 #define flag_2 2
 
-#define LED_R A0
+#define LED_R A3
 #define LED_G A1
 #define LED_B A2
+#define LED_GROUND A0
 #define LIMIT 3
-#define STEPS_PER_REV  400.
-#define MM_PER_REV  1.5
+#define STEPS_PER_REV  200.
+#define MM_PER_REV  8
 // powerSTEP library instance, parameters are distance from the end of a daisy-chain
 // of drivers, !CS pin, !STBY/!Reset pin
 
@@ -80,6 +81,7 @@ void setup()
   pinMode(LED_R, OUTPUT);
   pinMode(LED_G, OUTPUT);
   pinMode(LED_B, OUTPUT);
+  pinMode(LED_GROUND,OUTPUT);
   pinMode(SOLENOID1, OUTPUT);
   pinMode(SOLENOID2, OUTPUT);
   pinMode(SOLENOID3, OUTPUT);
@@ -108,6 +110,7 @@ void setup()
  digitalWrite(LED_R, HIGH);
  digitalWrite(LED_G, LOW);
  digitalWrite(LED_B, LOW);
+ digitalWrite(LED_GROUND, LOW);
 
  
 
