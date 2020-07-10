@@ -52,7 +52,7 @@ class RGBArduino(RGBAbstraction, UtilityControl):
         :param channel:  'R', 'G', or 'B'
         :return:
         """
-        self.controller.send_command(f'L{channel}1\n')
+        self.controller.send_command(f'L{channel}0\n')
         self.channels[channel] = 'Off'
         self.state = "R:{}, G:{}, B:{}".format(*[x for _, x in self.channels.items()])
         return self.state

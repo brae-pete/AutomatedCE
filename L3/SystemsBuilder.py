@@ -425,7 +425,13 @@ class SystemAbstraction(ABC):
         :return:
         """
         for _, utility in self.utilities.items():
-            utility.shutdown()
+            try:
+                utility.shutdown()
+            # We need to make sure all modules shutdown, so if there is an error, keep shutting down what you can.
+            except Exception as e:
+                logging.warning(e)
+                logging.warning(f"{utility} had error on shutdown")
+
 
 
 class CESystem(SystemAbstraction):
