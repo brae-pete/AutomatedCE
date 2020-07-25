@@ -584,6 +584,8 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             :param value:
             :return:
             """
+            if not 'PORT' in channel.upper():
+                channel = self.interpret_do_channels(channel)
             self._set_do_values[channel] = value
 
         def update_do_channels(self):
