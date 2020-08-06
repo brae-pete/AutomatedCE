@@ -6,7 +6,6 @@ from serial import Serial
 import pycromanager
 from L1 import MicroControlClient
 
-
 import logging
 import time
 
@@ -23,7 +22,6 @@ class ControllerAbstraction(ABC):
     def __init__(self, port):
         self.port = port
         self.lock = Lock()
-
 
     def __str__(self):
         return repr(self) + " using port: " + self.port
@@ -104,7 +102,7 @@ class ArduinoController(ControllerAbstraction):
         self._serial = Serial()
         self._serial.baudrate = 1000000
         self._serial.timeout = 0.5
-        self._delay=0.2
+        self._delay = 0.2
 
     def open(self):
         """
@@ -116,13 +114,11 @@ class ArduinoController(ControllerAbstraction):
             logging.info(f"PORT: {self.port}")
             self._serial.open()
             old_to = self._serial.timeout
-            self._serial.timeout=10
+            self._serial.timeout = 10
             ans = self._serial.read_until('INIT\r\n'.encode())
             time.sleep(1.5)
-            self._serial.timeout=old_to
+            self._serial.timeout = old_to
             self._serial.read_until('\r\n'.encode())
-
-
 
     def close(self):
         """
@@ -169,21 +165,20 @@ class ArduinoController(ControllerAbstraction):
             return response
 
 
-
 class PycromanagerController(ControllerAbstraction):
     """
     Controller class for the Pycromanager library. This doesn't require a python2 server and will likely have more
     support going forward.
     """
 
-    def __init__(self, port =0, config ='default', **kwargs):
+    def __init__(self, port=0, config='default', **kwargs):
         if config.lower() == 'default':
             config = os.path.abspath(os.path.join(os.getcwd(), '.', 'config/DemoCam.cfg'))
         super().__init__(port)
         self.id = "pycromanager"
         self._config = config
         self._bridge = pycromanager.Bridge()
-        self.core =  self._bridge.get_core()
+        self.core = self._bridge.get_core()
         self._delay_time = 0.075
 
     def open(self):
@@ -220,7 +215,7 @@ class PycromanagerController(ControllerAbstraction):
 
                 if e.args[0].find('java.lang.Exception: Error in device "XY": (Error message unavailable)') >= 0:
                     print("XY Stage could not keep up, try again...")
-                    time.sleep(self._delay_time*2)
+                    time.sleep(self._delay_time * 2)
                     ans = command(*args)
                 else:
                     raise e
@@ -234,11 +229,11 @@ class PycromanagerController(ControllerAbstraction):
         python_list = [java_list.get(x) for x in range(java_list.capacity())]
         return python_list
 
-    def get_device_name(self,id='XY'):
+    def get_device_name(self, id='XY'):
         """Finds the appropriate device name
         XY = XY drive for the Nikon instruments.
         """
-        keys = {'XY':'xy'}
+        keys = {'XY': 'xy'}
         devices = self.get_list(self.core.get_loaded_devices())
         key = keys[id]
         for name in devices:
@@ -263,7 +258,6 @@ class MicroManagerController(ControllerAbstraction):
         self.id = "micromanager"
         self._config = config
         self._mmc = MicroControlClient.MicroControlClient()
-
 
     def open(self):
         """
@@ -347,15 +341,19 @@ class PriorController(ControllerAbstraction):
         lines = []
         while self._serial.in_waiting > 0:
             lines.append(self._read_line())
-
+        if len(lines) < 1:
+            lines = ""
+        else:
+            lines = lines[-1]
         return lines
 
     def _read_line(self, first=True):
-        ans =  self._serial.read_until('\r'.encode()).decode().strip('\r')
+        ans = self._serial.read_until('\r'.encode()).decode().strip('\r')
         if ans == "" and first:
             time.sleep(0.3)
             return self._read_line(False)
         return ans
 
+
 if __name__ == "__main__":
-    mmc = MicroManagerController(port = 0, config = r'D:\Scripts\AutomatedCE\config\DemoCam.cfg')
+    mmc = MicroManagerController(port=0, config=r'D:\Scripts\AutomatedCE\config\DemoCam.cfg')
