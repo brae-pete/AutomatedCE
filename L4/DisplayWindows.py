@@ -15,6 +15,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from L3.SystemsBuilder import CESystem
 from skimage.exposure import adjust_gamma, exposure
+from skimage.transform import resize
 
 
 class MicroscopeDisplayAbstraction(ABC):
@@ -79,6 +80,7 @@ class PLTMicroscopeDisplay(MicroscopeDisplayAbstraction):
         self.system.camera.add_callback(self._update)
         self._ani_func = None
         self.percentiles = 0.5
+        self.scalar = 0.5
 
     def show(self):
         self.fig = fig = plt.figure()
@@ -95,6 +97,8 @@ class PLTMicroscopeDisplay(MicroscopeDisplayAbstraction):
             self.im = self.img_ax.imshow(img)
 
     def _pre_plot_image(self, image):
+        resize_shape = [int(x * self.scalar) for x in self.system.camera.dimensions]
+        image = resize(image,resize_shape)
         image = adjust_gamma(image, gamma=self.gamma, gain=self.gain)
         low, p98 = np.percentile(image, [self.percentiles, 1-self.percentiles])
         img_rescale = exposure.rescale_intensity(image, in_range=(low, p98))
@@ -119,7 +123,10 @@ class PLTMicroscopeDisplay(MicroscopeDisplayAbstraction):
         try:
             img = self.queue.get_nowait()
             img = self._pre_plot_image(img)
-            self.im.set_array(img)
+            self.im.set_data(img)
+            vmax = np.max(img)
+            vmin = np.min(img)
+            self.im.set_clim(vmin,vmax)
             #print(f"Type: {type(self.im)}, {self.im}")
             return [self.im]
 

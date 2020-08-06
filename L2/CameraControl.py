@@ -14,10 +14,10 @@ class CameraAbstraction(ABC):
         self.controller = controller
         self.role = role
         self._callbacks = []
-        self.last_image = []
+        self._last_image = []
         self.dimensions = [1,1] # Width and height of the image in pixels
-        self.update_frequency = 4  # How many times per second to check the camera
-
+        self.update_frequency = 16  # How many times per second to check the camera
+        self._last_image_lock = threading.RLock()
         # Continuous properties
         self._continuous_thread = threading.Thread()
         self._continuous_running = threading.Event()
@@ -98,7 +98,11 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         """
         self.controller.send_command(self.controller.core.snap_image)
         img = self.controller.send_command(self.controller.core.get_image)
-        return self._reshape(img)
+        img = self._reshape(img)
+        with self._last_image_lock:
+            self._last_image = img[:]
+        return img
+
 
     def _get_running(self):
         """
@@ -108,6 +112,15 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         """
         status = self.controller.send_command(self.controller.core.is_sequence_running)
         return status
+
+
+    def get_last(self):
+        """
+        Returns a copy of the most recent image that was acquired
+        :return:
+        """
+        with self._last_image_lock:
+            return self._last_image[:]
 
     def continuous_snap(self):
         """
@@ -133,7 +146,10 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
             images_ready = self.controller.send_command(self.controller.core.get_remaining_image_count)
             if images_ready > 0:
                 img = self.controller.send_command(self.controller.core.get_last_image)
-                self._update_callbacks(self._reshape(img))
+                img = self._reshape(img)
+                self._update_callbacks(img)
+                with self._last_image_lock:
+                    self._last_image = img[:]
             # Sleep until the next update time point
             time.sleep((time.time() - st) % (1 / self.update_frequency))
 
