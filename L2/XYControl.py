@@ -356,8 +356,9 @@ class PriorXY(XYAbstraction, UtilityControl):
     def read_xy(self):
         """ Read the XY position in mm """
         response = ['R']
-        while response[0]=='R':
+        while response[0]=='R' or response[0]=='':
             response = self.controller.send_command("\r").split(',')
+        #print ("X is {}".format(response))
         xy = [eval(x) for x in response[0:2]]
         xy = self._scale_values(xy)
         self.pos = xy

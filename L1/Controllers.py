@@ -334,7 +334,7 @@ class PriorController(ControllerAbstraction):
         """ Send the command and read the prior daqcontroller response"""
         with self.lock:
             self._serial.write("{}".format(command).encode())
-            response = self._read_line()
+            response = self._read_lines()
         return response
 
     def _read_lines(self, last=True):
@@ -345,6 +345,7 @@ class PriorController(ControllerAbstraction):
             lines = ""
         else:
             lines = lines[-1]
+        #print(lines)
         return lines
 
     def _read_line(self, first=True):

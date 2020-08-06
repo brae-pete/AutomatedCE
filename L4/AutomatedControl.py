@@ -483,9 +483,12 @@ class AutoRun:
                 self.error_message(state, "Outlet Move Down")
 
             # Run the special command for injections here
+            print('Step Special command is : {}'.format(step.special))
             if step.special == "manual_cell":
                 state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
                 self.error_message(state,"Manual Cell Injection")
+            elif step.special == 'wait':
+                self.wait_to_continue()
 
             after_special = True  # change this to false if we don't need to run the timed part of the step after
 
@@ -588,7 +591,7 @@ class AutoRun:
         self.continue_event.clear()
 
         # Check if we can run the callback message
-        if key in self.continue_callbacks.keys():
+        for key in self.continue_callbacks.keys():
             resp = self.continue_callbacks[key](message,step, simulated)
             if type(resp) is bool:
                 if resp is False:

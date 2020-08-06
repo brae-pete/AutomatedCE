@@ -261,7 +261,10 @@ class PriorZ(ZAbstraction, UtilityControl):
 
     def read_z(self):
         """ Read the current position"""
-        self.pos = float(self.controller.send_command("PZ \r"))
+        response = self.controller.send_command("PZ \r").split(',')
+        while response[0]=='R' or response[0]=='':
+            response = self.controller.send_command("\r").split(',')
+        self.pos =float(response[0])
         self.pos = self._scale_values(self.pos)
         return self.pos
 
