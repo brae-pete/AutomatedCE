@@ -343,14 +343,19 @@ class PriorController(ControllerAbstraction):
             response = self._read_line()
         return response
 
-    def _read_lines(self):
+    def _read_lines(self, last=True):
         lines = []
         while self._serial.in_waiting > 0:
             lines.append(self._read_line())
+
         return lines
 
-    def _read_line(self):
-        return self._serial.read_until('\r'.encode()).decode().strip('\r')
+    def _read_line(self, first=True):
+        ans =  self._serial.read_until('\r'.encode()).decode().strip('\r')
+        if ans == "" and first:
+            time.sleep(0.3)
+            return self._read_line(False)
+        return ans
 
 if __name__ == "__main__":
     mmc = MicroManagerController(port = 0, config = r'D:\Scripts\AutomatedCE\config\DemoCam.cfg')

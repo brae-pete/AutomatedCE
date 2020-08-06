@@ -15,6 +15,7 @@ from L4 import AutomatedControl
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 
+
 class Move(ABC):
     def __init__(self, system, template, xyz0, xyz1, simulated=False, path_information=[]):
         self.system = system
@@ -23,6 +24,15 @@ class Move(ABC):
         self.xyz1 = xyz1
         self.simulated = simulated
         self.path_information = path_information
+
+    def check_z(self, x0, y0, x1, y1):
+        # If xy0 and xy1 are the same location, we don't need to move z
+        if abs(x0 - x1[0]) < 0.1 and abs(y0[1] - y1[1]) < 0.1:
+            skip_z = True
+        else:
+            skip_z = False
+        return skip_z
+
     @abstractmethod
     def move(self):
         """
@@ -30,10 +40,11 @@ class Move(ABC):
         """
         pass
 
+
 class StepMove(Move):
 
     def __init__(self, system, template, xyz0, xyz1, simulated, path_information):
-        super().__init__(system, template, xyz0, xyz1, simulated,  path_information)
+        super().__init__(system, template, xyz0, xyz1, simulated, path_information)
 
     def move(self):
         """
@@ -46,13 +57,13 @@ class StepMove(Move):
         Move the Z Stage Down
         """
 
-        x0,y0,z0 = self.xyz0
-        x1,y1,z1 = self.xyz1
+        x0, y0, z0 = self.xyz0
+        x1, y1, z1 = self.xyz1
         transfer_height = self.template.get_max_ledge()
-
+        skip_z = self.check_z(x0, y0, x1, y1)
         # Move the Z stage, wait for the target height to be reached
         self.path_information.append(f"Moving capillary Z stage to {transfer_height} mm")
-        if not self.simulated:
+        if not self.simulated and not skip_z:
             self.system.inlet_z.set_z(transfer_height)
             if not self.system.inlet_z.wait_for_target(transfer_height):
                 return False
@@ -60,17 +71,16 @@ class StepMove(Move):
         # Move the XY Stage
         self.path_information.append(f"Moving Stage to {x1},{y1} mm")
         if not self.simulated:
-            self.system.xy_stage.set_xy([x1,y1])
+            self.system.xy_stage.set_xy([x1, y1])
             # Return false if the stage did not move
             if not self.system.xy_stage.wait_for_xy_target([x1, y1]):
                 return False
 
         # Move the Z Stage back down
         self.path_information.append(f"Moving capillary Z stage to {z1}")
-        if not self.simulated:
+        if not self.simulated and not skip_z:
             self.system.inlet_z.set_z(z1)
         return True
-
 
 
 class SafeMove(Move):
@@ -79,6 +89,8 @@ class SafeMove(Move):
         super().__init__(system, template, xyz0, xyz1, simulated, path_information)
         self.visual = visual
         self.display_data = {}
+
+
 
     def move(self):
         """
@@ -153,18 +165,18 @@ class SafeMove(Move):
         self.display_data['zz_ledge'] = ledge_z
         self.display_data['z_incr'] = zz
         self.display_data['z_decr'] = zz_decrease
-        tt_time = np.linspace(0,xx.shape[0]/1000, xx.shape[0])
-        plt.plot(tt_time,xx, label = 'X-Motor')
+        tt_time = np.linspace(0, xx.shape[0] / 1000, xx.shape[0])
+        plt.plot(tt_time, xx, label='X-Motor')
         plt.plot(tt_time, yy, label='Y-motor')
-        plt.plot(tt_time, ledge_z, label ='Ledges')
-        if len(zz)>1:
+        plt.plot(tt_time, ledge_z, label='Ledges')
+        if len(zz) > 1:
             logging.info(f"Increase Delay: {xy_delay}")
-            tt_time = np.linspace(-xy_delay, -xy_delay+len(zz)/1000, len(zz))
-            plt.plot(tt_time, zz, label ='Increasing Inlet')
-        if len(zz_decrease)>1:
+            tt_time = np.linspace(-xy_delay, -xy_delay + len(zz) / 1000, len(zz))
+            plt.plot(tt_time, zz, label='Increasing Inlet')
+        if len(zz_decrease) > 1:
             logging.info(f"Decrease Delay: {z_delay}")
-            tt_time = np.linspace(z_delay, z_delay+ len(zz_decrease)/1000, len(zz_decrease))
-            plt.plot(tt_time, zz_decrease, label = "Decreasing Inlet")
+            tt_time = np.linspace(z_delay, z_delay + len(zz_decrease) / 1000, len(zz_decrease))
+            plt.plot(tt_time, zz_decrease, label="Decreasing Inlet")
         plt.legend()
         plt.show()
 
@@ -212,21 +224,20 @@ def _get_motor_path(xy1, xy2, motor):
     v, a, j = motor.velocity_max, motor.acceleration, motor.jerk
     xy_path = []
 
-
     for start, stop in zip(xy1, xy2):
 
         if start > stop:
-            diff = start-stop
-            invert =-1
+            diff = start - stop
+            invert = -1
         else:
-            diff = stop-start
-            invert=1
+            diff = stop - start
+            invert = 1
 
         if j == 0:
             # For now assume very high J, but should go back and write new function
             j = a * 500
 
-        path_arr = _get_path(diff, v, a, j)*invert
+        path_arr = _get_path(diff, v, a, j) * invert
         path_arr += start
         xy_path.append(path_arr)
 
@@ -382,5 +393,3 @@ if __name__ == "__main__":
     xyz0 = [20, 20, 3]
     xyz1 = [100, 35, 10]
     path = SafeMove(system, tm, xyz0, xyz1, visual=True).move()
-
-

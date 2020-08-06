@@ -459,7 +459,7 @@ class AutoRun:
             (step, rep) = self._queue.get()
 
             # Get the move positions
-            xyz0, xyz1, well_name = self._get_move_positions(step, rep)
+            xyz0, xyz1, well_name, skip_z = self._get_move_positions(step, rep)
 
             self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
             self.path_information.append(f"Preparing for move to well {well_name}")
@@ -517,7 +517,12 @@ class AutoRun:
         z = step.inlet_height
         xyz1 = [x, y, z]
 
-        return xyz0, xyz1, step.well_location[rep % len(step.well_location)]
+        # If xy0 and xy1 are the same location, we don't need to move z
+        if abs(xyz0[0]-xyz1[0]) < 0.1 and abs(xyz0[1]-xyz1[1]) < 0.1:
+            skip_z=True
+        else:
+            skip_z=False
+        return xyz0, xyz1, step.well_location[rep % len(step.well_location)], skip_z
 
     def timed_step(self, step, simulated):
         """
@@ -555,7 +560,7 @@ class AutoRun:
         if not simulated:
             self.system.high_voltage.stop()
             self.system.detector.stop()
-
+            self.system.outlet_pressure.release()
         self.path_information.append("Stopping timed run at {}".format(time.time() - st))
         threading.Thread(target=self.system.outlet_pressure.stop, name='PressureStop').start()
 

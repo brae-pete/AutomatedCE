@@ -28,8 +28,8 @@
 #define nBUSY_PIN_2 4
 #define flag_2 2
 
-#define LED_R A3
-#define LED_G A1
+#define LED_R A1
+#define LED_G A3
 #define LED_B A2
 #define LED_GROUND A0
 #define LIMIT 3
@@ -87,7 +87,7 @@ void setup()
   pinMode(SOLENOID3, OUTPUT);
 
   pinMode(LIMIT, INPUT);
-  //pinMode(LIMIT, INPUT_PULLUP);  // set pull-up on analog pin 0 
+  pinMode(LIMIT, INPUT_PULLUP);  // set pull-up on analog pin 0 
   //digitalWrite(LIMIT, HIGH);
   pinMode(A5, OUTPUT);
   pinMode(A4, OUTPUT);
@@ -208,8 +208,12 @@ void interrupt_home_hi(){
   unsigned long temp_time = millis();
   first = true;
   //Serial.println("HI");
-  attachInterrupt(digitalPinToInterrupt(LIMIT),interrupt_home, LOW);
+  attachInterrupt(digitalPinToInterrupt(LIMIT),interrupt_temp, LOW);
 
+}
+
+void interrupt_temp(){
+  
 }
 void serialCheck() {
   while (Serial.available()) {

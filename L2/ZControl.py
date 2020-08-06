@@ -249,9 +249,7 @@ class PriorZ(ZAbstraction, UtilityControl):
 
     def __init__(self, controller, role, **kwargs):
         super().__init__(controller, role, **kwargs)
-        self.min_z = 0
-        self.max_z = 10
-        self._scale = 10
+
 
     def startup(self):
         """ Do nothing special on start up"""
@@ -283,7 +281,7 @@ class PriorZ(ZAbstraction, UtilityControl):
 
     def set_home(self):
         """ Set the home position"""
-        logging.warning("Set home not implemented")
+        self.controller.send_command('PZ 0\r')
 
     def homing(self):
         """ Go to the hardware homing point"""
