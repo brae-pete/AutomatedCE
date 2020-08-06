@@ -25,9 +25,9 @@ class Move(ABC):
         self.simulated = simulated
         self.path_information = path_information
 
-    def check_z(self, x0, y0, x1, y1):
+    def check_z(self, x0, y0, x1, y1, z0, z1):
         # If xy0 and xy1 are the same location, we don't need to move z
-        if abs(x0 - x1[0]) < 0.1 and abs(y0[1] - y1[1]) < 0.1:
+        if abs(x0 - x1) < 0.1 and abs(y0 - y1) < 0.1:
             skip_z = True
         else:
             skip_z = False
@@ -78,7 +78,7 @@ class StepMove(Move):
 
         # Move the Z Stage back down
         self.path_information.append(f"Moving capillary Z stage to {z1}")
-        if not self.simulated and not skip_z:
+        if not self.simulated:
             self.system.inlet_z.set_z(z1)
         return True
 
