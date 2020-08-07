@@ -25,7 +25,7 @@ class Move(ABC):
         self.simulated = simulated
         self.path_information = path_information
 
-    def check_z(self, x0, y0, x1, y1, z0, z1):
+    def check_z(self, x0, y0, x1, y1):
         # If xy0 and xy1 are the same location, we don't need to move z
         if abs(x0 - x1) < 0.1 and abs(y0 - y1) < 0.1:
             skip_z = True

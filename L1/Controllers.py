@@ -331,7 +331,12 @@ class PriorController(ControllerAbstraction):
         self.open()
 
     def send_command(self, command):
-        """ Send the command and read the prior daqcontroller response"""
+        """ Send the command and read the prior daqcontroller response
+
+        Then send a Empty command, and wait for the expected R response. Return whatever value was before the
+        expected R
+
+        """
         with self.lock:
             self._serial.write("{}".format(command).encode())
             response = self._read_lines()

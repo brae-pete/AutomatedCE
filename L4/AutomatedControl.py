@@ -47,7 +47,7 @@ class Step:
     """
     Standardize data object containing all the information needed for a given automation step
     """
-    special_commands = ['auto_cell', 'gate', 'collect', 'manual_cell', 'sample']
+    special_commands = ['auto_cell', 'gate', 'collect', 'manual_cell', 'sample', 'wait']
 
     def __init__(self, line):
         self.well_location = []  # um, um
@@ -183,7 +183,7 @@ class BasicTemplateShape(object):
         """
         # remove white space
         line = line.replace('[', '').replace(']', '')
-        line = line.replace('(','').replace(')','')
+        line = line.replace('(', '').replace(')', '')
         line = line.split('\t')
         line = [x.rstrip().lstrip() for x in line]
 
@@ -444,6 +444,7 @@ class AutoRun:
         self.traced_thread.name = 'AutoRun'
         self.traced_thread.start()
         self.is_running.set()
+        self.continue_event.set()
 
     def error_message(self, state, process):
         if not state:
@@ -465,9 +466,11 @@ class AutoRun:
             self.path_information.append(f"Preparing for move to well {well_name}")
             # Move the System Safely
             if self.safe_enabled:
-                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated, self.path_information).move()
+                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated,
+                                            self.path_information).move()
             else:
-                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated, self.path_information).move()
+                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated,
+                                            self.path_information).move()
             self.error_message(state, "System Move")
 
             # Move the inlet
@@ -486,7 +489,7 @@ class AutoRun:
             print('Step Special command is : {}'.format(step.special))
             if step.special == "manual_cell":
                 state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
-                self.error_message(state,"Manual Cell Injection")
+                self.error_message(state, "Manual Cell Injection")
             elif step.special == 'wait':
                 self.wait_to_continue()
 
@@ -521,10 +524,10 @@ class AutoRun:
         xyz1 = [x, y, z]
 
         # If xy0 and xy1 are the same location, we don't need to move z
-        if abs(xyz0[0]-xyz1[0]) < 0.1 and abs(xyz0[1]-xyz1[1]) < 0.1:
-            skip_z=True
+        if abs(xyz0[0] - xyz1[0]) < 0.1 and abs(xyz0[1] - xyz1[1]) < 0.1:
+            skip_z = True
         else:
-            skip_z=False
+            skip_z = False
         return xyz0, xyz1, step.well_location[rep % len(step.well_location)], skip_z
 
     def timed_step(self, step, simulated):
@@ -537,7 +540,8 @@ class AutoRun:
         st = time.time()
 
         # Apply Hydrodynamic Forces
-        self.path_information.append(f"Pressure state changed to {step.pressure}, Vaccuum state changed to {step.vacuum}")
+        self.path_information.append(
+            f"Pressure state changed to {step.pressure}, Vaccuum state changed to {step.vacuum}")
         if not simulated:
             if step.pressure:
                 self.system.outlet_pressure.rinse_pressure()
@@ -559,7 +563,7 @@ class AutoRun:
             time.sleep(0.05)
 
         # Stop applying the forces
-        self.path_information.append(f"Stopping timed run after {time.time()-st} s")
+        self.path_information.append(f"Stopping timed run after {time.time() - st} s")
         if not simulated:
             self.system.high_voltage.stop()
             self.system.detector.stop()
@@ -579,7 +583,7 @@ class AutoRun:
 
         self.system.stop_ce()
 
-    def wait_to_continue(self, key, message, step, simulated):
+    def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
         """Calls the continue_callbacks  for the user to set the continue_event before continuing
         There are two methods that could be employed. The first is the callback may return True when ready
         to continue or None or False when the run should be aborted. The callback should take a string that can
@@ -589,15 +593,15 @@ class AutoRun:
         """
         # Clear the flag
         self.continue_event.clear()
-
-        # Check if we can run the callback message
-        for key in self.continue_callbacks.keys():
-            resp = self.continue_callbacks[key](message,step, simulated)
-            if type(resp) is bool:
-                if resp is False:
-                    return False
-                elif resp:
-                    return True
+        if None not in [message, step, simulated, key]:
+            # Check if we can run the callback message
+            if key in self.continue_callbacks.keys():
+                resp = self.continue_callbacks[key](message, step, simulated)
+                if type(resp) is bool:
+                    if resp is False:
+                        return False
+                    elif resp:
+                        return True
         # otherwise use the flag
         while not self.continue_event.is_set():
             time.sleep(0.2)
@@ -741,14 +745,14 @@ class TemplateMaker:
 
         x1, y1 = xy1
         x2, y2 = xy2
-        delta_x = (x2 - x1) / (columns-1)
-        delta_y = (y2 - y1) / (rows-1)
+        delta_x = (x2 - x1) / (columns - 1)
+        delta_y = (y2 - y1) / (rows - 1)
 
         for x, letter in zip(range(1, columns + 1), string.ascii_lowercase):
             for y in range(rows):
                 # X starts with 1 so we need to account for that
                 # Y starts with 0
-                center = [x1 + delta_x * (x-1), y1 + delta_y * y]
+                center = [x1 + delta_x * (x - 1), y1 + delta_y * y]
 
                 name = self.get_original_name(f"{label}_{letter}{y}")
                 self.wells[name] = [shape, diameter, center]
