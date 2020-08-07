@@ -377,6 +377,7 @@ class PriorXY(XYAbstraction, UtilityControl):
     def set_home(self):
         """ Sets the current position as home position for the stage """
         self.controller.send_command("Z \r")
+        self.controller._read_line()
         self.read_xy()
 
     def go_home(self):
