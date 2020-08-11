@@ -14,22 +14,8 @@ from skimage import io, img_as_float, filters, morphology
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops
 from skimage.morphology import watershed
-
-
-class Blob(object):
-    """
-    Data object for standarizing some of the common elements needed to determine a cell location.
-
-
-    Blob.rc is the row, column, pixel position of the centroid of the blob in the image. It is in row,column format
-    to make image tasks easier.
-
-    Blob.bbox is the bounding box of the blob in pixels, *currently this is in xy*
-    """
-
-    def __init__(self, mm_per_pixel=1):
-        self.rc = [0, 0]  # should be the position in pixels, (row[y], column[x])
-        self.bbox = [0,0,0,0]  # Bounding box in pixels, [min_row, min_col, max_row, max_col]
+from L4.image_util import *
+import pandas as pd
 
 
 def get_blobs(image, algorithm, *args, **kwargs):
@@ -65,18 +51,9 @@ def get_blobs(image, algorithm, *args, **kwargs):
     blobs = []
     for region in regions:
         new_blob = Blob()
-        new_blob.rc = region.rc[:]
-        new_blob.bbox = region.bbox[:]
+        new_blob.add_point(region)
         blobs.append(new_blob)
     return blobs
-
-def read_image(img):
-    """
-    Read in the images
-    :param img:
-    :return: img as float
-    """
-    return img_as_float(io.imread(img, as_gray=True))
 
 
 def get_background_image(directory: str):
@@ -94,7 +71,7 @@ def get_background_image(directory: str):
     types = ('*.jpg', '*.tiff', '*.png')
     background_files = []
     for image_type in types:
-        background_files.extend(images_dir.glob(image_type))
+        background_files.extend([str(x) for x in images_dir.glob(image_type)])
     background_images = io.ImageCollection(background_files, load_func=read_image)
 
     # Calculate the median of the image collection
@@ -102,12 +79,17 @@ def get_background_image(directory: str):
     return median_background
 
 
-def scikit_threshold(image:np.ndarray, background:np.ndarray):
+def scikit_threshold(image: np.ndarray, background: np.ndarray, close_size=11, open_size=7,
+                     watershed_footprint=(11, 11)):
     """
     Finds all the blobs in a given image. Image and background should be the same type (float, uint16, etc...)
 
+
     :param image: image array
     :param background: background of the image
+    :param watershed_footprint: size of NxM Watershed footprint
+    :param open_size: size of structure element for binary opening operation
+    :param close_size: size of structure element for binary closing operation
     :return: labeled image
     :rtype: np.ndarray
     """
@@ -132,15 +114,42 @@ def scikit_threshold(image:np.ndarray, background:np.ndarray):
     binary_otsu = edge_sobel > thresh
 
     # Binary Morphology Operations
-    structure_element = morphology.disk(11)
+    structure_element = morphology.disk(close_size)
     closed_image = morphology.binary_closing(binary_otsu, structure_element)
-    structure_element = morphology.disk(7)
+    structure_element = morphology.disk(open_size)
     opened_image = morphology.binary_opening(closed_image, structure_element)
 
     # Watershed
     distance = distance_transform_edt(opened_image)
-    local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((11, 11)), labels=opened_image)
+    local_maxi = peak_local_max(distance, indices=False, footprint=np.ones(watershed_footprint), labels=opened_image)
     markers = label(local_maxi)[0]
     labels = watershed(-distance, markers, mask=opened_image)
 
     return labels
+
+
+def get_avg_score(img_dir, close_size=1, open_size=1):
+    # label Images here
+    if img_dir is None:
+        img_dir = r"D:\Scripts\working-at-home\fiji-haesleinhuepf\images\cells"
+    labels = ['cell', 'dust']
+    im_background = get_background_image(img_dir)
+    average_score = []
+    for image, im_file in image_iterator():
+        # im_plot=axes.imshow(image)
+        blobs = get_blobs(image, 'scikit_threshold', im_background, close_size=close_size, open_size=open_size)
+
+        try:
+            in_file = im_file[:-4] + "_labels.csv"
+            truth = pd.read_csv(in_file)
+
+        except FileNotFoundError:
+            print("The following image is not labeled: {}".format(im_file))
+            continue
+
+        truth_blobs = from_df_to_list(truth)
+        scores = compare_blobs_iou(blobs, truth_blobs)
+        average_score.append(np.sum(scores) / len(truth_blobs))
+    average_score = np.median(average_score)
+    print("Close_Size: {}, Open Size: {}, Score: {}".format(close_size, open_size, average_score))
+    return [close_size, open_size, average_score]
