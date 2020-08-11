@@ -1,8 +1,9 @@
 import logging
+import os
 from abc import ABC, abstractmethod
 from L1 import Controllers, DAQControllers
 from L2 import PressureControl, XYControl, ZControl, HighVoltageControl, DetectorControl, LaserControl, \
-    FilterWheelControl, ShutterControl, CameraControl
+    FilterWheelControl, ShutterControl, CameraControl, LightControl
 
 
 class Director(ABC):
@@ -75,10 +76,10 @@ class ControllerBuilder(Builder):
         super().__init__(ControlledObjects())
 
     def add_arduino(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.ArduinoController(settings[2])
+        self.constructed_object.fields[settings[1]] = Controllers.ArduinoController(settings[3])
 
     def add_simulated(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.SimulatedController(settings[2])
+        self.constructed_object.fields[settings[1]] = Controllers.SimulatedController(settings[3])
 
     def add_micromanager(self, settings):
         if len(settings) < 4:
@@ -86,10 +87,27 @@ class ControllerBuilder(Builder):
         self.constructed_object.fields[settings[1]] = Controllers.MicroManagerController(settings[2], settings[3])
 
     def add_prior(self, settings):
-        self.constructed_object.fields[settings[1]] = Controllers.PriorController(settings[2])
+        self.constructed_object.fields[settings[1]] = Controllers.PriorController(settings[3])
 
     def add_digilent(self, settings):
         self.constructed_object.fields[settings[1]] = DAQControllers.DigilentDaq()
+
+    def add_nidaqmx(self, settings):
+        self.constructed_object.fields[settings[1]] = DAQControllers.NiDaq()
+
+    def add_simulated_daq(self, settings):
+        self.constructed_object.fields[settings[1]] = DAQControllers.SimulatedDaq()
+
+    def add_kinesis(self, settings):
+        controller = Controllers.SimulatedController()
+        controller.id = 'kinesis'
+        controller.port = settings[3]
+        self.constructed_object.fields[settings[1]] = controller
+
+    def add_pycromanager(self, settings):
+        if len(settings) < 4:
+            raise ValueError("No config was provided: {}".format(settings))
+        self.constructed_object.fields[settings[1]] = Controllers.PycromanagerController(settings[2], settings[3])
 
 
 class UtilityBuilder(Builder):
@@ -116,6 +134,7 @@ class UtilityBuilder(Builder):
         self._filter_wheel_factory = FilterWheelControl.FilterWheelFactory()
         self._shutter_factory = ShutterControl.ShutterFactory()
         self._camera_factory = CameraControl.CameraFactory()
+        self._rgb_factory = LightControl.RGBControlFactory()
 
     def add_pressure(self, controller, settings):
         role = settings[3]
@@ -126,14 +145,32 @@ class UtilityBuilder(Builder):
         self.constructed_object.fields[role] = self._xy_factory.build_object(controller, role)
 
     def add_z(self, controller, settings):
+        """
+         Add a Z stage to the configuration.
+         Settings order: Utility, controller_id, zstage, *key, *value
+
+         keywords:
+         invert: -1 to invert the direction \n
+         scale: what to scale the microcontroller values by to get mm \n
+         offset: when the controller is homed, what offset should be added to the home position \n
+         default: default height to move to after homing \n
+         min_z :lowest height to move to \n
+         max_z: highest height oto move to \n
+
+        :param controller:
+        :param settings:
+        :return:
+        """
         role = settings[3]
-        self.constructed_object.fields[role] = self._z_factory.build_object(controller, role)
+        options = settings[4:]
+        kwargs = {options[key]: options[key + 1] for key in range(0,len(options), 2)}
+        self.constructed_object.fields[role] = self._z_factory.build_object(controller, role, **kwargs)
 
     def add_high_voltage(self, controller, settings):
         role = settings[3]
         self.constructed_object.fields[role] = self._high_voltage_factory.build_object(controller, role, settings)
 
-    def add_detector(self, controller,settings):
+    def add_detector(self, controller, settings):
         role = settings[3]
         self.constructed_object.fields[role] = self._detector_factory.build_object(controller, role, settings)
 
@@ -153,9 +190,14 @@ class UtilityBuilder(Builder):
         role = settings[3]
         self.constructed_object.fields[role] = self._camera_factory.build_object(controller, role)
 
+    def add_rgb(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._rgb_factory.build_object(controller, role)
+
 
 class ConcreteDirector(Director):
     """ Builds the object that composes the Systems object in layer 3 of automation """
+
     def __init__(self):
         super().__init__()
         # Create the builders and set the interpreter
@@ -209,6 +251,14 @@ class ConcreteDirector(Director):
                 self._controller_builder.add_prior(settings)
             elif control_type == 'digilent':
                 self._controller_builder.add_digilent(settings)
+            elif control_type == 'simulated_daq':
+                self._controller_builder.add_simulated_daq(settings)
+            elif control_type == 'nidaqmx':
+                self._controller_builder.add_nidaqmx(settings)
+            elif control_type == 'kinesis':
+                self._controller_builder.add_kinesis(settings)
+            elif control_type == 'pycromanager':
+                self._controller_builder.add_pycromanager(settings)
             else:
                 raise ValueError('Entered invalid controller: {}'.format(control_type))
         return self._controller_builder.get_object()
@@ -229,19 +279,21 @@ class ConcreteDirector(Director):
             elif utility_type == 'xy':
                 self._utility_builder.add_xy(controller, settings)
             elif utility_type == 'z':
-                self._utility_builder.add_z(controller,settings)
+                self._utility_builder.add_z(controller, settings)
             elif utility_type == 'high_voltage':
-                self._utility_builder.add_high_voltage(controller,settings)
+                self._utility_builder.add_high_voltage(controller, settings)
             elif utility_type == 'detector':
                 self._utility_builder.add_detector(controller, settings)
             elif utility_type == 'laser':
                 self._utility_builder.add_laser(controller, settings)
             elif utility_type == 'filter_wheel':
-                self._utility_builder.add_filter_wheel(controller,settings)
+                self._utility_builder.add_filter_wheel(controller, settings)
             elif utility_type == 'shutter':
                 self._utility_builder.add_shutter(controller, settings)
             elif utility_type == 'camera':
                 self._utility_builder.add_camera(controller, settings)
+            elif utility_type == 'rgb':
+                self._utility_builder.add_rgb(controller,settings)
             else:
                 raise ValueError('Entered invalid utility: {}'.format(utility_type))
 
@@ -317,13 +369,16 @@ class SystemAbstraction(ABC):
 
     def __init__(self):
         self.controllers = {}
+        self.utilities = {}
 
-    def load_config(self, config_file=r"D:\Scripts\AutomatedCE\config\Test-System.cfg"):
+    def load_config(self, config_file="default"):
         """
         Load the controllers and utitily objects, and assign them to the CE System utilities.
         :param config_file:
         :return:
         """
+        if config_file.lower() == "default":
+            config_file = os.path.abspath(os.path.join(os.getcwd(), 'config\\test-system.cfg'))
 
         director = ConcreteDirector()
         director.construct(config_file)
@@ -331,8 +386,9 @@ class SystemAbstraction(ABC):
 
         # Update the class utility properties
         for key, value in utilities.items():
-            self.__setattr__(key,value)
-
+            self.__setattr__(key, value)
+        print(utilities)
+        self.utilities = utilities
         self.controllers = director.get_controllers()
 
     def open_controllers(self):
@@ -350,6 +406,32 @@ class SystemAbstraction(ABC):
         """
         for name, controller in self.controllers.items():
             controller.close()
+
+    def startup_utilities(self):
+        """
+        Initializes the hardware Utility resources.
+        :return:
+        """
+
+        for name, utility in self.utilities.items():
+            if utility is None:
+                logging.info(f"{name} not configured.")
+                continue
+            utility.startup()
+
+    def shutdown_utilities(self):
+        """
+        Puts utility objects in their shutdown state
+        :return:
+        """
+        for _, utility in self.utilities.items():
+            try:
+                utility.shutdown()
+            # We need to make sure all modules shutdown, so if there is an error, keep shutting down what you can.
+            except Exception as e:
+                logging.warning(e)
+                logging.warning(f"{utility} had error on shutdown")
+
 
 
 class CESystem(SystemAbstraction):
@@ -376,6 +458,7 @@ class CESystem(SystemAbstraction):
         self.high_voltage = HighVoltageControl.HighVoltageAbstraction
         self.detector = DetectorControl.DetectorAbstraction
         self.lysis_laser = LaserControl.LaserAbstraction
+        self.inlet_rgb = LightControl.RGBAbstraction
 
     def stop_ce(self):
         """
@@ -390,7 +473,6 @@ class CESystem(SystemAbstraction):
                 utility.stop()
             except Exception as e:
                 logging.error(f"ERR: {utility} did not stop. \n {e}")
-
 
 
 if __name__ == "__main__":

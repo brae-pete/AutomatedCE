@@ -32,7 +32,8 @@ MainMenu
 import tkinter
 from tkinter import ttk
 from abc import ABC, abstractmethod
-
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 class Menu(ABC):
     """
@@ -112,6 +113,13 @@ class Menu(ABC):
         else:
             return False, self
 
+    def setup(self):
+        """
+        Any code that may need the root application reference can be executed inside the setup method
+        :return:
+        """
+        pass
+
 
 # Some helpful entry windows
 def get_float_value(msg:str, root:tkinter.Tk, exit_value=None):
@@ -171,6 +179,15 @@ def get_options_value(msg:str, root:tkinter.Tk, options: list, exit_value=None):
     return window.value
 
 
+class GraphWindow:
+
+    def __init__(self, figure, parent):
+        self.top = tkinter.Toplevel(parent)
+        self.canvas = FigureCanvasTkAgg(figure, self.top)
+        self.canvas.get_tk_widget().pack(expand=True)
+        self.canvas._tkcanvas.pack( expand=True)
+
+
 class PopupWindow(ABC):
 
     def __init__(self, msg, ui_master, exit_value=None):
@@ -193,7 +210,7 @@ class PopupWindow(ABC):
 class StringWindow(PopupWindow):
     def __init__(self, msg, ui_master, exit_value=None):
         super().__init__(msg, ui_master, exit_value)
-        self.input = ttk.Entry()
+        self.input = ttk.Entry(self.top)
         self.input.pack()
         self.enter.pack()
         self.input.focus_set()
@@ -205,18 +222,19 @@ class FloatWindow(PopupWindow):
         self.input = ttk.Spinbox(self.top, increment=0.1, format="%9.3f")
         self.input.pack()
         self.input.focus_set()
-
         self.enter.pack()
 
     def get_value(self):
-        self.value = float(self.input.get())
-
+        try:
+            self.value = float(self.input.get())
+        except ValueError:
+            return None
 
 class IntegerWindow(PopupWindow):
 
     def __init__(self, msg, ui_master, exit_value=None):
         super().__init__(msg, ui_master, exit_value)
-        self.input = ttk.Spinbox(ui_master, increment=1, format="%6.0f")
+        self.input = ttk.Spinbox(self.top, increment=1, format="%6.0f")
         self.input.pack()
         self.input.focus_set()
 
@@ -228,7 +246,7 @@ class OptionWindow(PopupWindow):
 
     def __init__(self, msg, ui_master, options, exit_value=None):
         super().__init__(msg, ui_master, exit_value)
-        self.input = ttk.Combobox(values=options)
+        self.input = ttk.Combobox(self.top,values=options)
         self.input.focus_set()
 
     def get_value(self):
@@ -246,10 +264,11 @@ class Application(ttk.Frame):
         # Set up the main menu and set our object to the main_menu view property
         self.menu = main_menu
         self.menu.view = self.master
-
+        self._main = main_menu
         self.root = tkinter.Tk()
         self.pack()
         self.create_widgets(self.menu)
+        self.menu.setup()
 
     def create_widgets(self, menu):
         self.message = tkinter.Text(self)

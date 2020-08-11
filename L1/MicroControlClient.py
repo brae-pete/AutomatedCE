@@ -6,15 +6,29 @@ import pickle
 import logging
 import time
 import os
+import sys
+
+try:
+    from L1.Util import get_system_var
+except ImportError:
+    sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
+    from L1.Util import get_system_var
+
 
 #This should be the path to the python.exe file in the CEpy27 environment set up by conda.
 WAIT_TIME = 0.1 # Time in seconds to wait between server calls.
 o_cwd = os.getcwd()
 cwd = o_cwd.split('\\')
 USER = cwd[2]
-PYTHON2_PATH = r"D:\Software\MiniConda\envs\CEpy27\python.exe"
-file_path = o_cwd.split('AutomatedCE')[0]+r'AutomatedCE\L1'
-SERVER_FILE = os.path.join(file_path,"MicroControlServer.py")
+
+conda_path = sys.executable.split('CEpy37')[0]
+PYTHON2_PATH = os.path.join(conda_path, get_system_var('python2path')[0]) # r"\CEpy27\python.exe"
+
+config = os.path.abspath(os.path.join(os.getcwd(), '.', 'config/DemoCam.cfg'))
+SERVER_FILE = os.path.abspath(os.path.join(os.getcwd(), '.', 'L1/MicroControlServer.py'))
+print(SERVER_FILE)
+
+
 class MicroControlClient:
     authkey = b'barracuda'
     server = None # subprocess.Popen object
@@ -55,6 +69,7 @@ class MicroControlClient:
         Opens the python2 subprocess that will run the server and micromanager code.
         :return:
         """
+        print(SERVER_FILE)
         with self.lock:
             self.server = subprocess.Popen([PYTHON2_PATH,
                                             SERVER_FILE, '{}'.format(self.address[1])], stdout=subprocess.PIPE, stdin=subprocess.PIPE)

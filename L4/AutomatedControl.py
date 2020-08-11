@@ -2,11 +2,14 @@
 This file contains the code necessary to run automated control over a capillary electrophoresis system.
 
 """
+import os
+import string
 import threading
 import time
 from queue import Queue
 from L3.SystemsBuilder import CESystem
 from L4 import Util, Trajectory, FileIO, Electropherogram
+from L1.Util import get_system_var
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,17 +34,20 @@ def get_standard_unit(value):
     units = {'cm': 10, 'kv': 1000, 'min': 60}
     # Get Height (Assume mm and s)
     value = value.split(' ')
+    assert value[0] != '', "Check method, one or more fields left blank on a step."
+
     value[0] = eval(value[0])
     if len(value) > 1:
         if value[1] in units.keys():
             value[0] *= units[value[1]]
     return value[0]
 
+
 class Step:
     """
     Standardize data object containing all the information needed for a given automation step
     """
-    special_commands = ['auto_cell', 'gate', 'collect', 'manual_cell', 'sample']
+    special_commands = ['auto_cell', 'gate', 'collect', 'manual_cell', 'sample', 'wait']
 
     def __init__(self, line):
         self.well_location = []  # um, um
@@ -56,8 +62,6 @@ class Step:
 
         # Read step
         self.read_line(line)
-
-
 
     @staticmethod
     def _get_true_false(value):
@@ -178,6 +182,8 @@ class BasicTemplateShape(object):
         :return:
         """
         # remove white space
+        line = line.replace('[', '').replace(']', '')
+        line = line.replace('(', '').replace(')', '')
         line = line.split('\t')
         line = [x.rstrip().lstrip() for x in line]
 
@@ -350,12 +356,18 @@ class Template(object):
             zz += ledge.get_intersection(xx, yy)
         return zz
 
+    def get_max_ledge(self):
+        z_max = -1
+        for _, ledge in self.ledges.items():
+            if ledge.height > z_max:
+                z_max = ledge.height
+        return z_max
+
 
 class AutoRun:
     """
     Class that organizes and starts the calls for an automated Run
     """
-    template: Template
 
     def __init__(self, system: CESystem()):
         """
@@ -371,54 +383,75 @@ class AutoRun:
         self.repetition_style = 'method'
         self._queue = Queue()
         self.is_running = threading.Event()
+        self.continue_event = threading.Event()
+        self.continue_callbacks = {}
         self.traced_thread = Util.TracedThread()
         self.traced_thread.name = 'AutoRun'
-        self.data_dir = FileIO.get_system_var('data_dir')[0]
+        self.data_dir = get_system_var('data_dir')[0]
+        self.safe_enabled = False
+        self.template = None
+        self.template: Template
+        self.path_information = PathTrace()
 
-    def add_method(self, method_file=r'D:\Scripts\AutomatedCE\config\method-test.txt'):
+    def add_method(self, method_file=r'default'):
         """
         Adds a method using a method config file to define the steps
         :param method_file: path to method config file
         :return:
         """
+        if method_file.lower() == "default":
+            method_file = os.path.abspath(os.path.join(os.getcwd(), '..', 'config\\method-test.txt'))
         self.methods.append(Method(method_file))
 
-    def set_template(self, template_file=r'D:\Scripts\AutomatedCE\config\template-test.txt'):
+    def set_template(self, template_file=r'default'):
         """
         Sets the template that should be used. Uses a template config file to definen the well positions and
         ledge heights.
         :param template_file: path to template config file
         :return:
         """
+        if template_file.lower() == "default":
+            template_file = os.path.abspath(os.path.join(os.getcwd(), '..', 'config\\template-test.txt'))
         self.template = Template(template_file)
 
-    def start_run(self):
+    def start_run(self, simulated=False):
         """
         Start a run. This creates a thread-safe queue object and sets the run flag.
         A run can be created in two style types. The first will run
         :param rep_style:
         :return:
         """
+        assert self.template is not None, "Template has not been defined"
+        # Get repeition settings
         rep_style = self.repetition_style.lower()
         self.repetitions = int(self.repetitions)
-        if rep_style == 'sequence': # run through all methods in the list before repeating
+        # Reset the queue and add the method steps according to repetition style
+        self._queue = Queue()
+        if rep_style == 'sequence':  # run through all methods in the list before repeating
             for rep in range(self.repetitions):
                 for method in self.methods:
                     for step in method.method_steps:
                         self._queue.put((step, rep))
 
-        elif rep_style == 'method': # repeat each method before moving to the next method in the list
+        elif rep_style == 'method':  # repeat each method before moving to the next method in the list
             for method in self.methods:
                 for rep in range(self.repetitions):
-                    for step in method:
+                    for step in method.method_steps:
                         self._queue.put((step, rep))
 
-        self.traced_thread = Util.TracedThread(target=self._run)
+        # Create a traced thread we can kill on demand
+        self.traced_thread = Util.TracedThread(target=self._run, args=(simulated,))
         self.traced_thread.name = 'AutoRun'
         self.traced_thread.start()
         self.is_running.set()
+        self.continue_event.set()
 
-    def _run(self):
+    def error_message(self, state, process):
+        if not state:
+            logging.error("Error while moving during {}. Aborting".format(process))
+            self.stop_run()
+
+    def _run(self, simulated=False):
         """
         Makes the individual step calls for a compiled method sequence.
         :return:
@@ -427,27 +460,52 @@ class AutoRun:
             (step, rep) = self._queue.get()
 
             # Get the move positions
-            xyz0, xyz1 = self._get_move_positions(step, rep)
+            xyz0, xyz1, well_name, skip_z = self._get_move_positions(step, rep)
 
+            self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
+            self.path_information.append(f"Preparing for move to well {well_name}")
             # Move the System Safely
-            Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, visual=False).move()
+            if self.safe_enabled:
+                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated,
+                                            self.path_information).move()
+            else:
+                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated,
+                                            self.path_information).move()
+            self.error_message(state, "System Move")
 
             # Move the inlet
-            self.system.outlet_z.set_z(step.outlet_height)
+            self.path_information.append(f"Outlet Height set to {step.outlet_height} mm")
+            if not simulated:
+                self.system.outlet_z.set_z(step.outlet_height)
+
+                # Wait for both Z Stages to stop moving
+                state = self.system.inlet_z.wait_for_target(xyz1[2])
+                self.error_message(state, "Inlet Move Down")
+
+                state = self.system.outlet_z.wait_for_target(step.outlet_height)
+                self.error_message(state, "Outlet Move Down")
 
             # Run the special command for injections here
+            print('Step Special command is : {}'.format(step.special))
+            if step.special == "manual_cell":
+                state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
+                self.error_message(state, "Manual Cell Injection")
+            elif step.special == 'wait':
+                self.wait_to_continue()
+
             after_special = True  # change this to false if we don't need to run the timed part of the step after
 
             # Run the special for Gating the separation here (get peak areas and set the next collection well)
 
             # Run the timed step
             if after_special:
-                self._timed_step(step)
-
+                self.timed_step(step, simulated)
             # Output the electropherogram data
             if step.data:
                 file_path = FileIO.get_data_filename(step.name, self.data_dir)
-                FileIO.OutputElectropherogram(self.system, file_path)
+                self.path_information.append(f"Saving Data to {file_path}")
+                if not simulated:
+                    FileIO.OutputElectropherogram(self.system, file_path)
 
     def _get_move_positions(self, step, rep):
         """
@@ -465,9 +523,14 @@ class AutoRun:
         z = step.inlet_height
         xyz1 = [x, y, z]
 
-        return xyz0, xyz1
+        # If xy0 and xy1 are the same location, we don't need to move z
+        if abs(xyz0[0] - xyz1[0]) < 0.1 and abs(xyz0[1] - xyz1[1]) < 0.1:
+            skip_z = True
+        else:
+            skip_z = False
+        return xyz0, xyz1, step.well_location[rep % len(step.well_location)], skip_z
 
-    def _timed_step(self, step):
+    def timed_step(self, step, simulated):
         """
         Run a timed step, applying the pressure, vacuum, and voltage as specified by the step
         :param step:
@@ -477,26 +540,35 @@ class AutoRun:
         st = time.time()
 
         # Apply Hydrodynamic Forces
-        if step.pressure:
-            self.system.outlet_pressure.rinse_pressure()
-        elif step.vacuum:
-            self.system.outlet_pressure.rinse_vacuum()
-        else:
-            self.system.outlet_pressure.release()
+        self.path_information.append(
+            f"Pressure state changed to {step.pressure}, Vaccuum state changed to {step.vacuum}")
+        if not simulated:
+            if step.pressure:
+                self.system.outlet_pressure.rinse_pressure()
+            elif step.vacuum:
+                self.system.outlet_pressure.rinse_vacuum()
+            else:
+                self.system.outlet_pressure.release()
 
         # Apply Electrokinetic Forces
-        self.system.high_voltage.set_voltage(step.voltage, channel='default')
-        self.system.high_voltage.start()
-        self.system.detector.start()
-        logging.info("Starting timed run at {}".format(time.time() - st))
+        self.path_information.append(f"Voltage set to {step.voltage}")
+        if not simulated:
+            self.system.high_voltage.set_voltage(step.voltage, channel='default')
+            self.system.high_voltage.start()
+            self.system.detector.start()
+
+        self.path_information.append("Timed run for {} s".format(step.time))
         # Wait while running
-        while time.time() - st < step.time and self.is_running.is_set():
+        while time.time() - st < step.time and self.is_running.is_set() and not simulated:
             time.sleep(0.05)
 
         # Stop applying the forces
-        self.system.high_voltage.stop()
-        self.system.detector.stop()
-        logging.info("Stopping timed run at {}".format(time.time() - st))
+        self.path_information.append(f"Stopping timed run after {time.time() - st} s")
+        if not simulated:
+            self.system.high_voltage.stop()
+            self.system.detector.stop()
+            self.system.outlet_pressure.release()
+        self.path_information.append("Stopping timed run at {}".format(time.time() - st))
         threading.Thread(target=self.system.outlet_pressure.stop, name='PressureStop').start()
 
     def stop_run(self):
@@ -508,8 +580,70 @@ class AutoRun:
         """
         # Kill the thread using the trace and wait till the thread has been killed before continuing
         self.traced_thread.kill()
-        self.traced_thread.join()
+
         self.system.stop_ce()
+
+    def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
+        """Calls the continue_callbacks  for the user to set the continue_event before continuing
+        There are two methods that could be employed. The first is the callback may return True when ready
+        to continue or None or False when the run should be aborted. The callback should take a string that can
+        be used to display the message.
+
+        The second method is to wait for the continue_event flag to be set then continue the run.
+        """
+        # Clear the flag
+        self.continue_event.clear()
+        if None not in [message, step, simulated, key]:
+            # Check if we can run the callback message
+            if key in self.continue_callbacks.keys():
+                resp = self.continue_callbacks[key](message, step, simulated)
+                if type(resp) is bool:
+                    if resp is False:
+                        return False
+                    elif resp:
+                        return True
+        # otherwise use the flag
+        while not self.continue_event.is_set():
+            time.sleep(0.2)
+        return True
+
+
+class PathTrace:
+    """
+    Stores the path (all moves and positions) of the current run and calls the assined callbacks when new information
+    is added to the history.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._callbacks = []
+        self.path = []
+
+    def add_callback(self, function):
+        """
+        New callback function is added to the list of callbacks
+        :param function: function to call, should accept single string parameter
+        """
+        self._callbacks.append(function)
+
+    def append(self, information: str):
+        """
+        Adds new piece of information to the list of path information. Sends the information to the callbacks.
+        :param information:
+        :return:
+        """
+        self.path.append(information)
+        for fnc in self._callbacks:
+            fnc(information)
+
+    def extend(self, data):
+        """
+        Adds multiple bits of data to the list of path information, sends the information to the callbacks
+        :param data: list of string information to be added
+        :return:
+        """
+        for information in data:
+            self.append(data)
 
 
 class GateSpecial:
@@ -559,7 +693,7 @@ class GateSpecial:
         """
         self.gates.append((ratio, well_name, peak1, peaks))
 
-    def check_gates(self, time_data:np.ndarray, rfu_data:np.ndarray):
+    def check_gates(self, time_data: np.ndarray, rfu_data: np.ndarray):
         """
         Checks if there are any gates whose requirements are met by the electropherogram data.
         Peak areas are time and baseline corrected from the Electropherograms module.
@@ -578,11 +712,128 @@ class GateSpecial:
             # Get the area of the remaining peaks
             for peak_start, peak_stop in peaks:
                 total_area += Electropherogram.get_corrected_peak_area(time_data, rfu_data, peak_start, peak_stop)
-            if peak1_area/total_area < ratio:
+            if peak1_area / total_area < ratio:
                 self.target = well_name
                 return True
         self.target = ""
         return False
+
+
+class TemplateMaker:
+
+    def __init__(self):
+        """
+        :param system: L3 System object for CE Systems
+        """
+        self.wells = {}
+        self.ledges = {}
+        self.dimensions = []
+        self.header = ""
+
+    def add_array(self, label, xy1, xy2, rows, columns, diameter, shape='circle'):
+        """
+        Adds an array of vials. Vials will have label with incrementing number after the name.
+         Adds to the dictionary  of wells.
+        :param label: identifer to be used for these wells ("Inlet, Sample, etc...")
+        :param xy1: xy position of the first well
+        :param xy2: xy position of the second well
+        :param rows: how many rows (y direction) for the array
+        :param cols: how many columns (x direction) for the array
+        :param diameter: diameter of the wells
+        :param shape: type of shape to create an array of (circle currenlty only shape supported)
+        """
+
+        x1, y1 = xy1
+        x2, y2 = xy2
+        delta_x = (x2 - x1) / (columns - 1)
+        delta_y = (y2 - y1) / (rows - 1)
+
+        for x, letter in zip(range(1, columns + 1), string.ascii_lowercase):
+            for y in range(rows):
+                # X starts with 1 so we need to account for that
+                # Y starts with 0
+                center = [x1 + delta_x * (x - 1), y1 + delta_y * y]
+
+                name = self.get_original_name(f"{label}_{letter}{y}")
+                self.wells[name] = [shape, diameter, center]
+
+    def get_original_name(self, name, type='well'):
+        """
+        Returns a unique name for dictionary of wells
+        :param name: name to check if it is unique
+        :return: unique name
+        """
+        original_name = name
+        idx = 0
+        types = {'well': self.wells, 'ledge': self.ledges}
+        while name in types[type].keys():
+            name = original_name + f"{idx}"
+        return name
+
+    def add_well(self, name, xy1, size, shape):
+        """
+        Adds a well to the dictionary
+        :param name: well label, should be unique otherwise a number will be appended.
+        :param xy1: xy position of the center of the well
+        :param size: the size of the shape, either a tuple for rectangles, or float for circles
+        :param shape: type of shape to add
+        :return:
+        """
+
+        name = self.get_original_name(name)
+        self.wells[name] = [shape, size, xy1]
+
+    def add_ledge(self, name, xy1, size, shape, height):
+        """
+        Adds a ledge to the dictionary.
+        :param name: ledge label, should be unique otherwise a number will be appended to make it unique
+        :param xy1: xy position of the ledge shape
+        :param size: size of the ledge
+        :param shape: shape of the ledge
+        :param height: height of the ledge
+        :return:
+        """
+        name = self.get_original_name(name)
+        self.ledges[name] = [shape, size, xy1, height]
+
+    def save_to_file(self, filepath):
+        """
+        Saves the template information, including template dimensions, well information, and ledge information
+        to a Template File
+        :param filepath: filepath to save the file
+        :param header: String of header information, hash '#' symbol will be appended to each new line character.
+        :return: True if successful, False if missing dimensions
+        """
+        if not self.dimensions:
+            logging.warning("No dimensions set, please set dimensions")
+            return False
+
+        with open(filepath, 'w') as f_out:
+            f_out.write(self.header.replace('\n', '\n#'))
+            f_out.write("\n")
+            f_out.write("DIMENSIONS\n Left X\tLower Y\tRight X\tUpper Y\n")
+            x1, y1, x2, y2 = self.dimensions
+            f_out.write(f"{x1}\t{y1}\t{x2}\t{y2}\n")
+            f_out.write("WELLS\nName\tShape\tSize\tXY\n")
+            for name, info in self.wells.items():
+                shape, size, xy1 = info
+                f_out.write(f"{name}\t{shape}\t{size}\t{xy1}\n")
+            f_out.write("LEDGES\nName\tShape\tSize\tXY\tHeight\n")
+            for name, info in self.ledges.items():
+                shape, size, xy, height = info
+                f_out.write(f"{name}\t{shape}\t{size}\t{xy}\t{height}\n")
+        return True
+
+    def add_dimension(self, left_x, lower_y, right_x, upper_y):
+        """
+        Adds dimensions for the overall template
+        :param left_x:
+        :param lower_y:
+        :param right_x:
+        :param upper_y:
+        :return:
+        """
+        self.dimensions = [left_x, lower_y, right_x, upper_y]
 
 
 class AutoSpecial:

@@ -29,8 +29,8 @@ def butter_lowpass_filter(data, kwargs):
         return b, a
 
     settings = {'cutoff': 3, 'fs': 10, 'order': 5, 'padlen': 24, 'padtype': 'constant'}
-    for key, value in kwargs.items():
-        settings.key = value
+    settings.update(kwargs)
+
     b, a = butter_lowpass(settings['cutoff'], settings['fs'], order=settings['order'])
     y = signal.filtfilt(b, a, data, padlen=settings['padlen'], padtype=settings['padtype'])
 
@@ -73,10 +73,10 @@ class DetectorAbstraction(ABC):
         self.role = role
         self.rfu = np.asarray([])
         self.time = np.asarray([])
-        self._lock = threading.Lock()
-        self._sampling_f = 1000
+        self._lock = threading.RLock()
+        self._sampling_f = 100000
         self._final_f = 10
-        self._oversample = False
+        self._oversample = True
         self._oversample_buffer = np.asarray([])
         self._filter_type = [None, None]
 
@@ -167,8 +167,9 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
 
     def __init__(self, controller: DaqAbstraction,role,  channel):
         super().__init__(controller, role)
-        self.daqcontroller.add_analog_input(channel)
-        self.daqcontroller.add_callback(self.add_data, channel, 'waveform', [])
+        self.daqcontroller.add_analog_input(channel, terminal_config="DIFF")
+        self.daqcontroller.add_callback(self.add_data, [channel], 'waveform', [])
+        self.set_oversample_frequency(80000,8)
 
     def set_oversample_frequency(self, sampling_frequency, final_frequency):
         """
@@ -214,24 +215,28 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         :return:
         """
         filter_type, kwargs = self._filter_type
+        locked = self._lock.acquire(timeout=0.2)
+        if not locked:
+            return None
 
-        with self._lock:
-            if filter_type == 'butter':
-                filtered = butter_lowpass_filter(self.rfu, kwargs)
-            elif filter_type == 'savgol':
-                filtered = savgol_filter(self.rfu, kwargs)
-            else:
-                filtered = self.rfu
-            return {'time_data': self.time.copy(), 'rfu': filtered}
+        if filter_type == 'butter':
+            filtered = butter_lowpass_filter(self.rfu.copy(), kwargs)
+        elif filter_type == 'savgol':
+            filtered = savgol_filter(self.rfu.copy(), kwargs)
+        else:
+            filtered = self.rfu.copy()
+        self._lock.release()
+
+        return {'time_data': self.time.copy(), 'rfu': filtered}
 
     def add_data(self, incoming_data, time_elapsed, *args):
         """
         Adds incoming data and oversample filters it as necessary
+        :param time_elapsed:
         :param incoming_data: should be a list of numpy arrays
         :param args:
         :return:
         """
-
         with self._lock:
             if self._oversample:
                 self._add_oversampled_data(incoming_data[0], self._sampling_f / self._final_f)
@@ -273,6 +278,7 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         Stops the daq controller  measurement process
         :return:
         """
+        self._copy_data=self.get_data()
         self.daqcontroller.stop_measurement()
 
     def startup(self):

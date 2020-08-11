@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 from L2.Utility import UtilityControl, UtilityFactory
 from L1.DAQControllers import DaqAbstraction
@@ -61,6 +62,7 @@ class Uniphase(LaserAbstraction, UtilityControl):
 
     def _set_channels(self, values):
         for value, channel in zip(values, self._channels.keys()):
+            channel = self._channels[channel]
             self.daqcontroller.set_do_channel(channel, value)
 
     def laser_fire(self):
@@ -73,19 +75,24 @@ class Uniphase(LaserAbstraction, UtilityControl):
             self._set_channels([True,True,True])
             self.daqcontroller.update_do_channels()
             time.sleep(0.05)
-            self._set_channels([False,True,False])
+            self._set_channels([True,True,False])
             self.daqcontroller.update_do_channels()
+
+    def laser_standby(self):
+        """ Laser is ready to fire in this mode"""
+        self.enable = True
+        self._set_channels([True,True,False])
 
     def startup(self):
         """ Opens the laser and makes sure it is set to off"""
         self.enable = False
-        self._set_channels([False, True, False])
+        self._set_channels([False, False, False])
         self.daqcontroller.update_do_channels()
 
     def shutdown(self):
         """ Close the resources """
         self.enable = False
-        self._set_channels([False, True, False])
+        self._set_channels([False, False, False])
         self.daqcontroller.update_do_channels()
 
     def get_status(self):
