@@ -3,12 +3,21 @@ import traceback
 import sys
 import os
 from L3 import SystemsBuilder
-
+from L4 import AutomatedControl
 
 class SystemsRoutine:
     """
     Class used to create a python process, a CE systems object, and send and interpret commands to and from
     the gui application.
+
+    It is beneficial for the CE system object to live in a different process so that all resources (hardware
+    resources especially) can be reset without resetting the main python interface.
+
+    Communication between the systems object and the python interface takes place using queues where the queues are
+    read and their commands run.
+
+    In addition to the CE System object, there will also be an auto_run object. This will handle the automation tasks
+    required by the System.
     """
 
     def __init__(self):
@@ -72,7 +81,8 @@ class SystemsInterpreter:
     def __init__(self, info, error):
         self.info_queue = info
         self.error_queue = error
-        self.system = SystemsBuilder.CESystem()
+        self.system = SystemsBuilder.CESystem
+        self.auto = AutomatedControl.AutoRun
 
     def create_systems_object(self, config=None):
         """
@@ -83,24 +93,42 @@ class SystemsInterpreter:
         self.system = SystemsBuilder.CESystem()
         if config is not None:
             self.system.load_config(config)
+        self.auto.system = self.system
+
+    def create_auto_object(self):
+        """
+        Creates an AutoRun object from Automated Control
+        :return:
+        """
+        self.auto = AutomatedControl.AutoRun(self.system)
 
     def interpret_and_respond(self, command, *args, **kwargs):
         """
         interprets an incoming command and runs the CE system object. When a response is required adds that to the
         appropriate queue.
-        :param parent:
-        :param utility:
-        :param command:
+
+        Example commands would be:
+
+        system.xy_stage.read_xy  ---> This will read the xy_stage
+        system.objective.set_rel_z, 5  -----> This will set the the objective relative hight 5 mm higher
+
+
+        :param command: String command that matches either a CE_system utility method or AutoRun method.
         :param args:
         :param kwargs:
         :return:
         """
 
         try:
+            # Identify which component to control, CE System (system), AutoRun (auto_run), or reset.
             if command.find('system') >= 0:
                 _, utility, cmd = command.split('.')
                 resp = self.system.__getattribute__(utility).__getattribute(cmd)(*args)
                 self.info_queue.put((utility, cmd, resp))
+            elif command.find('auto_run')>=0:
+                _, cmd = command.split('.')
+                resp = self.system.__getattribute__(cmd)(*args)
+                self.info_queue.put(('auto_run', cmd, resp))
             elif command == 'reset':
                 try:
                     self.system.close_controllers()
