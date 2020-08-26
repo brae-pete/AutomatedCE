@@ -853,8 +853,8 @@ if __name__ == "__main__":
         print(samples)
 
 
-    dq = DigilentDaq()
-    dq.add_analog_output(0)
+    dq = SimulatedDaq()
+    dq.add_analog_output(1)
     dq.set_channel_voltage(1, 0)
     dq.start_voltage()
     dq.add_analog_input(0, 5)
