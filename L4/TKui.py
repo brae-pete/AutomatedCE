@@ -2,6 +2,8 @@ from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
 from L3 import SystemsBuilder
+from L4 import SystemQueue
+
 
 class RootWindow(Frame):
     """
@@ -11,8 +13,8 @@ class RootWindow(Frame):
 
     def __init__(self, root, **kw):
         super().__init__(root, **kw)
-        self.system = SystemsBuilder.CESystem()
-
+        self.system_queue = SystemQueue.SystemsRoutine()
+        self.root = root
         # Add the main Buttons
         system_button = ttk.Button(root, text='System', command=lambda x=self: CESystemWindow(x))
         system_button.grid(column=0, row=0)
@@ -29,10 +31,30 @@ class RootWindow(Frame):
         egram_button = ttk.Button(root, text='Camera')
         egram_button.grid(column=4, row=0)
 
-        egram_button = ttk.Button(root, text='Terminal')
+        egram_button = ttk.Button(root, text='Terminal', command=lambda x=self: TerminalWindow(x))
         egram_button.grid(column=5, row=0)
 
         root.title('Automated Chip')
+
+        root.after(1000, self.check_queues)
+
+    def check_queues(self):
+        """
+        Check the queues for any updates to the UI
+        Also sends commands to get updates from the system
+        :return:
+        """
+        self.system_queue.check_error_queue()
+        self.system_queue.check_info_queue()
+        self.system_queue.send_updates()
+        self.root.after(1000,self.check_queues)
+
+    def on_close(self):
+        self.system_queue.stop_process()
+        self.system_queue.check_info_queue()
+        self.system_queue.check_error_queue()
+        self.root.destroy()
+
 
 
 class CollapsiblePane(ttk.Frame):
@@ -114,7 +136,7 @@ class ZExpandable(CollapsiblePane):
 
     """
 
-    def __init__(self, parent, z_name, **kw):
+    def __init__(self, parent, root: RootWindow, z_name, **kw):
         super().__init__(parent, **kw)
 
         defaults = {'z_name': 'z_stage'}
@@ -122,8 +144,8 @@ class ZExpandable(CollapsiblePane):
 
         self.name = z_name
         self.z_stage_readout = StringVar(value="{} Position:  mm".format(self.name))
-
         self.setup()
+        root.system_queue.add_info_callback("system.{}.read_z", self.read_z)
 
     def setup(self):
         lbl = ttk.Label(self.frame)
@@ -146,6 +168,9 @@ class ZExpandable(CollapsiblePane):
         go_btn = ttk.Button(self.frame)
         go_btn.grid(column=1, row=4)
 
+    def read_z(self, z, *args):
+        self.z_stage_readout.set(z)
+
 
 class XYExpandable(CollapsiblePane):
     """
@@ -154,11 +179,12 @@ class XYExpandable(CollapsiblePane):
     the absolute or relative position can be set using a combination of spin boxes and buttons
     """
 
-    def __init__(self, parent, **kw):
+    def __init__(self, parent, root, **kw):
         super().__init__(parent, **kw)
 
         self.xy_stage_readout = StringVar(value="X: mm Y: mm")
         self.setup()
+        root.system_queue.add_info_callback("system.xy_stage.read_xy", self.read_xy)
 
     def setup(self):
         """
@@ -196,33 +222,41 @@ class XYExpandable(CollapsiblePane):
         go_btn = ttk.Label(self.frame, text="Go!")
         go_btn.grid(row=6, column=2)
 
+    def read_xy(self, xy, *args):
+        self.xy_stage_readout.set("X: {:.3f} Y: {:.3f}".format(xy[0], xy[1]))
+
 
 class CESystemWindow(Frame):
 
-    def __init__(self, parent, **kw):
+    def __init__(self, parent: RootWindow, **kw):
         window = Toplevel(parent)
         super().__init__(window, **kw)
 
         window.title('System Controls')
+
+        reset_button = ttk.Button(window, text="Reset", command=parent.system_queue.start_process)
+        reset_button.grid(row=0, column=0)
+        st = 1
+
         xy_stage_label = ttk.Label(window, text='XY Stage')
-        xy_stage_label.grid(row=0, column=0, sticky="NEW")
-        self.xy_stage_frame = XYExpandable(window)
-        self.xy_stage_frame.grid(row=0, column=1, sticky="NSEW")
+        xy_stage_label.grid(row=st + 0, column=0, sticky="NEW")
+        self.xy_stage_frame = XYExpandable(window, parent)
+        self.xy_stage_frame.grid(row=st + 0, column=1, sticky="NSEW")
 
         objective_label = ttk.Label(window, text='Objective Z ')
-        objective_label.grid(row=1, column=0, sticky="NEW")
-        self.objective_frame = ZExpandable(window, z_name='objective')
-        self.objective_frame.grid(row=1, column=1, sticky="NSEW")
+        objective_label.grid(row=1 + st, column=0, sticky="NEW")
+        self.objective_frame = ZExpandable(window, parent, z_name='objective')
+        self.objective_frame.grid(row=1 + st, column=1, sticky="NSEW")
 
         outlet_label = ttk.Label(window, text='Outlet Z ')
-        outlet_label.grid(row=2, column=0, sticky="NEW")
-        self.outlet_z_frame = ZExpandable(window, z_name='Outlet')
-        self.outlet_z_frame.grid(row=2, column=1, sticky="NSEW")
+        outlet_label.grid(row=2 + st, column=0, sticky="NEW")
+        self.outlet_z_frame = ZExpandable(window, parent, z_name='Outlet')
+        self.outlet_z_frame.grid(row=2 + st, column=1, sticky="NSEW")
 
         inlet_label = ttk.Label(window, text='Inlet Z ')
-        inlet_label.grid(row=3, column=0, sticky="NEW")
-        self.inlet_z_frame = ZExpandable(window, z_name='Inlet')
-        self.inlet_z_frame.grid(row=3, column=1, sticky="NSEW")
+        inlet_label.grid(row=3 + st, column=0, sticky="NEW")
+        self.inlet_z_frame = ZExpandable(window, parent, z_name='Inlet')
+        self.inlet_z_frame.grid(row=3 + st, column=1, sticky="NSEW")
 
 
 class InitFrame(Frame):
@@ -299,7 +333,31 @@ class MethodWindow(Frame):
         text.tag_ranges('sel')
 
 
-root = Tk()
-wn = RootWindow(root)
+class TerminalWindow(Frame):
 
-root.mainloop()
+    def __init__(self, parent: RootWindow, **kw):
+        window = Toplevel(parent)
+        super().__init__(window, **kw)
+
+        text = Text(window, state='disabled', width=80, height=10, wrap='none')
+        text['state'] = 'normal'
+        text.insert('1.0+3c', 'Terminal Inputs Name', ('header'))
+        text.tag_add('method_line', 2.0, 10.0)
+        text.grid(row=0, column=0, columnspan=4, sticky="NSEW")
+        text['state'] = 'disabled'
+        self.text = text
+
+        parent.system_queue.add_error_callback(self.update_text)
+
+    def update_text(self, level, msg):
+        text = self.text
+        text['state'] = 'normal'
+        text.insert('end', "{}::{}".format(level,msg), (level))
+        text['state'] = 'disabled'
+
+
+if __name__ == "__main__":
+    root = Tk()
+    wn = RootWindow(root)
+    root.protocol("WM_DELETE_WINDOW", wn.on_close)
+    root.mainloop()
