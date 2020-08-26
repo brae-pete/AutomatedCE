@@ -91,6 +91,7 @@ class PMOD_DAC(HighVoltageAbstraction):
 
         Config example:
         utility, (daq1,ard1), high_voltage, chip_voltage, bertan, [3,4,5], ['ai3','ai5','NA'], ['ai4','ai6','NA']
+
         * The Output voltage and current channels must be the same length as the input channels. If there is no
         port available, or the outputs from the power supply don't need to be recorded pass 'NA' instead. In the above
         example channel 5 of the bertan does not have voltage or current readout.
@@ -198,6 +199,7 @@ class PMOD_DAC(HighVoltageAbstraction):
         Resets the daq and disables the daq enable pin
         :return:
         """
+        self.daqcontroller.stop_measurement()
         self._power_down()
 
     def shutdown(self):
@@ -445,7 +447,9 @@ def test_pmod():
 if __name__ == "__main__":
     import time
     from L1.DAQControllers import SimulatedDaq
+    from L1.Controllers import SimulatedController
 
-    controller = SimulatedDaq()
-    power = PMOD_DAC(controller, 'testing', ('0', '1', '2', '3'), ('0', '1', '2', '3'), ('4', '5', '6', '7'))
+    daqcontroller = SimulatedDaq()
+    controller = SimulatedController()
+    power = PMOD_DAC((daqcontroller,controller), 'testing', ('0', '1', '2', '3'), ('0', '1', '2', '3'), ('4', '5', '6', '7'))
 
