@@ -43,7 +43,7 @@ class DaqAbstraction(ABC):
 
     def __init__(self, **kwargs):
         self._send_funcs = []
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._callbacks = []
         self._set_ai_channels = []
         self._set_ao_channels = []
@@ -52,7 +52,6 @@ class DaqAbstraction(ABC):
         self._total_samples = 0  # used to keep track of time_data
         self._set_voltages = {}
         self._current_voltages = {}
-        self._lock = threading.Lock()
         self._read_thread = threading.Thread()
         self.id = 'daq'
 
