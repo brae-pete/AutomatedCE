@@ -419,14 +419,14 @@ class HighVoltageFactory(UtilityFactory):
         :param args: settings list from utility
         :return:
         """
-        if controller.id == 'daq':
-            settings = args[0]
-            if settings[4] == 'spellman':
-                return SpellmanPowerSupply(controller, role, settings[5], settings[6], settings[7])
-            else:
-                return None
+        settings = args[0]
+        if settings[4] == 'spellman':
+            return SpellmanPowerSupply(controller, role, settings[5], settings[6], settings[7])
+        elif settings[4] == 'pmod':
+            return PMOD_DAC(controller, role, settings[5], settings[6], settings[7] )
         else:
             return None
+
 
 
 def test_spellman():

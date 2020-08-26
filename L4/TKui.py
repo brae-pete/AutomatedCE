@@ -1,7 +1,7 @@
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
-
+from L3 import SystemsBuilder
 
 class RootWindow(Frame):
     """
@@ -11,6 +11,7 @@ class RootWindow(Frame):
 
     def __init__(self, root, **kw):
         super().__init__(root, **kw)
+        self.system = SystemsBuilder.CESystem()
 
         # Add the main Buttons
         system_button = ttk.Button(root, text='System', command=lambda x=self: CESystemWindow(x))
@@ -213,22 +214,21 @@ class CESystemWindow(Frame):
         self.objective_frame = ZExpandable(window, z_name='objective')
         self.objective_frame.grid(row=1, column=1, sticky="NSEW")
 
-
         outlet_label = ttk.Label(window, text='Outlet Z ')
         outlet_label.grid(row=2, column=0, sticky="NEW")
         self.outlet_z_frame = ZExpandable(window, z_name='Outlet')
         self.outlet_z_frame.grid(row=2, column=1, sticky="NSEW")
-
 
         inlet_label = ttk.Label(window, text='Inlet Z ')
         inlet_label.grid(row=3, column=0, sticky="NEW")
         self.inlet_z_frame = ZExpandable(window, z_name='Inlet')
         self.inlet_z_frame.grid(row=3, column=1, sticky="NSEW")
 
+
 class InitFrame(Frame):
 
     def __init__(self, parent, **kw):
-        self.window = window= Toplevel(parent)
+        self.window = window = Toplevel(parent)
         super().__init__(window, **kw)
         self.setup()
 
@@ -240,32 +240,33 @@ class InitFrame(Frame):
         instruction_frame.grid(row=0, column=0, rowspan=2)
 
         header_lbl = ttk.Label(instruction_frame, text='Initialize System')
-        header_lbl.grid(row=0, column = 0)
+        header_lbl.grid(row=0, column=0)
 
         step_1_lbl = ttk.Label(instruction_frame, text=" 1. Load the System ")
         step_1_lbl.grid()
 
-        step_1_file_button = ttk.Button(instruction_frame, text='Select Config', command= lambda: filedialog.askopenfilename())
+        step_1_file_button = ttk.Button(instruction_frame, text='Select Config',
+                                        command=lambda: filedialog.askopenfilename())
         step_1_file_button.grid()
 
         step_2_lbl = ttk.Label(instruction_frame, text='2. Load the Template')
         step_2_lbl.grid()
 
-        step_2_btn = ttk.Button(instruction_frame, text='Select Template' , command = lambda:filedialog.askopenfilename())
+        step_2_btn = ttk.Button(instruction_frame, text='Select Template', command=lambda: filedialog.askopenfilename())
         step_2_btn.grid()
 
-        step_3_lbl = ttk.Label(instruction_frame, text = "3. Calibrate the CE Apparatus")
+        step_3_lbl = ttk.Label(instruction_frame, text="3. Calibrate the CE Apparatus")
         step_3_lbl.grid()
 
-        step_4_lbl = ttk.Label(instruction_frame, text = "4. Calibration Check")
+        step_4_lbl = ttk.Label(instruction_frame, text="4. Calibration Check")
         step_4_lbl.grid()
-
 
         picture_frame = ttk.Frame(window)
         picture_frame.grid(row=0, column=1)
 
         detail_frame = ttk.Frame(window)
         detail_frame.grid(row=1, column=1)
+
 
 class MethodWindow(Frame):
     """
@@ -277,26 +278,25 @@ class MethodWindow(Frame):
         super().__init__(window, **kw)
 
         text = Text(window, state='disabled', width=80, height=10, wrap='none')
-        text['state']='normal'
-        text.insert('1.0+3c', 'Method Name',('header'))
+        text['state'] = 'normal'
+        text.insert('1.0+3c', 'Method Name', ('header'))
         text.tag_add('method_line', 2.0, 10.0)
-        text.grid(row = 0, column = 0, columnspan = 4, sticky="NSEW")
-        text['state']='disabled'
+        text.grid(row=0, column=0, columnspan=4, sticky="NSEW")
+        text['state'] = 'disabled'
         text.tag_bind('method_line', '<<Selection>>', lambda event, text=text: print(text.tag_ranges('sel')))
 
         btn = ttk.Button(window, text="Add New")
-        btn.grid(row=1, column = 0, sticky="NSEW")
+        btn.grid(row=1, column=0, sticky="NSEW")
 
-        btn = ttk.Button(window, text = "Delete Selected")
-        btn.grid(row=1, column = 1, sticky="NSEW")
+        btn = ttk.Button(window, text="Delete Selected")
+        btn.grid(row=1, column=1, sticky="NSEW")
 
-        spin_label = ttk.Label(window, text = "Repetitions")
-        spin_label.grid(row=1, column = 2, sticky="NSE")
+        spin_label = ttk.Label(window, text="Repetitions")
+        spin_label.grid(row=1, column=2, sticky="NSE")
         spin_box = ttk.Spinbox(window)
-        spin_box.grid(row=1, column = 3, sticky = "NSW")
+        spin_box.grid(row=1, column=3, sticky="NSW")
 
         text.tag_ranges('sel')
-
 
 
 root = Tk()
