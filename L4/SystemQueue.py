@@ -5,6 +5,35 @@ import os
 from L3 import SystemsBuilder
 from L4 import AutomatedControl
 
+
+import functools
+
+def rsetattr(obj, attr, val):
+    pre, _, post = attr.rpartition('.')
+    return setattr(rgetattr(obj, pre) if pre else obj, post, val)
+
+# using wonder's beautiful simplification: https://stackoverflow.com/questions/31174295/getattr-and-setattr-on-nested-objects/31174427?noredirect=1#comment86638618_31174427
+
+def rgetattr(obj, attr, *args):
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+    return functools.reduce(_getattr, [obj] + attr.split('.'))
+
+def call_method(obj, command, *args, **kwargs):
+    """
+    Calls a method given an object and a string. String contains the attributes of the object
+    that leads to the method. *args and **kwargs are the method arguments
+    :param obj: object holding the methods or subobjects
+    :param command: string command
+    :param args: method arguments
+    :param kwargs: method keyword arguments
+    :return:
+    """
+    #child = rgetattr(obj, ".".join(command.split('.')[0:-1])) # This was because I was a dork
+    func = rgetattr(obj, command)
+    resp = func(*args, **kwargs)
+    return resp
+
 class SystemsRoutine:
     """
     Class used to create a python process, a CE systems object, and send and interpret commands to and from
@@ -84,6 +113,7 @@ class SystemsRoutine:
 
     def send_command(self, cmd, *args, **kwargs):
         self.command_queue.put((cmd, args, kwargs))
+        print(args)
         return
 
     def add_info_callback(self, msg, fnc):
@@ -135,8 +165,8 @@ class SystemsInterpreter:
     def __init__(self, info, error):
         self.info_queue = info
         self.error_queue = error
-        self.system = SystemsBuilder.CESystem
-        self.auto = AutomatedControl.AutoRun
+        self.system = SystemsBuilder.CESystem()
+        self.auto = AutomatedControl.AutoRun(self.system)
 
     def create_systems_object(self, config=None):
         """
@@ -176,14 +206,17 @@ class SystemsInterpreter:
         try:
             # Identify which component to control, CE System (system), AutoRun (auto_run), or reset.
             if command.find('system') >= 0:
-                _, utility, cmd = command.split('.')
-                self.error_queue.put(("info", "{}::{}".format(utility, cmd)))
-                resp = self.system.__getattribute__(utility).__getattribute(cmd)(*args)
+                #_, utility, cmd = command.split('.')
+                self.error_queue.put(("info", "{}::{}::{}".format(command,args,kwargs)))
+                resp = call_method(self, command, *args, **kwargs)
+                #resp = self.system.__getattribute__(utility).__getattribute(cmd)(*args)
                 self.info_queue.put((command, resp))
-            elif command.find('auto_run')>=0:
-                _, cmd = command.split('.')
-                resp = self.system.__getattribute__(cmd)(*args)
-                self.info_queue.put(('auto_run', cmd, resp))
+                """ This should no longer be needed but lets test before we remove it
+                elif command.find('auto_run')>=0:
+                    _, cmd = command.split('.')
+                    resp = self.system.__getattribute__(cmd)(*args)
+                    self.info_queue.put(('auto_run', cmd, resp))
+                """
             elif command == 'reset':
                 try:
                     self.system.close_controllers()
@@ -194,6 +227,7 @@ class SystemsInterpreter:
         except Exception as e:
             a,b,c = sys.exc_info()
             self.error_queue.put(("traceback", "{}\n {}\n Line Number {}\n".format(a,c.tb_frame.f_code.co_filename,c.tb_lineno)))
+            self.error_queue.put(("traceback","".join(traceback.format_exception(a,b,c))))
             self.error_queue.put(('error-2',"{}::{}\n".format(e,command)))
 
 
@@ -209,7 +243,12 @@ def wait_n_read(info: mp.Queue, error: mp.Queue, command: mp.Queue):
             error.put(('error-1',e))
 
 
+
+
+
 if __name__ == "__main__":
     rout = SystemsRoutine()
     rout.start_process()
+    rout.send_command('system.load_config',r'C:\Users\bvp22\Documents\Scripts\AutomatedCE\config\TestChip.cfg')
     rout.command_queue.put(("system.xy_stage.read_xy", (), {}))
+

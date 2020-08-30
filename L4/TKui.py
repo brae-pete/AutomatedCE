@@ -261,10 +261,11 @@ class CESystemWindow(Frame):
 
 class InitFrame(Frame):
 
-    def __init__(self, parent, **kw):
+    def __init__(self, parent:RootWindow, **kw):
         self.window = window = Toplevel(parent)
         super().__init__(window, **kw)
         self.setup()
+        self.parent = parent
 
     def setup(self):
         window = self.window
@@ -300,6 +301,11 @@ class InitFrame(Frame):
 
         detail_frame = ttk.Frame(window)
         detail_frame.grid(row=1, column=1)
+
+    def set_config(self):
+        f_name = filedialog.askopenfilename()
+        if f_name is not None:
+            self.parent.system_queue.send_command("")
 
 
 class MethodWindow(Frame):
@@ -352,7 +358,7 @@ class TerminalWindow(Frame):
     def update_text(self, level, msg):
         text = self.text
         text['state'] = 'normal'
-        text.insert('end', "{}::{}".format(level,msg), (level))
+        text.insert('end', "{}::{}".format(level,msg.replace('\\n', '\n')), (level))
         text['state'] = 'disabled'
 
 
