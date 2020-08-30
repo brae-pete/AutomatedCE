@@ -43,7 +43,7 @@ class DaqAbstraction(ABC):
 
     def __init__(self, **kwargs):
         self._send_funcs = []
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._callbacks = []
         self._set_ai_channels = []
         self._set_ao_channels = []
@@ -52,7 +52,6 @@ class DaqAbstraction(ABC):
         self._total_samples = 0  # used to keep track of time_data
         self._set_voltages = {}
         self._current_voltages = {}
-        self._lock = threading.Lock()
         self._read_thread = threading.Thread()
         self.id = 'daq'
 
@@ -145,7 +144,7 @@ class DaqAbstraction(ABC):
         """
 
         # Get the total time_data elapsed since the start_measurment was last called
-        time_elapsed = total_samples / self._rate
+        time_elapsed = total_samples/self._rate
         for callback_info in self._callbacks:
             [func, channels, mode, args] = callback_info
             out_data = []
@@ -503,7 +502,7 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             :return:
             """
 
-            self._samples = int(self._rate / 10)
+            self._samples = int(10**(np.round(np.log10(self._rate))-1))
             if mode.lower() == 'finite':
                 mode = nidaqmx.constants.AcquisitionType.FINITE
             else:
@@ -545,7 +544,7 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
                 logging.error('Nidaq did not read samples correctly')
                 return 1
             with self._lock:
-                self._total_samples += len(samples)
+                self._total_samples += samples.shape[1]
                 self._send_data(samples, self._total_samples)
                 return 0
 
@@ -584,6 +583,8 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             :param value:
             :return:
             """
+            if not 'PORT' in channel.upper():
+                channel = self.interpret_do_channels(channel)
             self._set_do_values[channel] = value
 
         def update_do_channels(self):
@@ -851,8 +852,8 @@ if __name__ == "__main__":
         print(samples)
 
 
-    dq = DigilentDaq()
-    dq.add_analog_output(0)
+    dq = SimulatedDaq()
+    dq.add_analog_output(1)
     dq.set_channel_voltage(1, 0)
     dq.start_voltage()
     dq.add_analog_input(0, 5)

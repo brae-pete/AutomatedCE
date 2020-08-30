@@ -73,7 +73,7 @@ class DetectorAbstraction(ABC):
         self.role = role
         self.rfu = np.asarray([])
         self.time = np.asarray([])
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._sampling_f = 100000
         self._final_f = 10
         self._oversample = True
@@ -167,9 +167,9 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
 
     def __init__(self, controller: DaqAbstraction,role,  channel):
         super().__init__(controller, role)
-        self.daqcontroller.add_analog_input(channel)
+        self.daqcontroller.add_analog_input(channel, terminal_config="DIFF")
         self.daqcontroller.add_callback(self.add_data, [channel], 'waveform', [])
-        self.set_oversample_frequency(100000,10)
+        self.set_oversample_frequency(80000,8)
 
     def set_oversample_frequency(self, sampling_frequency, final_frequency):
         """
@@ -215,19 +215,24 @@ class PhotomultiplierDetector(DetectorAbstraction, UtilityControl):
         :return:
         """
         filter_type, kwargs = self._filter_type
+        locked = self._lock.acquire(timeout=0.2)
+        if not locked:
+            return None
 
-        with self._lock:
-            if filter_type == 'butter':
-                filtered = butter_lowpass_filter(self.rfu.copy(), kwargs)
-            elif filter_type == 'savgol':
-                filtered = savgol_filter(self.rfu.copy(), kwargs)
-            else:
-                filtered = self.rfu.copy()
-            return {'time_data': self.time.copy(), 'rfu': filtered}
+        if filter_type == 'butter':
+            filtered = butter_lowpass_filter(self.rfu.copy(), kwargs)
+        elif filter_type == 'savgol':
+            filtered = savgol_filter(self.rfu.copy(), kwargs)
+        else:
+            filtered = self.rfu.copy()
+        self._lock.release()
+
+        return {'time_data': self.time.copy(), 'rfu': filtered}
 
     def add_data(self, incoming_data, time_elapsed, *args):
         """
         Adds incoming data and oversample filters it as necessary
+        :param time_elapsed:
         :param incoming_data: should be a list of numpy arrays
         :param args:
         :return:

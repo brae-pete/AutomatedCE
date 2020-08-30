@@ -28,10 +28,13 @@
 #define nBUSY_PIN_2 4
 #define flag_2 2
 
-#define LED_R A0
-#define LED_G A1
+#define LED_R A1
+#define LED_G A3
 #define LED_B A2
+#define LED_GROUND A0
 #define LIMIT 3
+#define STEPS_PER_REV  200.
+#define MM_PER_REV  8
 // powerSTEP library instance, parameters are distance from the end of a daisy-chain
 // of drivers, !CS pin, !STBY/!Reset pin
 
@@ -57,7 +60,7 @@ bool inversion = 0;
 unsigned long switch_time = 0;
 unsigned long switch_hi_time = 0;
 bool first = true;
-
+float steps_per_mm = (STEPS_PER_REV * outlet_div /MM_PER_REV);
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
 
@@ -78,12 +81,13 @@ void setup()
   pinMode(LED_R, OUTPUT);
   pinMode(LED_G, OUTPUT);
   pinMode(LED_B, OUTPUT);
+  pinMode(LED_GROUND,OUTPUT);
   pinMode(SOLENOID1, OUTPUT);
   pinMode(SOLENOID2, OUTPUT);
   pinMode(SOLENOID3, OUTPUT);
 
   pinMode(LIMIT, INPUT);
-  //pinMode(LIMIT, INPUT_PULLUP);  // set pull-up on analog pin 0 
+  pinMode(LIMIT, INPUT_PULLUP);  // set pull-up on analog pin 0 
   //digitalWrite(LIMIT, HIGH);
   pinMode(A5, OUTPUT);
   pinMode(A4, OUTPUT);
@@ -106,6 +110,7 @@ void setup()
  digitalWrite(LED_R, HIGH);
  digitalWrite(LED_G, LOW);
  digitalWrite(LED_B, LOW);
+ digitalWrite(LED_GROUND, LOW);
 
  
 
@@ -188,8 +193,7 @@ void interrupt_home(){
     driver_2.getStatus(); // clears error flags
     switch_time = temp_time;
     driver_2.resetPos();
-    float steps_per_mm = (200. * outlet_div / 0.75);
-    long steps = long(-1.25*steps_per_mm);
+    long steps = long(-5*steps_per_mm);
     driver_2.goTo(steps);
     //Serial.println("Pause:");
     first = false;
@@ -204,8 +208,12 @@ void interrupt_home_hi(){
   unsigned long temp_time = millis();
   first = true;
   //Serial.println("HI");
-  attachInterrupt(digitalPinToInterrupt(LIMIT),interrupt_home, LOW);
+  attachInterrupt(digitalPinToInterrupt(LIMIT),interrupt_temp, LOW);
 
+}
+
+void interrupt_temp(){
+  
 }
 void serialCheck() {
   while (Serial.available()) {
@@ -256,7 +264,6 @@ void moveMotor(){
   //#Serial.print(inputString[1]);
   //#Serial.print(" To Location: ");
   //Serial.println(steps);
-  float steps_per_mm = (200. * outlet_div / 0.75);
   long steps = long(mm_pos*steps_per_mm);
   driver_2.goTo(steps);
   Serial.println("OK");
@@ -329,7 +336,7 @@ void getMotorPos(){
   //Serial.print(chnl);
   //Serial.println(": ");
   long steps = driver_2.getPos();
-  float steps_per_mm = (200. * outlet_div / 0.75);
+  
   float return_steps = float(float(steps)/steps_per_mm);
   Serial.print("L?");
   Serial.println(return_steps,3);
