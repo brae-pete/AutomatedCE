@@ -126,7 +126,6 @@ class SystemsRoutine:
 
     def send_command(self, cmd, *args, **kwargs):
         self.command_queue.put((cmd, args, kwargs))
-        print(args)
         return
 
     def add_info_callback(self, msg, fnc):
@@ -190,6 +189,8 @@ class SystemsInterpreter:
         self.system = SystemsBuilder.CESystem()
         if config is not None:
             self.system.load_config(config)
+            self.system.open_controllers()
+            self.system.startup_utilities()
         self.auto.system = self.system
 
     def create_auto_object(self):

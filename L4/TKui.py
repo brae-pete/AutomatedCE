@@ -1,8 +1,18 @@
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
+
+from skimage.exposure import adjust_gamma, exposure
+from skimage.transform import resize
+
 from L3 import SystemsBuilder
 from L4 import SystemQueue
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backend_bases import key_press_handler
+from matplotlib.figure import Figure
+import matplotlib.animation as animation
+from matplotlib.pyplot import imshow
+import numpy as np
 
 
 class RootWindow(Frame):
@@ -28,7 +38,7 @@ class RootWindow(Frame):
         egram_button = ttk.Button(root, text='Egram')
         egram_button.grid(column=3, row=0)
 
-        egram_button = ttk.Button(root, text='Camera')
+        egram_button = ttk.Button(root, text='Camera', command=lambda x=self: CameraWindow(x))
         egram_button.grid(column=4, row=0)
 
         egram_button = ttk.Button(root, text='Terminal', command=lambda x=self: TerminalWindow(x))
@@ -47,14 +57,13 @@ class RootWindow(Frame):
         self.system_queue.check_error_queue()
         self.system_queue.check_info_queue()
         self.system_queue.send_updates()
-        self.root.after(1000,self.check_queues)
+        self.root.after(1000, self.check_queues)
 
     def on_close(self):
         self.system_queue.stop_process()
         self.system_queue.check_info_queue()
         self.system_queue.check_error_queue()
         self.root.destroy()
-
 
 
 class CollapsiblePane(ttk.Frame):
@@ -139,13 +148,10 @@ class ZExpandable(CollapsiblePane):
     def __init__(self, parent, root: RootWindow, z_name='inlet_z', **kw):
         super().__init__(parent, **kw)
 
-        defaults = {'z_name': 'inlet_z'}
-        defaults.update(kw)
-
         self.name = z_name
         self.z_stage_readout = StringVar(value="{} Position:  mm".format(self.name))
         self.setup()
-        root.system_queue.add_info_callback("system.{}.read_z".format(defaults['z_name']), self.read_z)
+        root.system_queue.add_info_callback("system.{}.read_z".format(z_name), self.read_z)
 
     def setup(self):
         lbl = ttk.Label(self.frame)
@@ -252,18 +258,18 @@ class CESystemWindow(Frame):
 
         outlet_label = ttk.Label(window, text='Outlet Z ')
         outlet_label.grid(row=2 + st, column=0, sticky="NEW")
-        self.outlet_z_frame = ZExpandable(window, parent, z_name='Outlet')
+        self.outlet_z_frame = ZExpandable(window, parent, z_name='outlet_z')
         self.outlet_z_frame.grid(row=2 + st, column=1, sticky="NSEW")
 
         inlet_label = ttk.Label(window, text='Inlet Z ')
         inlet_label.grid(row=3 + st, column=0, sticky="NEW")
-        self.inlet_z_frame = ZExpandable(window, parent, z_name='Inlet')
+        self.inlet_z_frame = ZExpandable(window, parent, z_name='inlet_z')
         self.inlet_z_frame.grid(row=3 + st, column=1, sticky="NSEW")
 
 
 class InitFrame(Frame):
 
-    def __init__(self, parent:RootWindow, **kw):
+    def __init__(self, parent: RootWindow, **kw):
         self.window = window = Toplevel(parent)
         super().__init__(window, **kw)
         self.setup()
@@ -310,7 +316,7 @@ class InitFrame(Frame):
         f_name = filedialog.askopenfilename()
         if f_name is not None:
             self.parent.system_queue.send_command("system.load_config", config_file=f_name)
-            self.parent.system_queue.config=f_name
+            self.parent.system_queue.config = f_name
 
     def set_template(self):
         """ Set the automated run template """
@@ -318,6 +324,91 @@ class InitFrame(Frame):
         if f_name is not None:
             self.parent.system_queue.send_command('auto_run.set_template', template_file=f_name)
 
+
+class CameraWindow(Frame):
+
+    def __init__(self, parent: RootWindow, **kw):
+        self.parent = parent
+        window = self.window = Toplevel(parent)
+        super().__init__(window, **kw)
+        self.fig = None
+        self.ax = None
+        self._update_img = False
+        self.img = np.zeros((512, 512))
+        self.im_plot= None
+        self.canvas = None
+
+        self.figure_setup()
+        self.setup()
+        self.scalar = 0.75
+        self.gamma = 1
+        self.gain = 1
+        self.percentiles = [0.05, 0.95]
+        self.ani = animation.FuncAnimation(self.fig, self.update_image, interval=2000)
+        parent.system_queue.add_info_callback('system.camera.get_last_image', self.read_image)
+        parent.system_queue.add_info_callback('system.camera.get_camera_dimensions', self.update_dims)
+
+    def setup(self):
+
+        self.grid()
+
+        canvas = FigureCanvasTkAgg(self.fig, master=self)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, columnspan=2)
+
+        frame = Frame(self)
+        frame.grid(row=1, column=0)
+        toolbar = NavigationToolbar2Tk(canvas, frame)
+        toolbar.update()
+        #canvas.get_tk_widget().pack()
+        self.canvas = canvas
+
+        reset_button = ttk.Button(self, text='acquire', command=self.reset_acquisition)
+        reset_button.grid(row=1, column=1)
+
+    def reset_acquisition(self):
+        """
+        Stops and resets the camera continuous acquisition
+        :return:
+        """
+        self.parent.system_queue.send_command("system.camera.stop")
+        self.parent.system_queue.send_command("system.camera.continuous_snap")
+
+    def figure_setup(self):
+        self.fig = Figure(figsize=(5, 4))
+        self.ax = self.fig.add_subplot(111)
+        self.im_plot= self.ax.imshow(self.img)
+
+    def read_image(self, img, *args, **kwargs):
+        if img is not None and img != []:
+            print("LLL:{},{}".format(img, args))
+
+            img = self._pre_plot_image(img)
+            self.img = img
+            self._update_img = True
+
+    # noinspection PyUnresolvedReferences
+    def update_image(self, *args):
+        print(self.img.max())
+        if self._update_img:
+            print("UU")
+            self.im_plot.set_data(self.img)
+            vmax = np.max(self.img)
+            vmin = np.min(self.img)
+            self.im_plot.set_clim(vmin, vmax)
+            self._update_img = False
+            self.canvas.draw()
+        return [self.im_plot]
+
+    def _pre_plot_image(self, image):
+        #image = adjust_gamma(image, gamma=self.gamma, gain=self.gain)
+        low, hi = np.percentile(image, self.percentiles)
+
+        img_rescale = exposure.rescale_intensity(image, in_range=(low, hi))
+        return image
+
+    def update_dims(self, data, *args):
+        self.dims = data
 
 
 class MethodWindow(Frame):
@@ -370,7 +461,7 @@ class TerminalWindow(Frame):
     def update_text(self, level, msg):
         text = self.text
         text['state'] = 'normal'
-        text.insert('end', "{}::{}".format(level,msg.replace('\\n', '\n')), (level))
+        text.insert('end', "{}::{}".format(level, msg.replace('\\n', '\n')), (level))
         text['state'] = 'disabled'
 
 
