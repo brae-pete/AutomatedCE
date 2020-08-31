@@ -90,7 +90,7 @@ class PMOD_DAC(HighVoltageAbstraction):
         Output Current Channels correspond to the daq input ins connected to the bertan current readout.
 
         Config example:
-        utility, (daq1,ard1), high_voltage, chip_voltage, bertan, [3,4,5], ['ai3','ai5','NA'], ['ai4','ai6','NA']
+        utility, (daq1&ard1), high_voltage, chip_voltage, bertan, [3,4,5], ['ai3','ai5','NA'], ['ai4','ai6','NA']
         * The Output voltage and current channels must be the same length as the input channels. If there is no
         port available, or the outputs from the power supply don't need to be recorded pass 'NA' instead. In the above
         example channel 5 of the bertan does not have voltage or current readout.
