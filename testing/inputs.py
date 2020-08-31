@@ -47,7 +47,7 @@ def get_yes_no(msg: str, failed=False):
 def get_value(msg: str, values: list, failed=False):
     if failed:
         print(f"Please select one of the following wells:")
-        [print(x)]
+        [print(values)]
     resp = input(msg)
     if resp not in values:
         return get_value(msg, values, True)

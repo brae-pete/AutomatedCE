@@ -273,7 +273,11 @@ class ConcreteDirector(Director):
         for utility in utility_list:
             settings = utility.split(',')
             utility_type = settings[2]
-            controller = controllers[settings[1]]
+            if '&' in settings[1]:
+                controller = (settings[1].split('&'))
+                controller = [controllers[x] for x in controller]
+            else:
+                controller = controllers[settings[1]]
             if utility_type == 'pressure':
                 self._utility_builder.add_pressure(controller, settings)
             elif utility_type == 'xy':
@@ -378,7 +382,7 @@ class SystemAbstraction(ABC):
         :return:
         """
         if config_file.lower() == "default":
-            config_file = os.path.abspath(os.path.join(os.getcwd(), 'config\\test-system.cfg'))
+            config_file = os.path.abspath(os.path.join(os.getcwd(), 'config\\TestChip.cfg'))
 
         director = ConcreteDirector()
         director.construct(config_file)
@@ -476,6 +480,7 @@ class CESystem(SystemAbstraction):
 
 
 if __name__ == "__main__":
+    os.chdir('..')
     system = CESystem()
     system.load_config()
     system.open_controllers()
