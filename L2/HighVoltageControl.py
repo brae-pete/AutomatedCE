@@ -106,7 +106,7 @@ class PMOD_DAC(HighVoltageAbstraction):
         except TypeError:
             self.daqcontroller=controller
             self.controller = controller
-
+        print(input_channels, output_voltage, output_current)
         assert len(output_current) == len(input_channels) == len(output_voltage), "All Bertan config channel lengths" \
                                                                                   "must match"
         # Set up DAC information
@@ -131,7 +131,7 @@ class PMOD_DAC(HighVoltageAbstraction):
             data[i]=[]
         with self.lock:
             self.data['voltage']=data.copy()
-            self.data['current']=data
+            self.data['current']=data.copy()
 
 
     def get_current(self):
@@ -190,7 +190,7 @@ class PMOD_DAC(HighVoltageAbstraction):
     def start(self):
         with self.lock:
             self._reset_data()
-        self.daqcontroller.start_voltage()
+        self.load_changes()
         self.daqcontroller.start_measurement()
 
     def stop(self):
@@ -276,6 +276,7 @@ class PMOD_DAC(HighVoltageAbstraction):
                 if channel.upper() != "NA":
                     data = np.mean(samples[idx] / scalar)
                     idx += 1
+                    print(len(samples))
                 else:
                     data = np.nan
                 try:
@@ -288,7 +289,7 @@ class PMOD_DAC(HighVoltageAbstraction):
 
 
             self.data['time_data'].append(time_elapsed)
-            sel
+
 
 
 class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
@@ -424,6 +425,8 @@ class HighVoltageFactory(UtilityFactory):
         if settings[4] == 'spellman':
             return SpellmanPowerSupply(controller, role, settings[5], settings[6], settings[7])
         elif settings[4] == 'pmod':
+            print(settings[5],settings[6],settings[7])
+
             return PMOD_DAC(controller, role, settings[5], settings[6], settings[7] )
         else:
             return None

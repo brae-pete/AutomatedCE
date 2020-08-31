@@ -161,7 +161,7 @@ class ArduinoController(ControllerAbstraction):
         # todo output to logger when there is no response
         try:
             return response[-1].decode()
-        except AttributeError or IndexError:
+        except (AttributeError, IndexError) as e:
             return response
 
 
