@@ -385,3 +385,14 @@ class TkCEDisplay(CEDisplayAbstraction):
         self._artists[0].set_data(data['time_data'], data['rfu'])
         self._artists[1].set_data(power_data['time_data'], power_data['current'])
         return self._artists
+
+if __name__=="__main__":
+    import sys
+    import os
+    os.chdir(os.path.abspath('..'))
+    sys = CESystem()
+    sys.load_config(config_file=r'E:\Scripts\AutomatedCE\config\TestChip.cfg')
+    sys.open_controllers()
+    sys.startup_utilities()
+    c = sys.camera
+    wn = PLTMicroscopeDisplay(sys)

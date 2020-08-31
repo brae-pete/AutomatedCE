@@ -80,6 +80,28 @@ class CameraAbstraction(ABC):
         """
         pass
 
+    def get_last_image(self):
+        """
+        Returns the last image from the camera
+        :return:
+        """
+        with self._last_image_lock:
+            return self._last_image
+
+    def get_camera_dimensions(self):
+        """
+        Returns the camera dimensions
+        :return:
+        """
+        return self.dimensions
+
+    def _reshape(self, img:np.ndarray):
+        try:
+            img= img.reshape(self.dimensions)
+        except ValueError:
+            self.startup()
+            img= img.reshape(self.dimensions)
+        return img
 
 class PycromanagerControl(CameraAbstraction, UtilityControl):
     """
@@ -88,8 +110,6 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
     def __init__(self, controller, role):
         super().__init__(controller, role)
 
-    def _reshape(self, img:np.ndarray):
-        return img.reshape(self.dimensions)
 
     def snap(self):
         """
@@ -128,6 +148,7 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         :return:
         """
         if not self._get_running():
+            print("HEYYOO")
             self.controller.send_command(self.controller.core.start_continuous_sequence_acquisition, args=(1.0,))
             self._continuous_running.set()
             self._continuous_thread = threading.Thread(target=self._sequence_update)
@@ -159,9 +180,12 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         :return:
         """
         if self._get_running():
+
+            self.controller.send_command(self.controller.core.stop_sequence_acquisition)
+
             self._continuous_running.clear()
             self._continuous_thread.join()
-            self.controller.send_command(self.controller.core.stop_sequence_acquisition)
+
         return True
 
     def set_exposure(self, exposure: int):
@@ -206,6 +230,7 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         """
         self.stop()
         return True
+
 
 
 class MicroManagerCamera(CameraAbstraction, UtilityControl):

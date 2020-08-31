@@ -77,7 +77,7 @@ class PMOD_DAC(HighVoltageAbstraction):
     """
     _max_voltage = 5  # The absolute maximum voltage you can request
     _index = 0
-    lock = threading.Lock()
+    lock = threading.RLock()
     run_data = None
 
     def __init__(self, controller: (DAQControllers.DaqAbstraction, Controllers.ControllerAbstraction), role,
@@ -99,8 +99,14 @@ class PMOD_DAC(HighVoltageAbstraction):
         output control voltage and one that reads it in.
         """
         super().__init__(controller, role)
-        self.daqcontroller = controller[0]
-        self.controller = controller[1]
+        try:
+            self.daqcontroller = controller[0]
+            self.controller = controller[1]
+
+        except TypeError:
+            self.daqcontroller=controller
+            self.controller = controller
+
         assert len(output_current) == len(input_channels) == len(output_voltage), "All Bertan config channel lengths" \
                                                                                   "must match"
         # Set up DAC information
@@ -114,11 +120,29 @@ class PMOD_DAC(HighVoltageAbstraction):
                 self.daqcontroller.add_analog_input(out_voltage)
             if out_current.upper() != "NA":
                 self.daqcontroller.add_analog_input(out_current)
+
             self._input_channels.append(out_voltage)
             self._input_channels.append(out_current)
 
         self.daqcontroller.add_callback(self._read_data, self._input_channels, 'wave', ())
+    def _reset_data(self):
+        data = {}
+        for i in self.voltages.keys():
+            data[i]=[]
+        with self.lock:
+            self.data['voltage']=data.copy()
+            self.data['current']=data
 
+
+    def get_current(self):
+        with self.lock:
+            data = self.data['current'].copy()
+        return data
+
+    def get_voltage(self):
+        with self.lock:
+            data = self.data['voltage'].copy()
+        return data
 
     def read_arduino(self):
         with self.lock:
@@ -163,11 +187,18 @@ class PMOD_DAC(HighVoltageAbstraction):
         self._power_down()
         self._power_on()
 
+    def start(self):
+        with self.lock:
+            self._reset_data()
+        self.daqcontroller.start_voltage()
+        self.daqcontroller.start_measurement()
+
     def stop(self):
         """
         Resets the daq and disables the daq enable pin
         :return:
         """
+        self.daqcontroller.stop_measurement()
         self._power_down()
 
     def shutdown(self):
@@ -235,6 +266,7 @@ class PMOD_DAC(HighVoltageAbstraction):
         """
         # Empty queue
         scalars = [self._voltage_scalar, self._current_scalar]
+        output_channels = list(self.voltages.keys())
         with self._data_lock:
             idx = 0
             outputs = []
@@ -242,10 +274,17 @@ class PMOD_DAC(HighVoltageAbstraction):
                 # Only add data if we are getting data from our channels, channels that aren't recorded have the NA name
                 scalar = scalars[odd_even%2]
                 if channel.upper() != "NA":
-                    outputs.append(np.mean(samples[idx] / scalar))
+                    data = np.mean(samples[idx] / scalar)
                     idx += 1
                 else:
-                    outputs.append(0)
+                    data = np.nan
+                try:
+                    if odd_even%2 > 0:
+                        self.data['current'][output_channels[int(odd_even/2)]].append(data)
+                    else:
+                        self.data['voltage'][output_channels[int((odd_even-1)/2)]].append(data)
+                except IndexError:
+                    print(odd_even, len(output_channels))
 
 
             self.data['time_data'].append(time_elapsed)
@@ -381,23 +420,37 @@ class HighVoltageFactory(UtilityFactory):
         :param args: settings list from utility
         :return:
         """
-        if controller.id == 'daq':
-            settings = args[0]
-            if settings[4] == 'spellman':
-                return SpellmanPowerSupply(controller, role, settings[5], settings[6], settings[7])
-            else:
-                return None
+        settings = args[0]
+        if settings[4] == 'spellman':
+            return SpellmanPowerSupply(controller, role, settings[5], settings[6], settings[7])
+        elif settings[4] == 'pmod':
+            return PMOD_DAC(controller, role, settings[5], settings[6], settings[7] )
         else:
             return None
 
 
-if __name__ == "__main__":
-    import time
-    from L1.DAQControllers import DigilentDaq
 
-    controller = DigilentDaq()
-    power = SpellmanPowerSupply(controller, hv_ao=0, hv_ai=0, ua_ai=1)
+def test_spellman():
+    controller = SimulatedDaq()
+    power = SpellmanPowerSupply(controller, role='testing', hv_ao='0', hv_ai='0', ua_ai='1')
     power.set_voltage(1000)
     power.start()
     time.sleep(1.5)
     power.get_voltage()
+
+    return power
+
+
+def test_pmod():
+
+    return
+
+if __name__ == "__main__":
+    import time
+    from L1.DAQControllers import SimulatedDaq
+    from L1.Controllers import SimulatedController
+
+    daqcontroller = SimulatedDaq()
+    controller = SimulatedController()
+    power = PMOD_DAC((daqcontroller,controller), 'testing', ('0', '1', '2', '3'), ('0', '1', '2', '3'), ('4', '5', '6', '7'))
+
