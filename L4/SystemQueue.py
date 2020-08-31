@@ -59,6 +59,7 @@ class SystemsRoutine:
         self.updates={} # Dictionary of command msgs and a list of callbacks to call for each data recieved
         self.error_updates=[] # List of callbacks to send the error information to
         self.update_commands = [] # List of commands that will be sent periodically
+        self.config=None
 
     def check_info_queue(self):
         """
@@ -74,7 +75,8 @@ class SystemsRoutine:
         while not self.info_queue.empty():
             msg, data = self.info_queue.get()
             if msg in self.updates.keys():
-                self.updates[msg](*data)
+                for fnc in self.updates[msg]:
+                    fnc(*data)
 
     def check_error_queue(self):
         """
@@ -99,6 +101,17 @@ class SystemsRoutine:
         self.process = mp.Process(target=wait_n_read, args=(self.info_queue, self.error_queue,
                                                             self.command_queue))
         self.process.start()
+
+        # clear all previous commands
+        while not self.command_queue.empty():
+            try:
+                self.command_queue.get_nowait()
+            except Exception as e:
+                pass
+       # Send new commands
+        if self.config is not None:
+            self.send_command('system.load_config',config_file=self.config)
+
 
     def stop_process(self):
         self.command_queue.put(('stop', (), {}))
@@ -207,10 +220,10 @@ class SystemsInterpreter:
             # Identify which component to control, CE System (system), AutoRun (auto_run), or reset.
             if command.find('system') >= 0:
                 #_, utility, cmd = command.split('.')
-                self.error_queue.put(("info", "{}::{}::{}".format(command,args,kwargs)))
+                self.error_queue.put(("info", "{}::{}::{}\n".format(command,args,kwargs)))
                 resp = call_method(self, command, *args, **kwargs)
                 #resp = self.system.__getattribute__(utility).__getattribute(cmd)(*args)
-                self.info_queue.put((command, resp))
+                self.info_queue.put((command, [resp]))
                 """ This should no longer be needed but lets test before we remove it
                 elif command.find('auto_run')>=0:
                     _, cmd = command.split('.')

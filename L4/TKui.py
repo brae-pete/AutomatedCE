@@ -136,16 +136,16 @@ class ZExpandable(CollapsiblePane):
 
     """
 
-    def __init__(self, parent, root: RootWindow, z_name, **kw):
+    def __init__(self, parent, root: RootWindow, z_name='inlet_z', **kw):
         super().__init__(parent, **kw)
 
-        defaults = {'z_name': 'z_stage'}
+        defaults = {'z_name': 'inlet_z'}
         defaults.update(kw)
 
         self.name = z_name
         self.z_stage_readout = StringVar(value="{} Position:  mm".format(self.name))
         self.setup()
-        root.system_queue.add_info_callback("system.{}.read_z", self.read_z)
+        root.system_queue.add_info_callback("system.{}.read_z".format(defaults['z_name']), self.read_z)
 
     def setup(self):
         lbl = ttk.Label(self.frame)
@@ -189,7 +189,6 @@ class XYExpandable(CollapsiblePane):
     def setup(self):
         """
         Places all the buttons into their respective positions.
-
         :return:
         """
         lbl = ttk.Label(self.frame)
@@ -223,7 +222,10 @@ class XYExpandable(CollapsiblePane):
         go_btn.grid(row=6, column=2)
 
     def read_xy(self, xy, *args):
-        self.xy_stage_readout.set("X: {:.3f} Y: {:.3f}".format(xy[0], xy[1]))
+        try:
+            self.xy_stage_readout.set("X: {:.3f} Y: {:.3f}".format(xy[0], xy[1]))
+        except:
+            self.xy_stage_readout.set("incoming: {}".format(xy))
 
 
 class CESystemWindow(Frame):
@@ -268,6 +270,7 @@ class InitFrame(Frame):
         self.parent = parent
 
     def setup(self):
+        """ Place the buttons"""
         window = self.window
 
         # Instructions Frame
@@ -281,7 +284,7 @@ class InitFrame(Frame):
         step_1_lbl.grid()
 
         step_1_file_button = ttk.Button(instruction_frame, text='Select Config',
-                                        command=lambda: filedialog.askopenfilename())
+                                        command=self.set_config)
         step_1_file_button.grid()
 
         step_2_lbl = ttk.Label(instruction_frame, text='2. Load the Template')
@@ -303,9 +306,18 @@ class InitFrame(Frame):
         detail_frame.grid(row=1, column=1)
 
     def set_config(self):
+        """ Set the system config file """
         f_name = filedialog.askopenfilename()
         if f_name is not None:
-            self.parent.system_queue.send_command("")
+            self.parent.system_queue.send_command("system.load_config", config_file=f_name)
+            self.parent.system_queue.config=f_name
+
+    def set_template(self):
+        """ Set the automated run template """
+        f_name = filedialog.askopenfilename()
+        if f_name is not None:
+            self.parent.system_queue.send_command('auto_run.set_template', template_file=f_name)
+
 
 
 class MethodWindow(Frame):
