@@ -126,12 +126,14 @@ class PMOD_DAC(HighVoltageAbstraction):
 
         self.daqcontroller.add_callback(self._read_data, self._input_channels, 'wave', ())
     def _reset_data(self):
-        data = {}
+        v_data = {}
+        c_data = {}
         for i in self.voltages.keys():
-            data[i]=[]
+            v_data[i]=[]
+            c_data[i]=[]
         with self.lock:
-            self.data['voltage']=data.copy()
-            self.data['current']=data.copy()
+            self.data['voltage']=v_data
+            self.data['current']=c_data
 
 
     def get_current(self):
@@ -276,16 +278,18 @@ class PMOD_DAC(HighVoltageAbstraction):
                 if channel.upper() != "NA":
                     data = np.mean(samples[idx] / scalar)
                     idx += 1
-                    print(len(samples))
+                    #print(len(samples))
                 else:
                     data = np.nan
                 try:
                     if odd_even%2 > 0:
-                        self.data['current'][output_channels[int(odd_even/2)]].append(data)
+                        self.data['current'][output_channels[int((odd_even-1)/2)]].append(data)
+                    elif odd_even%2 == 0:
+                        self.data['voltage'][output_channels[int((odd_even)/2)]].append(data)
                     else:
-                        self.data['voltage'][output_channels[int((odd_even-1)/2)]].append(data)
+                        print("??")
                 except IndexError:
-                    print(odd_even, len(output_channels))
+                    print("Index Error: ",odd_even, len(output_channels))
 
 
             self.data['time_data'].append(time_elapsed)
