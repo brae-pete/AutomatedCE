@@ -38,7 +38,7 @@ def get_system_var(*var_names):
     return response
 
 
-def get_data_filename(name, file_dir):
+def get_data_filename(name, file_dir, extension=".csv"):
     """
     Returns a unique filename by adding 0's to the end of the name (but before the file suffix).
     :param name: str
@@ -48,14 +48,31 @@ def get_data_filename(name, file_dir):
     # Check if directory exists and make it if not
     Path(file_dir).mkdir(parents=True, exist_ok=True)
 
-    file_name = os.path.join(file_dir, name+".csv")
+    file_name = os.path.join(file_dir, name+extension)
     copy_number = 0
     while os.path.exists(file_name):
-        new_name = name + f"_{copy_number:05d}" + ".csv"
+        new_name = name + f"_{copy_number:05d}" + extension
         file_name = os.path.join(file_dir, new_name)
         copy_number += 1
     return file_name
 
+def get_data_folder(name, file_dir):
+    """
+    Returns a unique folder name by adding 0's to the end of the name
+    :param name:
+    :param file_dir:
+    :return:
+    """
+    # Check if directory exists and make it if not
+    Path(file_dir).mkdir(parents=True, exist_ok=True)
+
+    folder = os.path.join(file_dir, name)
+    copy_number = 0
+    while os.path.is_dir(folder):
+        new_name = name + f"_{copy_number:05d}"
+        folder = os.path.join(file_dir, new_name)
+        copy_number += 1
+    return folder
 
 class OutputElectropherogram:
     """

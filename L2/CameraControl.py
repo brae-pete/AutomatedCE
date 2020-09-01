@@ -14,6 +14,7 @@ class CameraAbstraction(ABC):
         self.controller = controller
         self.role = role
         self._callbacks = []
+        self._callback_tags = {}
         self._last_image = []
         self.dimensions = [1,1] # Width and height of the image in pixels
         self.update_frequency = 16  # How many times per second to check the camera
@@ -44,13 +45,27 @@ class CameraAbstraction(ABC):
         """
         pass
 
-    def add_callback(self, function):
+    def add_callback(self, function, tag="default"):
         """
         Add function to call during continuous acquisition
         :param function:
         :return:
         """
         self._callbacks.append(function)
+        if tag not in self._callback_tags.keys():
+            self._callback_tags[tag]=[]
+        self._callback_tags[tag].append(function)
+
+
+    def remove_callback(self, tag:str):
+        """
+        Removes all callbacks with a given tag
+        :param tag: string identifier
+        :return:
+        """
+        if tag in self._callback_tags:
+            for fnc in self._callback_tags[tag]:
+                self._callbacks.pop(fnc)
 
     def _update_callbacks(self, img):
         """
