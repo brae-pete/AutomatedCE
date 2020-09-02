@@ -270,6 +270,65 @@ class XYExpandable(CollapsiblePane):
         self.root_window.system_queue.send_command('system.xy_stage.startup')
 
 
+class SolenoidExpandable(CollapsiblePane):
+
+    def __init__(self, parent, root: RootWindow, **kw):
+        super().__init__(parent, **kw)
+        self.pressure_state_var=StringVar()
+        self.pressure_state_var.trace('w',self.change_pressure)
+        self.root_window=root
+
+    def setup(self):
+        states = [('Seal','seal'),
+                     ('Release','release'),
+                     ('Vacuum', 'rinse_vacuum'),
+                     ('Pressure','rinse_pressure')]
+
+        for label, cmd  in states:
+            rd_btn = ttk.Radiobutton(self.frame, text=label, variable=self.pressure_state_var, value=cmd)
+            rd_btn.grid()
+
+    def change_pressure(self):
+        utility_method = self.pressure_state_var.get()
+        self.root_window.system_queue.send_command('system.outlet_pressure.{}'.format(utility_method))
+
+
+class LEDExpandable(CollapsiblePane):
+
+    def __init__(self, parent, root: RootWindow, **kw):
+        super().__init__(parent, **kw)
+        self.r_var = IntVar()
+        self.g_var = IntVar()
+        self.b_var = IntVar()
+
+        self.root_window = root
+
+    def setup(self):
+        channels = [('Red', self.r_var),
+                    ('Green', self.g_var),
+                    ('Blue', self.b_var)]
+
+        col= 0
+        for label, var in channels:
+            ck_button = ttk.Checkbutton(self.frame, text=label, variable=var)
+            ck_button.grid(row=0, col=col)
+            col+=1
+
+        apply_button = ttk.Button(self.frame, text='Apply', command=self.set_led)
+        apply_button.grid(row=0, col=col)
+
+    def set_led(self):
+        for var, rgb in [(self.r_var,'R'), (self.g_var, 'G'), (self.b_var, 'B')]:
+            state = var.get()
+            if state > 0:
+                self.root_window.system_queue.send_command('system.inlet_rgb.turn_on_channel',rgb)
+            elif state == 0:
+                self.root_window.system_queue.send_command('system.inlet_rgb.turn_off_channel',rgb)
+
+
+
+
+
 class CESystemWindow(Frame):
 
     def __init__(self, parent: RootWindow, **kw):
