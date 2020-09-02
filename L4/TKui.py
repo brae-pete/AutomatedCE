@@ -487,7 +487,7 @@ class CameraWindow(Frame):
 
     def snap_image(self, *args):
         img = self.raw_image.copy()
-        file = filedialog.asksaveasfilename(filetypes=("*.tif",))
+        file = filedialog.asksaveasfilename(defaultextension=".tif",filetypes=[("Raw Image Tiffs","*.tif")])
         if file is not None:
             imsave(file, img)
 
