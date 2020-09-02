@@ -3,10 +3,11 @@ from tkinter import ttk
 from tkinter import filedialog
 
 from skimage.exposure import adjust_gamma, exposure
+from skimage.io import imsave
 from skimage.transform import resize
 
 from L3 import SystemsBuilder
-from L4 import SystemQueue
+from L4 import SystemQueue, FileIO
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.backend_bases import key_press_handler
 from matplotlib.figure import Figure
@@ -276,8 +277,8 @@ class CESystemWindow(Frame):
         super().__init__(window, **kw)
 
         window.title('System Controls')
-
-        reset_button = ttk.Button(window, text="Reset", command=parent.system_queue.start_process)
+        self.parent = parent
+        reset_button = ttk.Button(window, text="Reset", command=self.reset_process)
         reset_button.grid(row=0, column=0)
         st = 1
 
@@ -301,6 +302,12 @@ class CESystemWindow(Frame):
         self.inlet_z_frame = ZExpandable(window, parent, z_name='inlet_z')
         self.inlet_z_frame.grid(row=3 + st, column=1, sticky="NSEW")
 
+    def reset_process(self):
+        try:
+            self.parent.system_queue.stop_process()
+        except Exception as e:
+            print(e)
+        self.parent.system_queue.start_process()
 
 class InitFrame(Frame):
 
@@ -374,6 +381,8 @@ class CameraWindow(Frame):
         self.canvas = None
         self.lower_var = DoubleVar(value=1)
         self.upper_var = DoubleVar(value=98)
+        self.exposure_var = DoubleVar(value=100)
+        self.exposure_var.trace('w', self.adjust_exposure)
         self.percentiles = [1, 98]
 
         self.figure_setup()
@@ -404,6 +413,9 @@ class CameraWindow(Frame):
         reset_button = ttk.Button(self, text='acquire', command=self.reset_acquisition)
         reset_button.grid(row=2, column=0)
 
+        snap_button = ttk.Button(self, text = 'Save Raw', command = self.snap_image)
+        snap_button.grid(row=3, column = 0)
+
         label = ttk.Label(self, text="Lower perc.")
         label.grid(row=2, column=1)
         spin_box = ttk.Spinbox(self, from_=0, to=100, increment=0.5, format="%.1f",
@@ -416,6 +428,11 @@ class CameraWindow(Frame):
                                textvariable=self.upper_var)
         spin_box.grid(row=3, column=2)
 
+        label = ttk.Label(self, text="Exposure (ms)")
+        label.grid(row=2, column=3)
+        spin_box = ttk.Spinbox(self,from_=0, to=10000, increment=10, format="%.1f",
+                               textvariable=self.exposure_var)
+        spin_box.grid(row=3, column=3)
 
     def reset_acquisition(self):
         """
@@ -431,7 +448,9 @@ class CameraWindow(Frame):
         self.im_plot = self.ax.imshow(self.img)
 
     def read_image(self, img, *args, **kwargs):
+
         if img is not None and img != []:
+            self.raw_image = img.copy()
             #print("LLL:{},{}".format(img, args))
 
             img = self._pre_plot_image(img)
@@ -465,6 +484,20 @@ class CameraWindow(Frame):
 
     def update_dims(self, data, *args):
         self.dims = data
+
+    def snap_image(self, *args):
+        img = self.raw_image.copy()
+        file = filedialog.asksaveasfilename(filetypes=("*.tif",))
+        if file is not None:
+            imsave(file, img)
+
+    def adjust_exposure(self, *args):
+        try:
+            exp = self.exposure_var.get()
+            if exp > 0:
+                self.parent.system_queue.send_command('system.camera.set_exposure',exp)
+        except Exception as e:
+            print(e)
 
 
 class MethodWindow(Frame):
