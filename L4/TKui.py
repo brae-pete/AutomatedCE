@@ -458,7 +458,7 @@ class InitFrame(Frame):
         step_2_lbl = ttk.Label(instruction_frame, text='2. Load the Template')
         step_2_lbl.grid()
 
-        step_2_btn = ttk.Button(instruction_frame, text='Select Template', command=lambda: filedialog.askopenfilename())
+        step_2_btn = ttk.Button(instruction_frame, text='Select Template', command=self.set_template)
         step_2_btn.grid()
 
         step_3_lbl = ttk.Label(instruction_frame, text="3. Calibrate the CE Apparatus")
