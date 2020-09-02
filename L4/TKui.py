@@ -274,17 +274,18 @@ class SolenoidExpandable(CollapsiblePane):
 
     def __init__(self, parent, root: RootWindow, **kw):
         super().__init__(parent, **kw)
-        self.pressure_state_var=StringVar()
-        self.pressure_state_var.trace('w',self.change_pressure)
-        self.root_window=root
+        self.pressure_state_var = StringVar()
+        self.pressure_state_var.trace('w', self.change_pressure)
+        self.root_window = root
+        self.setup()
 
     def setup(self):
-        states = [('Seal','seal'),
-                     ('Release','release'),
-                     ('Vacuum', 'rinse_vacuum'),
-                     ('Pressure','rinse_pressure')]
+        states = [('Seal', 'seal'),
+                  ('Release', 'release'),
+                  ('Vacuum', 'rinse_vacuum'),
+                  ('Pressure', 'rinse_pressure')]
 
-        for label, cmd  in states:
+        for label, cmd in states:
             rd_btn = ttk.Radiobutton(self.frame, text=label, variable=self.pressure_state_var, value=cmd)
             rd_btn.grid()
 
@@ -302,31 +303,42 @@ class LEDExpandable(CollapsiblePane):
         self.b_var = IntVar()
 
         self.root_window = root
+        self.setup()
 
     def setup(self):
         channels = [('Red', self.r_var),
                     ('Green', self.g_var),
                     ('Blue', self.b_var)]
 
-        col= 0
+        col = 0
         for label, var in channels:
             ck_button = ttk.Checkbutton(self.frame, text=label, variable=var)
             ck_button.grid(row=0, col=col)
-            col+=1
+            col += 1
 
         apply_button = ttk.Button(self.frame, text='Apply', command=self.set_led)
         apply_button.grid(row=0, col=col)
 
     def set_led(self):
-        for var, rgb in [(self.r_var,'R'), (self.g_var, 'G'), (self.b_var, 'B')]:
+        for var, rgb in [(self.r_var, 'R'), (self.g_var, 'G'), (self.b_var, 'B')]:
             state = var.get()
             if state > 0:
-                self.root_window.system_queue.send_command('system.inlet_rgb.turn_on_channel',rgb)
+                self.root_window.system_queue.send_command('system.inlet_rgb.turn_on_channel', rgb)
             elif state == 0:
-                self.root_window.system_queue.send_command('system.inlet_rgb.turn_off_channel',rgb)
+                self.root_window.system_queue.send_command('system.inlet_rgb.turn_off_channel', rgb)
 
 
+class LaserExpandable(CollapsiblePane):
 
+    def __init__(self, parent, root: RootWindow, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.root_window = root
+        self.enable_var = IntVar(value=0)
+        self.setup()
+
+    def setup(self):
+        ck_button = ttk.Checkbutton(self.frame, text='Enable Laser', )
 
 
 class CESystemWindow(Frame):
@@ -367,6 +379,7 @@ class CESystemWindow(Frame):
         except Exception as e:
             print(e)
         self.parent.system_queue.start_process()
+
 
 class InitFrame(Frame):
 
@@ -472,8 +485,8 @@ class CameraWindow(Frame):
         reset_button = ttk.Button(self, text='acquire', command=self.reset_acquisition)
         reset_button.grid(row=2, column=0)
 
-        snap_button = ttk.Button(self, text = 'Save Raw', command = self.snap_image)
-        snap_button.grid(row=3, column = 0)
+        snap_button = ttk.Button(self, text='Save Raw', command=self.snap_image)
+        snap_button.grid(row=3, column=0)
 
         label = ttk.Label(self, text="Lower perc.")
         label.grid(row=2, column=1)
@@ -483,13 +496,13 @@ class CameraWindow(Frame):
 
         label = ttk.Label(self, text="Upper perc.")
         label.grid(row=2, column=2)
-        spin_box = ttk.Spinbox(self,from_=0, to=100, increment=0.5, format="%.1f",
+        spin_box = ttk.Spinbox(self, from_=0, to=100, increment=0.5, format="%.1f",
                                textvariable=self.upper_var)
         spin_box.grid(row=3, column=2)
 
         label = ttk.Label(self, text="Exposure (ms)")
         label.grid(row=2, column=3)
-        spin_box = ttk.Spinbox(self,from_=0, to=10000, increment=10, format="%.1f",
+        spin_box = ttk.Spinbox(self, from_=0, to=10000, increment=10, format="%.1f",
                                textvariable=self.exposure_var)
         spin_box.grid(row=3, column=3)
 
@@ -510,7 +523,7 @@ class CameraWindow(Frame):
 
         if img is not None and img != []:
             self.raw_image = img.copy()
-            #print("LLL:{},{}".format(img, args))
+            # print("LLL:{},{}".format(img, args))
 
             img = self._pre_plot_image(img)
             self.img = img
@@ -546,7 +559,7 @@ class CameraWindow(Frame):
 
     def snap_image(self, *args):
         img = self.raw_image.copy()
-        file = filedialog.asksaveasfilename(defaultextension=".tif",filetypes=[("Raw Image Tiffs","*.tif")])
+        file = filedialog.asksaveasfilename(defaultextension=".tif", filetypes=[("Raw Image Tiffs", "*.tif")])
         if file is not None:
             imsave(file, img)
 
@@ -554,7 +567,7 @@ class CameraWindow(Frame):
         try:
             exp = self.exposure_var.get()
             if exp > 0:
-                self.parent.system_queue.send_command('system.camera.set_exposure',exp)
+                self.parent.system_queue.send_command('system.camera.set_exposure', exp)
         except Exception as e:
             print(e)
 

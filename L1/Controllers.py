@@ -169,6 +169,10 @@ class PycromanagerController(ControllerAbstraction):
     """
     Controller class for the Pycromanager library. This doesn't require a python2 server and will likely have more
     support going forward.
+
+    Check out this site for documentation on the Core element of Micromanager:
+    https://valelab4.ucsf.edu/~MM/doc/mmcorej/mmcorej/CMMCore.html
+
     """
 
     def __init__(self, port=0, config='default', **kwargs):
