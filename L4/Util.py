@@ -28,6 +28,7 @@ class TracedThread(threading.Thread):
     def localtrace(self, frame, event, arg):
         if self.killed:
             if event == 'line':
+                print("Killing Thread")
                 raise SystemExit()
         return self.localtrace
 

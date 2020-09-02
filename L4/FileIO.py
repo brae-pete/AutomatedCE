@@ -38,7 +38,7 @@ def get_system_var(*var_names):
     return response
 
 
-def get_data_filename(name, file_dir):
+def get_data_filename(name, file_dir, extension=".csv"):
     """
     Returns a unique filename by adding 0's to the end of the name (but before the file suffix).
     :param name: str
@@ -48,14 +48,31 @@ def get_data_filename(name, file_dir):
     # Check if directory exists and make it if not
     Path(file_dir).mkdir(parents=True, exist_ok=True)
 
-    file_name = os.path.join(file_dir, name+".csv")
+    file_name = os.path.join(file_dir, name+extension)
     copy_number = 0
     while os.path.exists(file_name):
-        new_name = name + f"_{copy_number:05d}" + ".csv"
+        new_name = name + f"_{copy_number:05d}" + extension
         file_name = os.path.join(file_dir, new_name)
         copy_number += 1
     return file_name
 
+def get_data_folder(name, file_dir):
+    """
+    Returns a unique folder name by adding 0's to the end of the name
+    :param name:
+    :param file_dir:
+    :return:
+    """
+    # Check if directory exists and make it if not
+    Path(file_dir).mkdir(parents=True, exist_ok=True)
+
+    folder = os.path.join(file_dir, name)
+    copy_number = 0
+    while os.path.isdir(folder):
+        new_name = name + f"_{copy_number:05d}"
+        folder = os.path.join(file_dir, new_name)
+        copy_number += 1
+    return folder
 
 class OutputElectropherogram:
     """
@@ -92,14 +109,17 @@ class OutputElectropherogram:
         :param system:
         :return:
         """
-        system.detector.stop()
         detector_data = system.detector.get_data()
         power_data = system.high_voltage.get_data()
         power_time = power_data['time_data']
         detector_time = detector_data['time_data']
         # We need a power data to be as long as the detector data, so we add in one more time_data pair to be sure
-        if max(power_time) < max(detector_time):
+        # thus replace the start and stop of the power time to match the detector time if the detector time has
+        # more data points
+        if power_time[-1] < detector_time[-1]:
             power_time[-1] = detector_time[-1]
+        if power_time[0] > detector_time[0]:
+            power_time[0] = detector_time[0]
 
         # We need to interpolate data values from the power supply (Power supply may not be sampled at the same rate)
         if len(power_time) > 0:
@@ -107,6 +127,7 @@ class OutputElectropherogram:
                 if len(power_data[channel])>3:
                     fx = interp1d(power_time, power_data[channel], kind='cubic')
                     power_data[channel] = fx(detector_time)
+
                 else:
                     power_data[channel] = np.pad(power_data[channel], (0, len(detector_time)-len(power_data[channel])),
                                                  'edge')

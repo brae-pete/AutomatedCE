@@ -29,7 +29,7 @@ def check_z(func):
         if self.min_z < z < self.max_z:
             return func(self, z)
         else:
-            logging.warning("z-set is not within bounds for z-stage {}".format(self.role))
+            logging.warning(f"z-set {z} mm is not within bounds for z-stage {self.role}")
 
     return wrapper
 
@@ -62,16 +62,18 @@ class ZAbstraction(ABC):
     wait_for_move: waits for the stage to stop moving
     """
 
-    def __init__(self, controller: Controllers.ControllerAbstraction, role: str):
+    def __init__(self, controller: Controllers.ControllerAbstraction, role: str, **kwargs):
+        settings = {'scale': 0.1, 'offset':300, 'default': 275, "min_z":-0.1, "max_z":300, "invert":1}
+        settings.update(kwargs)
         self.controller = controller
         self.role = role
-        self._scale = 1
-        self.z_inversion = 1
-        self._offset = 0
+        self._scale = float(settings['scale'])
+        self.z_inversion = int(settings['invert'])
+        self._offset = float(settings['offset'])
         self.pos = 0
-        self._default_pos = 24.5
-        self.min_z = 0
-        self.max_z = 25
+        self._default_pos = float(settings['default'])
+        self.min_z = float(settings['min_z'])
+        self.max_z = float( settings['max_z'])
 
     def _scale_values(self, z: float):
         "Called on values read from microcontroller"
@@ -124,7 +126,7 @@ class ZAbstraction(ABC):
         :return : True or False depending if the target was reached
         """
         st = time.time()
-        while self.read_z() < z - 0.1:
+        while abs(self.read_z() - z) > 0.1:
             time.sleep(0.25)
             if time.time() - st > timeout:
                 return False
@@ -148,17 +150,7 @@ class ArduinoZ(ZAbstraction, UtilityControl):
     jerk = 0  # If constant acceleration, set jerk equal to 0
 
     def __init__(self, controller, role, **kwargs):
-        super().__init__(controller, role)
-        self._scale = 1
-        self._offset = 30
-        self.pos = 0
-        self._default_pos = 24.5
-        self.min_z = 0
-        self.max_z = 30
-        settings = {'direction': 1}
-        if kwargs is not None:
-            settings.update(kwargs)
-        self.z_inversion = settings['direction']  # 0 For positive/forward motion is towards home
+        super().__init__(controller, role, **kwargs)
 
     def startup(self):
         """ on startup we need to go to the home position (raise all the way up)"""
@@ -210,9 +202,11 @@ class ArduinoZ(ZAbstraction, UtilityControl):
         # self.controller.send_command("M0G{}{}\n".format(1, 1))
 
         # self.wait_for_move()
-        self.max_z = 60
-        self.set_z(59.75)
-        self.max_z = 30
+        old_min, old_max = self.min_z, self.max_z
+
+        self.max_z = 3*self.max_z
+        self.set_z(2*old_max)
+        self.max_z = old_max
 
 
 class SimulatedZ(ZAbstraction, UtilityControl):
@@ -220,8 +214,8 @@ class SimulatedZ(ZAbstraction, UtilityControl):
     acceleration = 5
     jerk = 0  # If constant acceleration, set jerk equal to 0
 
-    def __init__(self, controller, role):
-        super().__init__(controller, role)
+    def __init__(self, controller, role, **kwargs):
+        super().__init__(controller, role, **kwargs)
 
     def startup(self):
         self.set_z(0)
@@ -253,11 +247,9 @@ class PriorZ(ZAbstraction, UtilityControl):
     acceleration = 5
     jerk = 0  # If constant acceleration, set jerk equal to 0
 
-    def __init__(self, controller, role):
-        super().__init__(controller, role)
-        self.min_z = 0
-        self.max_z = 10
-        self._scale = 10
+    def __init__(self, controller, role, **kwargs):
+        super().__init__(controller, role, **kwargs)
+
 
     def startup(self):
         """ Do nothing special on start up"""
@@ -269,7 +261,10 @@ class PriorZ(ZAbstraction, UtilityControl):
 
     def read_z(self):
         """ Read the current position"""
-        self.pos = float(self.controller.send_command("PZ \r"))
+        response = self.controller.send_command("PZ \r").split(',')
+        while response[0]=='R' or response[0]=='':
+            response = self.controller.send_command("\r").split(',')
+        self.pos =float(response[0])
         self.pos = self._scale_values(self.pos)
         return self.pos
 
@@ -289,7 +284,7 @@ class PriorZ(ZAbstraction, UtilityControl):
 
     def set_home(self):
         """ Set the home position"""
-        logging.warning("Set home not implemented")
+        self.controller.send_command('PZ 0\r')
 
     def homing(self):
         """ Go to the hardware homing point"""
@@ -301,8 +296,8 @@ class PycromanagerZ(ZAbstraction, UtilityControl):
     Pycromanager for the objective or z-focus. It has not been tested with other Z stages on micromanager.
     """
 
-    def __init__(self, controller, role):
-        super().__init__(controller, role)
+    def __init__(self, controller, role, **kwargs):
+        super().__init__(controller, role, **kwargs)
         self.min_z = -0.01
         self.max_z = 10.01
         self._scale = 1000
@@ -310,7 +305,7 @@ class PycromanagerZ(ZAbstraction, UtilityControl):
 
     def startup(self):
         """ Do nothing special on start up"""
-        self.set_z(0)
+        self.set_z(0.0)
 
     def shutdown(self):
         """ Do nothing special on shutdown """
@@ -359,8 +354,8 @@ class MicroManagerZ(ZAbstraction, UtilityControl):
     acceleration = 5
     jerk = 0  # If constant acceleration, set jerk equal to 0
 
-    def __init__(self, controller, role):
-        super().__init__(controller, role)
+    def __init__(self, controller, role, **kwargs):
+        super().__init__(controller, role, **kwargs)
         self.min_z = 0
         self.max_z = 10
 
@@ -436,10 +431,13 @@ if kinesis_load:
         from Thorlabs.MotionControl import GenericMotorCLI
         from Thorlabs.MotionControl import IntegratedStepperMotorsCLI
 
-        def __init__(self, controller: Controllers.ControllerAbstraction, role: str):
-            super().__init__(controller, role)
+        def __init__(self, controller: Controllers.ControllerAbstraction, role: str, **kwargs):
+            super().__init__(controller, role, **kwargs)
             self._ser_no = controller.port
             self._lock = threading.Lock()
+            self._scale = 1
+            self.min_z = -10
+            self.max_z = 500
 
         def set_serial(self, ser_no):
             """Set the serial number for the device"""
@@ -548,9 +546,8 @@ if kinesis_load:
             logging.warning("Set home no implemented")
 
         def go_home(self):
-            """ Moves down until the stage hits the mechanical stop that specifices the 0 mm mark
-             """
-            self.set_z(0)
+            """ Moves down until the Zstage reaches its home position. """
+            threading.Thread(target=self.device.Home, args=(60000,)).start()
 
         def homing(self):
             """
@@ -568,20 +565,20 @@ if kinesis_load:
 class ZControlFactory(UtilityFactory):
     """ Determines the type of xy utility object to return according to the daqcontroller id"""
 
-    def build_object(self, controller, role):
+    def build_object(self, controller, role, **kwargs):
 
         if controller.id == 'micromanager':
-            return MicroManagerZ(controller, role)
+            return MicroManagerZ(controller, role, **kwargs)
         elif controller.id == 'prior':
-            return PriorZ(controller, role)
+            return PriorZ(controller, role, **kwargs)
         elif controller.id == 'arduino':
-            return ArduinoZ(controller, role)
+            return ArduinoZ(controller, role, **kwargs)
         elif controller.id == 'kinesis':
-            return KinesisZ(controller, role)
+            return KinesisZ(controller, role, **kwargs)
         elif controller.id == 'simulator':
-            return SimulatedZ(controller, role)
+            return SimulatedZ(controller, role, **kwargs)
         elif controller.id == 'pycromanager':
-            return PycromanagerZ(controller, role)
+            return PycromanagerZ(controller, role, **kwargs)
         else:
             return None
 

@@ -7,6 +7,9 @@ import string
 import threading
 import time
 from queue import Queue
+
+from skimage.io import imsave
+
 from L3.SystemsBuilder import CESystem
 from L4 import Util, Trajectory, FileIO, Electropherogram
 from L1.Util import get_system_var
@@ -43,11 +46,36 @@ def get_standard_unit(value):
     return value[0]
 
 
+def get_chip_voltage(arg: str):
+    value = arg.split(' ')
+    assert value[0] != '', "Voltage must be a number, 'T', or 'G'. "
+
+    if value[0] == 'T':
+        return 'T'
+    elif value[0] == 'G':
+        return 'G'
+    elif value[0].isnumeric():
+        return get_standard_unit(arg)
+    else:
+        raise ValueError("Voltage must be a number 'T', or 'G'. Given: {} -> {}".format(arg, value[0]), )
+
+
+def get_true_false(value):
+    value = value.upper()
+    if value == '1' or value == 'TRUE' or value == 'T':
+        return True
+    else:
+        return False
+
+def get_channels(line):
+    channels = line.split('\t')[1:]
+    return channels
+
 class Step:
     """
     Standardize data object containing all the information needed for a given automation step
     """
-    special_commands = ['auto_cell', 'gate', 'collect', 'manual_cell', 'sample']
+    special_commands = ['auto_cell', 'gate', 'collect', 'manual_cell', 'sample', 'wait']
 
     def __init__(self, line):
         self.well_location = []  # um, um
@@ -114,6 +142,47 @@ class Step:
         self.data = self._get_true_false(columns[9])
 
 
+class ChipStep:
+
+    def __init__(self, line, channels):
+        """
+        Microchip method as Step, time, Voltage, Camera options for each line in the method (*in that order).
+        :param line:
+        """
+        self.name = "Step"
+        self.voltage = []
+        self.camera = False
+        self.time = 0
+        self.read_line(line)
+        self.line = line
+        self.channels = channels
+    def read_line(self, line):
+        """
+        Read information from a tab seperated line.
+
+        column order:
+        Name, Time, Voltage, Camera
+        :param line:
+        :return:
+        """
+
+        # Split into columns and remove white space
+        columns = line.rstrip('\n').split('\t')
+        columns = [x.rstrip().lstrip() for x in columns]
+
+        # add name
+        self.name = columns[0]
+
+        # Get the time
+        self.time = get_standard_unit(columns[1])
+
+        # Get the Voltages
+        self.voltage = [get_chip_voltage(col.rstrip().lstrip()) for col in columns[2].split(',')]
+
+        # Get camera
+        self.camera = get_true_false(columns[3])
+
+
 class Method(object):
     """
     Creates a Method object that groups automation steps in a sequential order for automated analysis. Well locations
@@ -149,17 +218,51 @@ class Method(object):
         with open(method_file, 'r') as in_file:
             lines = in_file.readlines()
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
+        chip_method = False
         for idx, line in enumerate(method_lines):
-            if line.find('METHOD') > -1:
+            if line.find("CHIP"):
+                chip_method = True
+                chip_idx = idx
+            elif line.find('METHOD') > -1:
                 break
         method_lines = method_lines[idx + 2:]
 
         for line in method_lines:
-            if line.count('\t') == 9:
-                logging.info("Adding step {}".format(line))
-                self.method_steps.append(Step(line))
-            else:
-                raise "Error in method file: {} is not the right number of columns".format(line)
+            logging.info("Adding step {}".format(line))
+            self.method_steps.append(Step(line))
+
+
+class ChipMethod(Method):
+
+    def __init__(self, method_file):
+        super().__init__(method_file)
+
+    def open_file(self, method_file):
+        """
+        Read a text configuration file (tab delimited) where each column is an attribute of a step.
+        Columns:
+        Name, time, voltage (column separated for each channel), camera
+        :param method_file:
+        :return:
+        """
+
+        with open(method_file, 'r') as in_file:
+            lines = in_file.readlines()
+        method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
+        chip_method = False
+        for idx, line in enumerate(method_lines):
+            if line.find("CHIP")>-1:
+                chip_method = True
+                chip_idx = idx
+            elif line.find("VOLTAGE CHANNELS")>-1:
+                channels = get_channels(line)
+            elif line.find('METHOD') > -1:
+                break
+        method_lines = method_lines[idx + 2:]
+
+        for line in method_lines:
+            logging.info("Adding step {}".format(line))
+            self.method_steps.append(ChipStep(line, channels))
 
 
 class BasicTemplateShape(object):
@@ -183,6 +286,7 @@ class BasicTemplateShape(object):
         """
         # remove white space
         line = line.replace('[', '').replace(']', '')
+        line = line.replace('(', '').replace(')', '')
         line = line.split('\t')
         line = [x.rstrip().lstrip() for x in line]
 
@@ -376,12 +480,15 @@ class AutoRun:
         :param system:  CE system object that will be automated
         """
         self.system = system  # L3 CE Systems object
+        self.style= 'CE'
         self.methods = []
         self.gate = GateSpecial()
         self.repetitions = 1
         self.repetition_style = 'method'
         self._queue = Queue()
         self.is_running = threading.Event()
+        self.continue_event = threading.Event()
+        self.continue_callbacks = {}
         self.traced_thread = Util.TracedThread()
         self.traced_thread.name = 'AutoRun'
         self.data_dir = get_system_var('data_dir')[0]
@@ -398,7 +505,10 @@ class AutoRun:
         """
         if method_file.lower() == "default":
             method_file = os.path.abspath(os.path.join(os.getcwd(), '..', 'config\\method-test.txt'))
-        self.methods.append(Method(method_file))
+        if self.style == 'CE':
+            self.methods.append(Method(method_file))
+        elif self.style == 'CHIP':
+            self.methods.append(ChipMethod(method_file))
 
     def set_template(self, template_file=r'default'):
         """
@@ -418,9 +528,12 @@ class AutoRun:
         :param rep_style:
         :return:
         """
-        assert self.template is not None, "Template has not been defined"
+        assert (self.template is not None or self.style == 'CHIP'), "Template has not been defined"
+        # Get repeition settings
         rep_style = self.repetition_style.lower()
         self.repetitions = int(self.repetitions)
+        # Reset the queue and add the method steps according to repetition style
+        self._queue = Queue()
         if rep_style == 'sequence':  # run through all methods in the list before repeating
             for rep in range(self.repetitions):
                 for method in self.methods:
@@ -433,14 +546,17 @@ class AutoRun:
                     for step in method.method_steps:
                         self._queue.put((step, rep))
 
+        # Create a traced thread we can kill on demand
         self.traced_thread = Util.TracedThread(target=self._run, args=(simulated,))
         self.traced_thread.name = 'AutoRun'
         self.traced_thread.start()
         self.is_running.set()
+        self.continue_event.set()
 
     def error_message(self, state, process):
         if not state:
             logging.error("Error while moving during {}. Aborting".format(process))
+            self.stop_run()
 
     def _run(self, simulated=False):
         """
@@ -451,15 +567,17 @@ class AutoRun:
             (step, rep) = self._queue.get()
 
             # Get the move positions
-            xyz0, xyz1, well_name = self._get_move_positions(step, rep)
+            xyz0, xyz1, well_name, skip_z = self._get_move_positions(step, rep)
 
             self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
             self.path_information.append(f"Preparing for move to well {well_name}")
             # Move the System Safely
             if self.safe_enabled:
-                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated, self.path_information).move()
+                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated,
+                                            self.path_information).move()
             else:
-                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated, self.path_information).move()
+                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated,
+                                            self.path_information).move()
             self.error_message(state, "System Move")
 
             # Move the inlet
@@ -475,13 +593,20 @@ class AutoRun:
                 self.error_message(state, "Outlet Move Down")
 
             # Run the special command for injections here
+            print('Step Special command is : {}'.format(step.special))
+            if step.special == "manual_cell":
+                state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
+                self.error_message(state, "Manual Cell Injection")
+            elif step.special == 'wait':
+                self.wait_to_continue()
+
             after_special = True  # change this to false if we don't need to run the timed part of the step after
 
             # Run the special for Gating the separation here (get peak areas and set the next collection well)
 
             # Run the timed step
             if after_special:
-                self._timed_step(step, simulated)
+                self.timed_step(step, simulated)
             # Output the electropherogram data
             if step.data:
                 file_path = FileIO.get_data_filename(step.name, self.data_dir)
@@ -505,9 +630,14 @@ class AutoRun:
         z = step.inlet_height
         xyz1 = [x, y, z]
 
-        return xyz0, xyz1, step.well_location[rep % len(step.well_location)]
+        # If xy0 and xy1 are the same location, we don't need to move z
+        if abs(xyz0[0] - xyz1[0]) < 0.1 and abs(xyz0[1] - xyz1[1]) < 0.1:
+            skip_z = True
+        else:
+            skip_z = False
+        return xyz0, xyz1, step.well_location[rep % len(step.well_location)], skip_z
 
-    def _timed_step(self, step, simulated):
+    def timed_step(self, step, simulated):
         """
         Run a timed step, applying the pressure, vacuum, and voltage as specified by the step
         :param step:
@@ -517,7 +647,8 @@ class AutoRun:
         st = time.time()
 
         # Apply Hydrodynamic Forces
-        self.path_information.append(f"Pressure state changed to {step.pressure}, Vaccuum state changed to {step.vacuum}")
+        self.path_information.append(
+            f"Pressure state changed to {step.pressure}, Vaccuum state changed to {step.vacuum}")
         if not simulated:
             if step.pressure:
                 self.system.outlet_pressure.rinse_pressure()
@@ -539,11 +670,12 @@ class AutoRun:
             time.sleep(0.05)
 
         # Stop applying the forces
-        self.path_information.append(f"Stopping timed run after {time.time()-st} s")
+        self.path_information.append(f"Stopping timed run after {time.time() - st} s")
         if not simulated:
             self.system.high_voltage.stop()
             self.system.detector.stop()
-        logging.info("Stopping timed run at {}".format(time.time() - st))
+            self.system.outlet_pressure.release()
+        self.path_information.append("Stopping timed run at {}".format(time.time() - st))
         threading.Thread(target=self.system.outlet_pressure.stop, name='PressureStop').start()
 
     def stop_run(self):
@@ -555,8 +687,76 @@ class AutoRun:
         """
         # Kill the thread using the trace and wait till the thread has been killed before continuing
         self.traced_thread.kill()
-        self.traced_thread.join()
+
         self.system.stop_ce()
+
+    def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
+        """Calls the continue_callbacks  for the user to set the continue_event before continuing
+        There are two methods that could be employed. The first is the callback may return True when ready
+        to continue or None or False when the run should be aborted. The callback should take a string that can
+        be used to display the message.
+
+        The second method is to wait for the continue_event flag to be set then continue the run.
+        """
+        # Clear the flag
+        self.continue_event.clear()
+        if None not in [message, step, simulated, key]:
+            # Check if we can run the callback message
+            if key in self.continue_callbacks.keys():
+                resp = self.continue_callbacks[key](message, step, simulated)
+                if type(resp) is bool:
+                    if resp is False:
+                        return False
+                    elif resp:
+                        return True
+        # otherwise use the flag
+        while not self.continue_event.is_set():
+            time.sleep(0.2)
+        return True
+
+
+class ChipRun(AutoRun):
+
+    def __init__(self, system: CESystem()):
+        super().__init__(system)
+        self.style='CHIP'
+
+    def _run(self,simulated,*args, **kwargs):
+        while not self._queue.empty():
+            (step,rep) = self._queue.get()
+            self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
+
+            # Change the voltages
+            for v, channel in zip(step.voltage, step.channels):
+                self.system.high_voltage.set_voltage(v, channel)
+
+            self.timed_step(step, simulated)
+
+    def timed_step(self, step, simulated):
+        st = time.time()
+        if step.camera:
+            file_path = FileIO.get_data_folder(step.name, self.data_dir)
+            self._img_folder=file_path
+            self.system.camera.add_callback(self.save_img, tag="temp")
+            self.system.camera.continuous_snap()
+
+        self.system.high_voltage.load_changes()
+        while time.time()-st < step.time and self.is_running.is_set() and not simulated:
+            time.sleep(0.05)
+
+        if step.camera:
+            self.system.camera.remove_callback("temp")
+
+    def save_img(self, img, *args, **kwargs):
+        """
+        saves the image to the corresping steps data folder.
+        :param img:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        file_name = FileIO.get_data_filename("IMG",self._img_folder, extension=".tif")
+        imsave(file_name, img, check_contrast=False)
 
 
 class PathTrace:
@@ -696,12 +896,14 @@ class TemplateMaker:
 
         x1, y1 = xy1
         x2, y2 = xy2
-        delta_x = (x2 - x1) / columns
-        delta_y = (y2 - y1) / rows
+        delta_x = (x2 - x1) / (columns - 1)
+        delta_y = (y2 - y1) / (rows - 1)
 
         for x, letter in zip(range(1, columns + 1), string.ascii_lowercase):
             for y in range(rows):
-                center = [x1 + delta_x * x, y1 + delta_y * y]
+                # X starts with 1 so we need to account for that
+                # Y starts with 0
+                center = [x1 + delta_x * (x - 1), y1 + delta_y * y]
 
                 name = self.get_original_name(f"{label}_{letter}{y}")
                 self.wells[name] = [shape, diameter, center]
@@ -767,7 +969,7 @@ class TemplateMaker:
             for name, info in self.wells.items():
                 shape, size, xy1 = info
                 f_out.write(f"{name}\t{shape}\t{size}\t{xy1}\n")
-            f_out.write("LEDGES\nName\tShape\tSize\tXY\nHeight\n")
+            f_out.write("LEDGES\nName\tShape\tSize\tXY\tHeight\n")
             for name, info in self.ledges.items():
                 shape, size, xy, height = info
                 f_out.write(f"{name}\t{shape}\t{size}\t{xy}\t{height}\n")
@@ -793,15 +995,15 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import numpy as np
     import logging
-
+    import os
+    os.chdir(os.path.abspath('..'))
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     system = CESystem()
-    system.load_config()
+    system.load_config(config_file = r'E:\Scripts\AutomatedCE\config\TestChip.cfg')
     system.open_controllers()
-    system.detector.set_oversample_frequency(20000, 10)
-    auto = AutoRun(system)
-    auto.add_method()
-    auto.set_template()
+    auto = ChipRun(system)
+    auto.add_method(r'E:\Scripts\AutomatedCE\config\methods-chep.txt')
+    #auto.set_template()
     auto.repetitions = 2
-    auto.start_run()
+    #auto.start_run()

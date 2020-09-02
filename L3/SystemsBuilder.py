@@ -3,7 +3,7 @@ import os
 from abc import ABC, abstractmethod
 from L1 import Controllers, DAQControllers
 from L2 import PressureControl, XYControl, ZControl, HighVoltageControl, DetectorControl, LaserControl, \
-    FilterWheelControl, ShutterControl, CameraControl
+    FilterWheelControl, ShutterControl, CameraControl, LightControl
 
 
 class Director(ABC):
@@ -134,6 +134,7 @@ class UtilityBuilder(Builder):
         self._filter_wheel_factory = FilterWheelControl.FilterWheelFactory()
         self._shutter_factory = ShutterControl.ShutterFactory()
         self._camera_factory = CameraControl.CameraFactory()
+        self._rgb_factory = LightControl.RGBControlFactory()
 
     def add_pressure(self, controller, settings):
         role = settings[3]
@@ -144,8 +145,26 @@ class UtilityBuilder(Builder):
         self.constructed_object.fields[role] = self._xy_factory.build_object(controller, role)
 
     def add_z(self, controller, settings):
+        """
+         Add a Z stage to the configuration.
+         Settings order: Utility, controller_id, zstage, *key, *value
+
+         keywords:
+         invert: -1 to invert the direction \n
+         scale: what to scale the microcontroller values by to get mm \n
+         offset: when the controller is homed, what offset should be added to the home position \n
+         default: default height to move to after homing \n
+         min_z :lowest height to move to \n
+         max_z: highest height oto move to \n
+
+        :param controller:
+        :param settings:
+        :return:
+        """
         role = settings[3]
-        self.constructed_object.fields[role] = self._z_factory.build_object(controller, role)
+        options = settings[4:]
+        kwargs = {options[key]: options[key + 1] for key in range(0,len(options), 2)}
+        self.constructed_object.fields[role] = self._z_factory.build_object(controller, role, **kwargs)
 
     def add_high_voltage(self, controller, settings):
         role = settings[3]
@@ -170,6 +189,10 @@ class UtilityBuilder(Builder):
     def add_camera(self, controller, settings):
         role = settings[3]
         self.constructed_object.fields[role] = self._camera_factory.build_object(controller, role)
+
+    def add_rgb(self, controller, settings):
+        role = settings[3]
+        self.constructed_object.fields[role] = self._rgb_factory.build_object(controller, role)
 
 
 class ConcreteDirector(Director):
@@ -249,8 +272,14 @@ class ConcreteDirector(Director):
         """
         for utility in utility_list:
             settings = utility.split(',')
+            print(settings)
+            settings=[x.split('&')  if ('&' in x) else x for x in settings]
+            print(settings)
             utility_type = settings[2]
-            controller = controllers[settings[1]]
+            if type(settings[1]) is list:
+                controller = [controllers[x] for x in settings[1]]
+            else:
+                controller = controllers[settings[1]]
             if utility_type == 'pressure':
                 self._utility_builder.add_pressure(controller, settings)
             elif utility_type == 'xy':
@@ -269,6 +298,8 @@ class ConcreteDirector(Director):
                 self._utility_builder.add_shutter(controller, settings)
             elif utility_type == 'camera':
                 self._utility_builder.add_camera(controller, settings)
+            elif utility_type == 'rgb':
+                self._utility_builder.add_rgb(controller,settings)
             else:
                 raise ValueError('Entered invalid utility: {}'.format(utility_type))
 
@@ -345,6 +376,7 @@ class SystemAbstraction(ABC):
     def __init__(self):
         self.controllers = {}
         self.utilities = {}
+
     def load_config(self, config_file="default"):
         """
         Load the controllers and utitily objects, and assign them to the CE System utilities.
@@ -352,7 +384,7 @@ class SystemAbstraction(ABC):
         :return:
         """
         if config_file.lower() == "default":
-            config_file = os.path.abspath(os.path.join(os.getcwd(), 'config\\test-system.cfg'))
+            config_file = os.path.abspath(os.path.join(os.getcwd(), 'config\\TestChip.cfg'))
 
         director = ConcreteDirector()
         director.construct(config_file)
@@ -399,7 +431,14 @@ class SystemAbstraction(ABC):
         :return:
         """
         for _, utility in self.utilities.items():
-            utility.shutdown()
+            try:
+                utility.shutdown()
+            # We need to make sure all modules shutdown, so if there is an error, keep shutting down what you can.
+            except Exception as e:
+                logging.warning(e)
+                logging.warning(f"{utility} had error on shutdown")
+
+
 
 class CESystem(SystemAbstraction):
     """
@@ -425,6 +464,7 @@ class CESystem(SystemAbstraction):
         self.high_voltage = HighVoltageControl.HighVoltageAbstraction
         self.detector = DetectorControl.DetectorAbstraction
         self.lysis_laser = LaserControl.LaserAbstraction
+        self.inlet_rgb = LightControl.RGBAbstraction
 
     def stop_ce(self):
         """
@@ -442,6 +482,7 @@ class CESystem(SystemAbstraction):
 
 
 if __name__ == "__main__":
+    os.chdir('..')
     system = CESystem()
     system.load_config()
     system.open_controllers()

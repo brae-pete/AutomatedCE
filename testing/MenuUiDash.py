@@ -1,5 +1,5 @@
 """
-This MenuUi module is used to create a text based tkinter GUI that can *easily* be modified.
+This MenuUiDash module is used to create a web based GUI that can *easily* be modified.
 
 The basic premise is to display a text menu where there are options identified by a number or string, and each option
 is associated with a new menu to display, as well as optional input windows (for retrieving floats, integers, keywords,
@@ -32,8 +32,9 @@ MainMenu
 import tkinter
 from tkinter import ttk
 from abc import ABC, abstractmethod
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
 
 class Menu(ABC):
     """
@@ -53,12 +54,13 @@ class Menu(ABC):
 
     parent_options = " No options were defined... "
 
-    def __init__(self, master=None, parent=None):
+    def __init__(self, app, parent):
         self.options = self.parent_options
-        self.master = master  # type: Menu
+        self.app = app  # type: Application
         self.parent = parent  # type: Menu
         self.header = "\n\n"  # type: str
         self.footer = "0: Return to parent menu        00:Return to main menu"  # type: str
+        self.children = []
 
     @abstractmethod
     def interpret(self, text: str):
@@ -80,6 +82,22 @@ class Menu(ABC):
         """
         pass
 
+    def add_to_layout(self, div_children):
+        """
+        Returns the Dash objects that will be needed.
+        :return:
+        """
+        # Add any widgets needed for this menu here
+        div_children.extend(self.menu_children)
+        return div_children
+
+    def add_to_callbacks(self):
+        """
+        Adds callbacks to the app
+        :return:
+        """
+
+        return
     def get_options(self, *args, **kwargs):
         """
         Get the string that will be displayed, appending the header and footer. This can be adjusted as necessary
@@ -179,13 +197,6 @@ def get_options_value(msg:str, root:tkinter.Tk, options: list, exit_value=None):
     return window.value
 
 
-class GraphWindow:
-
-    def __init__(self, figure, parent):
-        self.top = tkinter.Toplevel(parent)
-        self.canvas = FigureCanvasTkAgg(figure, self.top)
-        self.canvas.get_tk_widget().pack(expand=True)
-        self.canvas._tkcanvas.pack( expand=True)
 
 
 class PopupWindow(ABC):
@@ -253,13 +264,22 @@ class OptionWindow(PopupWindow):
         self.value = self.input.get()
 
 
-class Application(ttk.Frame):
+class Application:
     """Pass in the Main Menu object to this application """
     message_header = "Please enter the number for the option below and press 'Send Command' \n"
 
-    def __init__(self, master=None, main_menu=Menu):
-        super().__init__(master)
-        self.master = master
+    def __init__(self, app, main_menu:Menu):
+        self.app = app
+
+        # Add the application widgets, get all the other widgets that will be necessary
+        children = [dcc.Markdown(children=self.message_header, id="app_markdown"),
+            dcc.Input(id="app_input", debounce=True)   ]
+        children = main_menu.add_to_layout(children)
+        self.app.layout = html.Div(children)
+
+        app.callback(dash.dependencies.Output('app_markdown', 'children'),
+                     [dash.dependencies.Input('app_input', 'value')])(self.send_command)
+        main_menu.add_to_callbacks()
 
         # Set up the main menu and set our object to the main_menu view property
         self.menu = main_menu
@@ -283,6 +303,7 @@ class Application(ttk.Frame):
         self.master.bind('<Return>', self.send_command)
         self.send_button.pack()
 
+
     def send_command(self, *args):
         """
         When the send command is pressed, updates the menu to the users selection, running a check if the user
@@ -303,8 +324,15 @@ class Application(ttk.Frame):
 
         # Get the new menu options and replace the old ones
         options = self.menu.get_options()
-        self.message.delete(2.0, tkinter.END)
-        self.message.insert(tkinter.INSERT, options)
 
-        # Delete the old input text
-        self.input.delete(0, 'end')
+        # Return the new options
+        return options
+
+    def display_input(self, state, *args):
+        """
+        Hides or shows the main input
+        :param state:
+        :param args:
+        :return:
+        """
+

@@ -2,19 +2,23 @@ import threading
 from abc import ABC, abstractmethod
 from L2.Utility import UtilityControl, UtilityFactory
 from L1.Controllers import ControllerAbstraction
-
+import time
+import numpy as np
 
 class CameraAbstraction(ABC):
     """
     Utility class for controlling camera hardware
     """
 
-    def __init__(self, controller,role):
+    def __init__(self, controller, role):
         self.controller = controller
         self.role = role
         self._callbacks = []
-        self.last_image = []
-
+        self._callback_tags = {}
+        self._last_image = []
+        self.dimensions = [1,1] # Width and height of the image in pixels
+        self.update_frequency = 16  # How many times per second to check the camera
+        self._last_image_lock = threading.RLock()
         # Continuous properties
         self._continuous_thread = threading.Thread()
         self._continuous_running = threading.Event()
@@ -41,13 +45,40 @@ class CameraAbstraction(ABC):
         """
         pass
 
-    def add_callback(self, function):
+    def add_callback(self, function, tag="default"):
         """
         Add function to call during continuous acquisition
         :param function:
         :return:
         """
         self._callbacks.append(function)
+        if tag not in self._callback_tags.keys():
+            self._callback_tags[tag]=[]
+        self._callback_tags[tag].append(function)
+
+
+    def remove_callback(self, tag:str):
+        """
+        Removes all callbacks with a given tag
+        :param tag: string identifier
+        :return:
+        """
+        if tag in self._callback_tags:
+            for fnc in self._callback_tags[tag]:
+                self._callbacks.pop(self._callbacks.index(fnc))
+        self._callback_tags[tag]=[]
+
+    def _update_callbacks(self, img):
+        """
+        Called during a continuous acquisition, sends new images to the callback functions.
+        :param img: image (np.ndarray) to send to the callback functions
+        :return:
+        """
+
+        for fnc in self._callbacks:
+            fnc(img)
+        return True
+
 
     @abstractmethod
     def set_exposure(self, exposure: int):
@@ -64,6 +95,158 @@ class CameraAbstraction(ABC):
         :return:
         """
         pass
+
+    def get_last_image(self):
+        """
+        Returns the last image from the camera
+        :return:
+        """
+        with self._last_image_lock:
+            return self._last_image
+
+    def get_camera_dimensions(self):
+        """
+        Returns the camera dimensions
+        :return:
+        """
+        return self.dimensions
+
+    def _reshape(self, img:np.ndarray):
+        try:
+            img= img.reshape(self.dimensions)
+        except ValueError:
+            self.startup()
+            img= img.reshape(self.dimensions)
+        return img
+
+class PycromanagerControl(CameraAbstraction, UtilityControl):
+    """
+    Utility class for controlling camera hardware using Micromanager via Pycromanager library
+    """
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
+
+
+    def snap(self):
+        """
+        Take one image from the camera and return the image
+        :return:
+        """
+        self.controller.send_command(self.controller.core.snap_image)
+        img = self.controller.send_command(self.controller.core.get_image)
+        img = self._reshape(img)
+        with self._last_image_lock:
+            self._last_image = img[:]
+        return img
+
+
+    def _get_running(self):
+        """
+        Checks if sequence acquisition is running, returns True when running. False when not.
+        :return: True/False if acquisition is running
+        :rtype: bool
+        """
+        status = self.controller.send_command(self.controller.core.is_sequence_running)
+        return status
+
+
+    def get_last(self):
+        """
+        Returns a copy of the most recent image that was acquired
+        :return:
+        """
+        with self._last_image_lock:
+            return self._last_image[:]
+
+    def continuous_snap(self):
+        """
+        Start continuous acquisition from the camera.
+        :return:
+        """
+        if not self._get_running():
+            print("HEYYOO")
+            self.controller.send_command(self.controller.core.start_continuous_sequence_acquisition, args=(1.0,))
+            self._continuous_running.set()
+            self._continuous_thread = threading.Thread(target=self._sequence_update)
+            self._continuous_thread.start()
+
+        return True
+
+    def _sequence_update(self):
+        """
+        Reads the continuous acquisition buffer and sends the images to the functions
+        listed inside the callback list.
+        :return:
+        """
+        st = time.time()
+        while self._continuous_running.is_set():
+            images_ready = self.controller.send_command(self.controller.core.get_remaining_image_count)
+            if images_ready > 0:
+                img = self.controller.send_command(self.controller.core.get_last_image)
+                img = self._reshape(img)
+                self._update_callbacks(img)
+                with self._last_image_lock:
+                    self._last_image = img[:]
+            # Sleep until the next update time point
+            time.sleep((time.time() - st) % (1 / self.update_frequency))
+
+    def stop(self):
+        """
+        Stops the continuous acquisiton
+        :return:
+        """
+        if self._get_running():
+
+            self.controller.send_command(self.controller.core.stop_sequence_acquisition)
+
+            self._continuous_running.clear()
+            self._continuous_thread.join()
+
+        return True
+
+    def set_exposure(self, exposure: int):
+        """
+        Set the exposure in milliseconds
+        :param exposure:
+        :return:
+        """
+        exposure = float(exposure)
+        self.controller.send_command(self.controller.core.set_exposure, args=(exposure,))
+        return True
+
+    def get_exposure(self):
+        """
+        Returns the camera's current exposure setting
+        :return:
+        """
+        exposure = self.controller.send_command(self.controller.core.get_exposure)
+        return exposure
+
+    def startup(self):
+        """
+        Function to call on startup.
+        :return:
+        """
+        h = self.controller.send_command(self.controller.core.get_image_height)
+        w = self.controller.send_command(self.controller.core.get_image_width)
+        self.dimensions = [h,w]
+        return True
+
+    def get_status(self):
+        """
+        Returns whether or not the continuous sequence is acquring
+        :return:
+        """
+        return self._get_running()
+
+    def shutdown(self):
+        """
+        Stops the continuous acquisition
+        :return:
+        """
+        self.stop()
+        return True
+
 
 
 class MicroManagerCamera(CameraAbstraction, UtilityControl):
@@ -113,8 +296,7 @@ class MicroManagerCamera(CameraAbstraction, UtilityControl):
         self.controller.send_command('camera,stop_continuous\n')
         self._continuous_running.clear()
 
-
-    def set_exposure(self, exposure: int):
+    def set_exposure(self, exposure: float):
         """
         Sets the camera exposure in milliseconds
         :param exposure:
@@ -157,6 +339,8 @@ class CameraFactory(UtilityFactory):
     def build_object(self, controller, role, *args):
         if controller.id == 'micromanager':
             return MicroManagerCamera(controller, role)
+        elif controller.id == "pycromanager":
+            return PycromanagerControl(controller, role)
         else:
             return None
 
