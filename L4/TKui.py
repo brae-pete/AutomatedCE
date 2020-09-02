@@ -152,7 +152,7 @@ class ZExpandable(CollapsiblePane):
         self.z_stage_readout = StringVar(value="{} Position:  mm".format(self.name))
         self.setup()
         root.system_queue.add_info_callback("system.{}.read_z".format(z_name), self.read_z)
-
+        self.root_window=root
     def setup(self):
         lbl = ttk.Label(self.frame)
         lbl.grid(row=0, column=0)
@@ -174,8 +174,15 @@ class ZExpandable(CollapsiblePane):
         go_btn = ttk.Button(self.frame)
         go_btn.grid(column=1, row=4)
 
+        startup = ttk.Button(self.frame, command=self.startup_command)
+        startup.grid(column=0, row=4)
+
+
     def read_z(self, z, *args):
         self.z_stage_readout.set(z)
+
+    def startup_command(self):
+        self.root_window.system_queue.send_command('system.{}.startup'.format(self.name))
 
 
 class XYExpandable(CollapsiblePane):
@@ -185,12 +192,17 @@ class XYExpandable(CollapsiblePane):
     the absolute or relative position can be set using a combination of spin boxes and buttons
     """
 
-    def __init__(self, parent, root, **kw):
+    def __init__(self, parent, root:RootWindow, **kw):
         super().__init__(parent, **kw)
 
         self.xy_stage_readout = StringVar(value="X: mm Y: mm")
+        self.step_spin = None  # type: ttk.Spinbox
+        self.x_spin = None # type: ttk.Spinbox
+        self.y_spin = None # type: ttk.Spinbox
+
         self.setup()
         root.system_queue.add_info_callback("system.xy_stage.read_xy", self.read_xy)
+        self.root_window = root
 
     def setup(self):
         """
@@ -201,38 +213,60 @@ class XYExpandable(CollapsiblePane):
         lbl['textvariable'] = self.xy_stage_readout
         lbl.grid(column=0, row=0, columnspan=3)
 
-        up_btn = ttk.Button(self.frame, text="Up")
+        up_btn = ttk.Button(self.frame, text="Up", command=lambda: self.set_rel('y',1))
         up_btn.grid(row=1, column=1)
-        down_btn = ttk.Button(self.frame, text="Down")
+        down_btn = ttk.Button(self.frame, text="Down", command=lambda: self.set_rel('y',-1))
         down_btn.grid(row=3, column=1)
-        left_btn = ttk.Button(self.frame, text="Left")
+        left_btn = ttk.Button(self.frame, text="Left", command=lambda: self.set_rel('x',-1))
         left_btn.grid(row=2, column=0)
-        right_btn = ttk.Button(self.frame, text="Right")
+        right_btn = ttk.Button(self.frame, text="Right", command=lambda: self.set_rel('x',1))
         right_btn.grid(row=2, column=2)
+
+        step_bx = ttk.Spinbox(self.frame, from_=0, to=5, increment=0.02)
+        step_bx.grid(row=1, column=2)
+        self.step_spin = step_bx
 
         x_lbl = ttk.Label(self.frame, text="X: ")
         x_lbl.grid(row=4, column=0)
-        x_spin = ttk.Spinbox(self.frame)
+        x_spin = ttk.Spinbox(self.frame, increment=0.02)
         x_spin.grid(row=4, column=1)
+        self.x_spin=x_spin
         x_lbl_unit = ttk.Label(self.frame, text=" mm")
         x_lbl_unit.grid(row=4, column=2)
 
         y_lbl = ttk.Label(self.frame, text="Y: ")
         y_lbl.grid(row=5, column=0)
-        y_spin = ttk.Spinbox(self.frame)
+        y_spin = ttk.Spinbox(self.frame, increment=0.02)
         y_spin.grid(row=5, column=1)
+        self.y_spin = y_spin
         y_lbl_unit = ttk.Label(self.frame, text=" mm")
         y_lbl_unit.grid(row=5, column=2)
 
-        go_btn = ttk.Label(self.frame, text="Go!")
+        go_btn = ttk.Button(self.frame, text="Go!", command=self.set_abs)
         go_btn.grid(row=6, column=2)
+
+        start_btn = ttk.Button(self.frame, text='Startup', command=self.startup_command)
+        start_btn.grid(row=6, column=2)
 
     def read_xy(self, xy, *args):
         try:
             self.xy_stage_readout.set("X: {:.3f} Y: {:.3f}".format(xy[0], xy[1]))
         except:
-            self.xy_stage_readout.set("incoming: {}".format(xy))
+            self.xy_stage_readout.set("incoming err read_xy: {}".format(xy))
 
+    def set_abs(self):
+        xy = [float(self.x_spin.get()), float(self.y_spin.get())]
+        self.root_window.system_queue.send_command('system.xy_stage.set_xy',xy)
+
+    def set_rel(self, axis:str, direction:int):
+        value = float(self.step_spin.get()) * direction
+        if axis == 'x':
+            self.root_window.system_queue.send_command('system.xy_stage.set_rel_x', value)
+        elif axis == 'y':
+            self.root_window.system_queue.send_command('system.xy_stage.set_rel_y', value)
+
+    def startup_command(self):
+        self.root_window.system_queue.send_command('system.xy_stage.startup')
 
 class CESystemWindow(Frame):
 
