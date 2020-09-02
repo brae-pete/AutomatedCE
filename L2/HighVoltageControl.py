@@ -117,9 +117,9 @@ class PMOD_DAC(HighVoltageAbstraction):
         for in_ch, out_voltage, out_current in zip(input_channels, output_voltage, output_current) :
             self.voltages[in_ch] = [0, 0]
             if out_voltage.upper() != "NA":
-                self.daqcontroller.add_analog_input(out_voltage)
+                self.daqcontroller.add_analog_input(out_voltage, terminal_config='NRSE')
             if out_current.upper() != "NA":
-                self.daqcontroller.add_analog_input(out_current)
+                self.daqcontroller.add_analog_input(out_current, terminal_config='NRSE')
 
             self._input_channels.append(out_voltage)
             self._input_channels.append(out_current)

@@ -10,7 +10,7 @@ int SPI_ENDIAN = MSBFIRST;
 int CS =10;
 
 // Bertan Pins
-int ENABLE = 7;
+int ENABLE = 9;
 
 // Byte variables for SPI communication
 long WRITE = B0000;
