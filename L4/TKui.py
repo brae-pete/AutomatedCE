@@ -152,7 +152,8 @@ class ZExpandable(CollapsiblePane):
         self.z_stage_readout = StringVar(value="{} Position:  mm".format(self.name))
         self.setup()
         root.system_queue.add_info_callback("system.{}.read_z".format(z_name), self.read_z)
-        self.root_window=root
+        self.root_window = root
+
     def setup(self):
         lbl = ttk.Label(self.frame)
         lbl.grid(row=0, column=0)
@@ -177,7 +178,6 @@ class ZExpandable(CollapsiblePane):
         startup = ttk.Button(self.frame, command=self.startup_command)
         startup.grid(column=0, row=4)
 
-
     def read_z(self, z, *args):
         self.z_stage_readout.set(z)
 
@@ -192,13 +192,13 @@ class XYExpandable(CollapsiblePane):
     the absolute or relative position can be set using a combination of spin boxes and buttons
     """
 
-    def __init__(self, parent, root:RootWindow, **kw):
+    def __init__(self, parent, root: RootWindow, **kw):
         super().__init__(parent, **kw)
 
         self.xy_stage_readout = StringVar(value="X: mm Y: mm")
         self.step_spin = None  # type: ttk.Spinbox
-        self.x_spin = None # type: ttk.Spinbox
-        self.y_spin = None # type: ttk.Spinbox
+        self.x_spin = None  # type: ttk.Spinbox
+        self.y_spin = None  # type: ttk.Spinbox
 
         self.setup()
         root.system_queue.add_info_callback("system.xy_stage.read_xy", self.read_xy)
@@ -213,13 +213,13 @@ class XYExpandable(CollapsiblePane):
         lbl['textvariable'] = self.xy_stage_readout
         lbl.grid(column=0, row=0, columnspan=3)
 
-        up_btn = ttk.Button(self.frame, text="Up", command=lambda: self.set_rel('y',1))
+        up_btn = ttk.Button(self.frame, text="Up", command=lambda: self.set_rel('y', 1))
         up_btn.grid(row=1, column=1)
-        down_btn = ttk.Button(self.frame, text="Down", command=lambda: self.set_rel('y',-1))
+        down_btn = ttk.Button(self.frame, text="Down", command=lambda: self.set_rel('y', -1))
         down_btn.grid(row=3, column=1)
-        left_btn = ttk.Button(self.frame, text="Left", command=lambda: self.set_rel('x',-1))
+        left_btn = ttk.Button(self.frame, text="Left", command=lambda: self.set_rel('x', -1))
         left_btn.grid(row=2, column=0)
-        right_btn = ttk.Button(self.frame, text="Right", command=lambda: self.set_rel('x',1))
+        right_btn = ttk.Button(self.frame, text="Right", command=lambda: self.set_rel('x', 1))
         right_btn.grid(row=2, column=2)
 
         step_bx = ttk.Spinbox(self.frame, from_=0, to=5, increment=0.02)
@@ -230,7 +230,7 @@ class XYExpandable(CollapsiblePane):
         x_lbl.grid(row=4, column=0)
         x_spin = ttk.Spinbox(self.frame, increment=0.02)
         x_spin.grid(row=4, column=1)
-        self.x_spin=x_spin
+        self.x_spin = x_spin
         x_lbl_unit = ttk.Label(self.frame, text=" mm")
         x_lbl_unit.grid(row=4, column=2)
 
@@ -256,9 +256,9 @@ class XYExpandable(CollapsiblePane):
 
     def set_abs(self):
         xy = [float(self.x_spin.get()), float(self.y_spin.get())]
-        self.root_window.system_queue.send_command('system.xy_stage.set_xy',xy)
+        self.root_window.system_queue.send_command('system.xy_stage.set_xy', xy)
 
-    def set_rel(self, axis:str, direction:int):
+    def set_rel(self, axis: str, direction: int):
         value = float(self.step_spin.get()) * direction
         if axis == 'x':
             self.root_window.system_queue.send_command('system.xy_stage.set_rel_x', value)
@@ -267,6 +267,7 @@ class XYExpandable(CollapsiblePane):
 
     def startup_command(self):
         self.root_window.system_queue.send_command('system.xy_stage.startup')
+
 
 class CESystemWindow(Frame):
 
@@ -369,15 +370,18 @@ class CameraWindow(Frame):
         self.ax = None
         self._update_img = False
         self.img = np.zeros((512, 512))
-        self.im_plot= None
+        self.im_plot = None
         self.canvas = None
+        self.lower_var = DoubleVar(value=1)
+        self.upper_var = DoubleVar(value=98)
+        self.percentiles = [1, 98]
 
         self.figure_setup()
         self.setup()
         self.scalar = 0.75
         self.gamma = 1
         self.gain = 1
-        self.percentiles = [0.05, 0.95]
+
         self.ani = animation.FuncAnimation(self.fig, self.update_image, interval=2000)
         parent.system_queue.add_info_callback('system.camera.get_last_image', self.read_image)
         parent.system_queue.add_info_callback('system.camera.get_camera_dimensions', self.update_dims)
@@ -388,17 +392,30 @@ class CameraWindow(Frame):
 
         canvas = FigureCanvasTkAgg(self.fig, master=self)
         canvas.draw()
-        canvas.get_tk_widget().grid(row=0, column=0, columnspan=2)
+        canvas.get_tk_widget().grid(row=0, column=0, columnspan=6)
 
         frame = Frame(self)
         frame.grid(row=1, column=0)
         toolbar = NavigationToolbar2Tk(canvas, frame)
         toolbar.update()
-        #canvas.get_tk_widget().pack()
+        # canvas.get_tk_widget().pack()
         self.canvas = canvas
 
         reset_button = ttk.Button(self, text='acquire', command=self.reset_acquisition)
-        reset_button.grid(row=1, column=1)
+        reset_button.grid(row=2, column=0)
+
+        label = ttk.Label(self, text="Lower perc.")
+        label.grid(row=2, column=1)
+        spin_box = ttk.Spinbox(self, from_=0, to=100, increment=0.5, format="%.1f",
+                               textvariable=self.lower_var)
+        spin_box.grid(row=3, column=1)
+
+        label = ttk.Label(self, text="Upper perc.")
+        label.grid(row=2, column=2)
+        spin_box = ttk.Spinbox(self,from_=0, to=100, increment=0.5, format="%.1f",
+                               textvariable=self.upper_var)
+        spin_box.grid(row=3, column=2)
+
 
     def reset_acquisition(self):
         """
@@ -411,11 +428,11 @@ class CameraWindow(Frame):
     def figure_setup(self):
         self.fig = Figure(figsize=(5, 4))
         self.ax = self.fig.add_subplot(111)
-        self.im_plot= self.ax.imshow(self.img)
+        self.im_plot = self.ax.imshow(self.img)
 
     def read_image(self, img, *args, **kwargs):
         if img is not None and img != []:
-            print("LLL:{},{}".format(img, args))
+            #print("LLL:{},{}".format(img, args))
 
             img = self._pre_plot_image(img)
             self.img = img
@@ -423,9 +440,7 @@ class CameraWindow(Frame):
 
     # noinspection PyUnresolvedReferences
     def update_image(self, *args):
-        print(self.img.max())
         if self._update_img:
-            print("UU")
             self.im_plot.set_data(self.img)
             vmax = np.max(self.img)
             vmin = np.min(self.img)
@@ -435,11 +450,18 @@ class CameraWindow(Frame):
         return [self.im_plot]
 
     def _pre_plot_image(self, image):
-        #image = adjust_gamma(image, gamma=self.gamma, gain=self.gain)
-        low, hi = np.percentile(image, self.percentiles)
+        # image = adjust_gamma(image, gamma=self.gamma, gain=self.gain)
+        try:
+            self.percentiles = [self.lower_var.get(), self.upper_var.get()]
+        except Exception as e:
+            pass
 
+        print(self.percentiles)
+        low, hi = np.percentile(image, self.percentiles)
+        print(low, hi)
         img_rescale = exposure.rescale_intensity(image, in_range=(low, hi))
-        return image
+        print(img_rescale)
+        return img_rescale
 
     def update_dims(self, data, *args):
         self.dims = data
