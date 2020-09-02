@@ -218,19 +218,24 @@ class PMOD_DAC(HighVoltageAbstraction):
         :return:
         """
         self.voltages[channel][1] = voltage
-        if -self._max_voltage > voltage > self._max_voltage:
-            logging.warning("Absolute voltage value must be less than {}} Volts".format(voltage))
-        # PMOD_DAC is between 0 and 2.5 V
-        if voltage > self._max_voltage:
-            logging.error("ERROR: Voltage set beyond DAC capability")
-            voltage = self._max_voltage
-        # Convert to 16 bit unisigned int
-        vout = int(voltage * 2 ** 12 / self._max_voltage)
-        msb, lsb = divmod(vout, 0x100)
-        with self.lock:
-            self.controller.send_command("S{}".format(channel))
-            self.controller.send_command(bytearray([msb, lsb]))
-            self.controller.send_command("\n".encode())
+        if voltage == 'T':
+            pass
+        elif voltage == 'G':
+            pass
+        else:
+            if -self._max_voltage > voltage > self._max_voltage:
+                logging.warning("Absolute voltage value must be less than {}} Volts".format(voltage))
+            # PMOD_DAC is between 0 and 2.5 V
+            if voltage > self._max_voltage:
+                logging.error("ERROR: Voltage set beyond DAC capability")
+                voltage = self._max_voltage
+            # Convert to 16 bit unisigned int
+            vout = int(voltage * 2 ** 12 / self._max_voltage)
+            msb, lsb = divmod(vout, 0x100)
+            with self.lock:
+                self.controller.send_command("S{}".format(channel))
+                self.controller.send_command(bytearray([msb, lsb]))
+                self.controller.send_command("\n".encode())
 
     @staticmethod
     def _interpret_bytes(byte_data):

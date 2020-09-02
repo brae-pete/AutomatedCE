@@ -65,7 +65,8 @@ class CameraAbstraction(ABC):
         """
         if tag in self._callback_tags:
             for fnc in self._callback_tags[tag]:
-                self._callbacks.pop(fnc)
+                self._callbacks.pop(self._callbacks.index(fnc))
+        self._callback_tags[tag]=[]
 
     def _update_callbacks(self, img):
         """

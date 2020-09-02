@@ -55,7 +55,7 @@ def get_chip_voltage(arg: str):
     elif value[0] == 'G':
         return 'G'
     elif value[0].isnumeric():
-        get_standard_unit(arg)
+        return get_standard_unit(arg)
     else:
         raise ValueError("Voltage must be a number 'T', or 'G'. Given: {} -> {}".format(arg, value[0]), )
 
@@ -67,6 +67,9 @@ def get_true_false(value):
     else:
         return False
 
+def get_channels(line):
+    channels = line.split('\t')[1:]
+    return channels
 
 class Step:
     """
@@ -141,7 +144,7 @@ class Step:
 
 class ChipStep:
 
-    def __init__(self, line):
+    def __init__(self, line, channels):
         """
         Microchip method as Step, time, Voltage, Camera options for each line in the method (*in that order).
         :param line:
@@ -152,7 +155,7 @@ class ChipStep:
         self.time = 0
         self.read_line(line)
         self.line = line
-
+        self.channels = channels
     def read_line(self, line):
         """
         Read information from a tab seperated line.
@@ -225,11 +228,8 @@ class Method(object):
         method_lines = method_lines[idx + 2:]
 
         for line in method_lines:
-            if line.count('\t') == 3:
-                logging.info("Adding step {}".format(line))
-                self.method_steps.append(ChipStep(line))
-            else:
-                raise "Error in method file: {} is not the right number of columns".format(line)
+            logging.info("Adding step {}".format(line))
+            self.method_steps.append(Step(line))
 
 
 class ChipMethod(Method):
@@ -249,11 +249,20 @@ class ChipMethod(Method):
         with open(method_file, 'r') as in_file:
             lines = in_file.readlines()
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
-
+        chip_method = False
         for idx, line in enumerate(method_lines):
-            # Find the start of the method method
-            if line.find('METHOD') > -1:
+            if line.find("CHIP")>-1:
+                chip_method = True
+                chip_idx = idx
+            elif line.find("VOLTAGE CHANNELS")>-1:
+                channels = get_channels(line)
+            elif line.find('METHOD') > -1:
                 break
+        method_lines = method_lines[idx + 2:]
+
+        for line in method_lines:
+            logging.info("Adding step {}".format(line))
+            self.method_steps.append(ChipStep(line, channels))
 
 
 class BasicTemplateShape(object):
@@ -519,7 +528,7 @@ class AutoRun:
         :param rep_style:
         :return:
         """
-        assert self.template is not None, "Template has not been defined"
+        assert (self.template is not None or self.style == 'CHIP'), "Template has not been defined"
         # Get repeition settings
         rep_style = self.repetition_style.lower()
         self.repetitions = int(self.repetitions)
@@ -712,7 +721,7 @@ class ChipRun(AutoRun):
         super().__init__(system)
         self.style='CHIP'
 
-    def _run(self, **kwargs):
+    def _run(self,simulated,*args, **kwargs):
         while not self._queue.empty():
             (step,rep) = self._queue.get()
             self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
@@ -721,7 +730,7 @@ class ChipRun(AutoRun):
             for v, channel in zip(step.voltage, step.channels):
                 self.system.high_voltage.set_voltage(v, channel)
 
-            self.timed_step(step)
+            self.timed_step(step, simulated)
 
     def timed_step(self, step, simulated):
         st = time.time()
@@ -986,15 +995,15 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import numpy as np
     import logging
-
+    import os
+    os.chdir(os.path.abspath('..'))
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     system = CESystem()
-    system.load_config()
+    system.load_config(config_file = r'E:\Scripts\AutomatedCE\config\TestChip.cfg')
     system.open_controllers()
-    system.detector.set_oversample_frequency(20000, 10)
-    auto = AutoRun(system)
-    auto.add_method()
-    auto.set_template()
+    auto = ChipRun(system)
+    auto.add_method(r'E:\Scripts\AutomatedCE\config\methods-chep.txt')
+    #auto.set_template()
     auto.repetitions = 2
-    auto.start_run()
+    #auto.start_run()

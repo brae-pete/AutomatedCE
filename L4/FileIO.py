@@ -68,7 +68,7 @@ def get_data_folder(name, file_dir):
 
     folder = os.path.join(file_dir, name)
     copy_number = 0
-    while os.path.is_dir(folder):
+    while os.path.isdir(folder):
         new_name = name + f"_{copy_number:05d}"
         folder = os.path.join(file_dir, new_name)
         copy_number += 1
