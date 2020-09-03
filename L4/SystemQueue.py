@@ -115,7 +115,10 @@ class SystemsRoutine:
 
     def stop_process(self):
         self.command_queue.put(('stop', (), {}))
-        self.process.terminate()
+        try:
+            self.process.terminate()
+        except AttributeError:
+            pass
         self.check_info_queue()
         self.check_error_queue()
 

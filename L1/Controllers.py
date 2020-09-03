@@ -154,7 +154,10 @@ class ArduinoController(ControllerAbstraction):
         :return: 'Ok' or String containing data
         """
         with self.lock:
-            self._serial.write(f"{command}".encode())
+            if type(command)==bytes:
+                self._serial.write(command)
+            elif type(command)==str:
+                self._serial.write(f"{command}".encode())
             time.sleep(self._delay)
             response = self.read_buffer()
         # only return the last line
@@ -172,7 +175,7 @@ class PycromanagerController(ControllerAbstraction):
 
     Check out this site for documentation on the Core element of Micromanager:
     https://valelab4.ucsf.edu/~MM/doc/mmcorej/mmcorej/CMMCore.html
-
+0
     """
 
     def __init__(self, port=0, config='default', **kwargs):
