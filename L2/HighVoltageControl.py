@@ -117,9 +117,9 @@ class PMOD_DAC(HighVoltageAbstraction):
         for in_ch, out_voltage, out_current in zip(input_channels, output_voltage, output_current) :
             self.voltages[in_ch] = [0, 0]
             if out_voltage.upper() != "NA":
-                self.daqcontroller.add_analog_input(out_voltage)
+                self.daqcontroller.add_analog_input(out_voltage, terminal_config='NRSE')
             if out_current.upper() != "NA":
-                self.daqcontroller.add_analog_input(out_current)
+                self.daqcontroller.add_analog_input(out_current, terminal_config='NRSE')
 
             self._input_channels.append(out_voltage)
             self._input_channels.append(out_current)
@@ -228,14 +228,16 @@ class PMOD_DAC(HighVoltageAbstraction):
             # PMOD_DAC is between 0 and 2.5 V
             if voltage > self._max_voltage:
                 logging.error("ERROR: Voltage set beyond DAC capability")
-                voltage = self._max_voltage
+                #voltage = self._max_voltage
+            voltage = voltage/1000
             # Convert to 16 bit unisigned int
             vout = int(voltage * 2 ** 12 / self._max_voltage)
             msb, lsb = divmod(vout, 0x100)
+            cmd = bytes("S{}".format(channel).encode())
+            cmd = cmd + bytearray([msb, lsb])
+            cmd = cmd + bytes("\n".encode())
             with self.lock:
-                self.controller.send_command("S{}".format(channel))
-                self.controller.send_command(bytearray([msb, lsb]))
-                self.controller.send_command("\n".encode())
+                self.controller.send_command(cmd)
 
     @staticmethod
     def _interpret_bytes(byte_data):
@@ -460,9 +462,11 @@ def test_pmod():
 if __name__ == "__main__":
     import time
     from L1.DAQControllers import SimulatedDaq
-    from L1.Controllers import SimulatedController
+    from L1.Controllers import SimulatedController, ArduinoController
 
     daqcontroller = SimulatedDaq()
-    controller = SimulatedController()
+    controller = ArduinoController('COM3')
     power = PMOD_DAC((daqcontroller,controller), 'testing', ('0', '1', '2', '3'), ('0', '1', '2', '3'), ('4', '5', '6', '7'))
 
+    controller.open()
+    power._power_on()

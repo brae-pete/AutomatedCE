@@ -10,7 +10,7 @@ int SPI_ENDIAN = MSBFIRST;
 int CS =10;
 
 // Bertan Pins
-int ENABLE = 7;
+int ENABLE = 9;
 
 // Byte variables for SPI communication
 long WRITE = B0000;
@@ -165,7 +165,7 @@ void Oracle::interpret(){
       break;
     case 'L':
     {
-      //Serial.println("Write and Load DAC");
+      Serial.println("Write and Load DAC");
       chnl = _rx_msg[1]-'0';
       //in_data = this-> _get_float_portion(2,10);
       byte msb = _rx_msg[2];

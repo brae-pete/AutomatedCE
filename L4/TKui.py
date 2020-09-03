@@ -3,10 +3,11 @@ from tkinter import ttk
 from tkinter import filedialog
 
 from skimage.exposure import adjust_gamma, exposure
+from skimage.io import imsave
 from skimage.transform import resize
 
 from L3 import SystemsBuilder
-from L4 import SystemQueue
+from L4 import SystemQueue, FileIO
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.backend_bases import key_press_handler
 from matplotlib.figure import Figure
@@ -150,32 +151,58 @@ class ZExpandable(CollapsiblePane):
 
         self.name = z_name
         self.z_stage_readout = StringVar(value="{} Position:  mm".format(self.name))
+        self.z_step = None  # type: ttk.Spinbox
+        self.z_abs = None  # type: ttk.Spinbox
+
         self.setup()
         root.system_queue.add_info_callback("system.{}.read_z".format(z_name), self.read_z)
+        self.root_window = root
 
     def setup(self):
         lbl = ttk.Label(self.frame)
         lbl.grid(row=0, column=0)
         lbl['textvariable'] = self.z_stage_readout
 
-        up_btn = ttk.Button(self.frame)
+        up_btn = ttk.Button(self.frame, text='Up', command=lambda: self.rel_z(1))
         up_btn.grid(column=0, row=1)
 
-        down_btn = ttk.Button(self.frame)
+        down_btn = ttk.Button(self.frame, text='Down', command=lambda: self.rel_z(-1))
         down_btn.grid(column=0, row=2)
+
+        lbl_z = ttk.Label(self.frame, text="Step mm: ")
+        lbl_z.grid(column=1, row=0)
+        spin_z = ttk.Spinbox(self.frame, from_=0, to_=10 ** 9, increment=0.05)
+        spin_z.grid(column=1, row=1)
+        self.z_step = spin_z
 
         lbl_z = ttk.Label(self.frame, text="{} Z position: ".format(self.name))
         lbl_z.grid(column=0, row=3)
-        spin_z = ttk.Spinbox(self.frame)
+        spin_z = ttk.Spinbox(self.frame, from_=-10 ** 9, to=10 ** 9, increment=0.05)
+        spin_z.set(0)
         spin_z.grid(column=1, row=3)
+        self.z_abs = spin_z
         lbl_z_unit = ttk.Label(self.frame, text=" mm ")
         lbl_z_unit.grid(column=2, row=3)
 
-        go_btn = ttk.Button(self.frame)
+        go_btn = ttk.Button(self.frame, text="Go", command=self.go_abs)
         go_btn.grid(column=1, row=4)
+
+        startup = ttk.Button(self.frame, text='Startup', command=self.startup_command)
+        startup.grid(column=0, row=4)
 
     def read_z(self, z, *args):
         self.z_stage_readout.set(z)
+
+    def startup_command(self):
+        self.root_window.system_queue.send_command('system.{}.startup'.format(self.name))
+
+    def rel_z(self, direction: int, *args):
+        value = self.z_step.get() * direction
+        self.root_window.system_queue.send_command('system.{}.set_rel_z'.format(self.name), value)
+
+    def go_abs(self):
+        value = self.z_abs.get()
+        self.root_window.system_queue.send_command('system.{}.set_z'.format(self.name), value)
 
 
 class XYExpandable(CollapsiblePane):
@@ -185,12 +212,17 @@ class XYExpandable(CollapsiblePane):
     the absolute or relative position can be set using a combination of spin boxes and buttons
     """
 
-    def __init__(self, parent, root, **kw):
+    def __init__(self, parent, root: RootWindow, **kw):
         super().__init__(parent, **kw)
 
         self.xy_stage_readout = StringVar(value="X: mm Y: mm")
+        self.step_spin = None  # type: ttk.Spinbox
+        self.x_spin = None  # type: ttk.Spinbox
+        self.y_spin = None  # type: ttk.Spinbox
+
         self.setup()
         root.system_queue.add_info_callback("system.xy_stage.read_xy", self.read_xy)
+        self.root_window = root
 
     def setup(self):
         """
@@ -201,37 +233,146 @@ class XYExpandable(CollapsiblePane):
         lbl['textvariable'] = self.xy_stage_readout
         lbl.grid(column=0, row=0, columnspan=3)
 
-        up_btn = ttk.Button(self.frame, text="Up")
+        up_btn = ttk.Button(self.frame, text="Up", command=lambda: self.set_rel('y', 1))
         up_btn.grid(row=1, column=1)
-        down_btn = ttk.Button(self.frame, text="Down")
+        down_btn = ttk.Button(self.frame, text="Down", command=lambda: self.set_rel('y', -1))
         down_btn.grid(row=3, column=1)
-        left_btn = ttk.Button(self.frame, text="Left")
+        left_btn = ttk.Button(self.frame, text="Left", command=lambda: self.set_rel('x', -1))
         left_btn.grid(row=2, column=0)
-        right_btn = ttk.Button(self.frame, text="Right")
+        right_btn = ttk.Button(self.frame, text="Right", command=lambda: self.set_rel('x', 1))
         right_btn.grid(row=2, column=2)
+
+        step_bx = ttk.Spinbox(self.frame, from_=0, to=5, increment=0.02)
+        step_bx.grid(row=1, column=2)
+        self.step_spin = step_bx
 
         x_lbl = ttk.Label(self.frame, text="X: ")
         x_lbl.grid(row=4, column=0)
-        x_spin = ttk.Spinbox(self.frame)
+        x_spin = ttk.Spinbox(self.frame, increment=0.02)
         x_spin.grid(row=4, column=1)
+        self.x_spin = x_spin
         x_lbl_unit = ttk.Label(self.frame, text=" mm")
         x_lbl_unit.grid(row=4, column=2)
 
         y_lbl = ttk.Label(self.frame, text="Y: ")
         y_lbl.grid(row=5, column=0)
-        y_spin = ttk.Spinbox(self.frame)
+        y_spin = ttk.Spinbox(self.frame, increment=0.02)
         y_spin.grid(row=5, column=1)
+        self.y_spin = y_spin
         y_lbl_unit = ttk.Label(self.frame, text=" mm")
         y_lbl_unit.grid(row=5, column=2)
 
-        go_btn = ttk.Label(self.frame, text="Go!")
+        go_btn = ttk.Button(self.frame, text="Go!", command=self.set_abs)
         go_btn.grid(row=6, column=2)
+
+        start_btn = ttk.Button(self.frame, text='Startup', command=self.startup_command)
+        start_btn.grid(row=6, column=2)
 
     def read_xy(self, xy, *args):
         try:
             self.xy_stage_readout.set("X: {:.3f} Y: {:.3f}".format(xy[0], xy[1]))
         except:
-            self.xy_stage_readout.set("incoming: {}".format(xy))
+            self.xy_stage_readout.set("incoming err read_xy: {}".format(xy))
+
+    def set_abs(self):
+        xy = [float(self.x_spin.get()), float(self.y_spin.get())]
+        self.root_window.system_queue.send_command('system.xy_stage.set_xy', xy)
+
+    def set_rel(self, axis: str, direction: int):
+        value = float(self.step_spin.get()) * direction
+        if axis == 'x':
+            self.root_window.system_queue.send_command('system.xy_stage.set_rel_x', value)
+        elif axis == 'y':
+            self.root_window.system_queue.send_command('system.xy_stage.set_rel_y', value)
+
+    def startup_command(self):
+        self.root_window.system_queue.send_command('system.xy_stage.startup')
+
+
+class SolenoidExpandable(CollapsiblePane):
+
+    def __init__(self, parent, root: RootWindow, **kw):
+        super().__init__(parent, **kw)
+        self.pressure_state_var = StringVar()
+        self.pressure_state_var.trace('w', self.change_pressure)
+        self.root_window = root
+        self.setup()
+
+    def setup(self):
+        states = [('Seal', 'seal'),
+                  ('Release', 'release'),
+                  ('Vacuum', 'rinse_vacuum'),
+                  ('Pressure', 'rinse_pressure')]
+
+        for label, cmd in states:
+            rd_btn = ttk.Radiobutton(self.frame, text=label, variable=self.pressure_state_var, value=cmd)
+            rd_btn.grid()
+
+    def change_pressure(self, *args):
+        utility_method = self.pressure_state_var.get()
+        self.root_window.system_queue.send_command('system.outlet_pressure.{}'.format(utility_method))
+
+
+class LEDExpandable(CollapsiblePane):
+
+    def __init__(self, parent, root: RootWindow, **kw):
+        super().__init__(parent, **kw)
+        self.r_var = IntVar()
+        self.g_var = IntVar()
+        self.b_var = IntVar()
+
+        self.root_window = root
+        self.setup()
+
+    def setup(self):
+        channels = [('Red', self.r_var),
+                    ('Green', self.g_var),
+                    ('Blue', self.b_var)]
+
+        col = 0
+        for label, var in channels:
+            ck_button = ttk.Checkbutton(self.frame, text=label, variable=var)
+            ck_button.grid(row=0, column=col)
+            col += 1
+
+        apply_button = ttk.Button(self.frame, text='Apply', command=self.set_led)
+        apply_button.grid(row=0, column=col)
+
+    def set_led(self):
+        for var, rgb in [(self.r_var, 'R'), (self.g_var, 'G'), (self.b_var, 'B')]:
+            state = var.get()
+            if state > 0:
+                self.root_window.system_queue.send_command('system.inlet_rgb.turn_on_channel', rgb)
+            elif state == 0:
+                self.root_window.system_queue.send_command('system.inlet_rgb.turn_off_channel', rgb)
+
+
+class LaserExpandable(CollapsiblePane):
+
+    def __init__(self, parent, root: RootWindow, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.root_window = root
+        self.enable_var = IntVar(value=0)
+        self.enable_var.trace('w', self.standby_laser)
+        self.setup()
+
+    def setup(self):
+        ck_button = ttk.Checkbutton(self.frame, text='Enable Laser')
+        ck_button.grid()
+
+        fire = ttk.Button(self.frame, text='Fire', command=self.fire_laser)
+        fire.grid()
+
+    def fire_laser(self):
+        self.root_window.system_queue.send_command('system.lysis_laser.laser_fire')
+
+    def standby_laser(self):
+        enb = self.enable_var.get()
+        if enb == 1:
+            self.root_window.system_queue.send_command('system.lysis_laser.laser_standby')
+        elif enb == 0:
+            self.root_window.system_queue.send_command('system.lysis_laser.stop')
 
 
 class CESystemWindow(Frame):
@@ -241,8 +382,8 @@ class CESystemWindow(Frame):
         super().__init__(window, **kw)
 
         window.title('System Controls')
-
-        reset_button = ttk.Button(window, text="Reset", command=parent.system_queue.start_process)
+        self.parent = parent
+        reset_button = ttk.Button(window, text="Reset", command=self.reset_process)
         reset_button.grid(row=0, column=0)
         st = 1
 
@@ -265,6 +406,28 @@ class CESystemWindow(Frame):
         inlet_label.grid(row=3 + st, column=0, sticky="NEW")
         self.inlet_z_frame = ZExpandable(window, parent, z_name='inlet_z')
         self.inlet_z_frame.grid(row=3 + st, column=1, sticky="NSEW")
+
+        label = ttk.Label(window, text='Pressure')
+        label.grid(row=4 + st, column=0, sticky="NEW")
+        self.pressure_frame = SolenoidExpandable(window, parent)
+        self.pressure_frame.grid(row=4 + st, column=1, sticky="NSEW")
+
+        label = ttk.Label(window, text='RGB LED ')
+        label.grid(row=5 + st, column=0, sticky="NEW")
+        self.led_frame = LEDExpandable(window, parent)
+        self.led_frame.grid(row=5 + st, column=1, sticky="NSEW")
+
+        label = ttk.Label(window, text='Lysis Laser')
+        label.grid(row=6 + st, column=0, sticky="NEW")
+        self.lysis_frame = LaserExpandable(window, parent)
+        self.lysis_frame.grid(row=6 + st, column=1, sticky="NSEW")
+
+    def reset_process(self):
+        try:
+            self.parent.system_queue.stop_process()
+        except Exception as e:
+            print(e)
+        self.parent.system_queue.start_process()
 
 
 class InitFrame(Frame):
@@ -296,7 +459,7 @@ class InitFrame(Frame):
         step_2_lbl = ttk.Label(instruction_frame, text='2. Load the Template')
         step_2_lbl.grid()
 
-        step_2_btn = ttk.Button(instruction_frame, text='Select Template', command=lambda: filedialog.askopenfilename())
+        step_2_btn = ttk.Button(instruction_frame, text='Select Template', command=self.set_template)
         step_2_btn.grid()
 
         step_3_lbl = ttk.Label(instruction_frame, text="3. Calibrate the CE Apparatus")
@@ -335,15 +498,20 @@ class CameraWindow(Frame):
         self.ax = None
         self._update_img = False
         self.img = np.zeros((512, 512))
-        self.im_plot= None
+        self.im_plot = None
         self.canvas = None
+        self.lower_var = DoubleVar(value=1)
+        self.upper_var = DoubleVar(value=98)
+        self.exposure_var = DoubleVar(value=100)
+        self.exposure_var.trace('w', self.adjust_exposure)
+        self.percentiles = [1, 98]
 
         self.figure_setup()
         self.setup()
         self.scalar = 0.75
         self.gamma = 1
         self.gain = 1
-        self.percentiles = [0.05, 0.95]
+
         self.ani = animation.FuncAnimation(self.fig, self.update_image, interval=2000)
         parent.system_queue.add_info_callback('system.camera.get_last_image', self.read_image)
         parent.system_queue.add_info_callback('system.camera.get_camera_dimensions', self.update_dims)
@@ -354,17 +522,38 @@ class CameraWindow(Frame):
 
         canvas = FigureCanvasTkAgg(self.fig, master=self)
         canvas.draw()
-        canvas.get_tk_widget().grid(row=0, column=0, columnspan=2)
+        canvas.get_tk_widget().grid(row=0, column=0, columnspan=6)
 
         frame = Frame(self)
         frame.grid(row=1, column=0)
         toolbar = NavigationToolbar2Tk(canvas, frame)
         toolbar.update()
-        #canvas.get_tk_widget().pack()
+        # canvas.get_tk_widget().pack()
         self.canvas = canvas
 
         reset_button = ttk.Button(self, text='acquire', command=self.reset_acquisition)
-        reset_button.grid(row=1, column=1)
+        reset_button.grid(row=2, column=0)
+
+        snap_button = ttk.Button(self, text='Save Raw', command=self.snap_image)
+        snap_button.grid(row=3, column=0)
+
+        label = ttk.Label(self, text="Lower perc.")
+        label.grid(row=2, column=1)
+        spin_box = ttk.Spinbox(self, from_=0, to=100, increment=0.5, format="%.1f",
+                               textvariable=self.lower_var)
+        spin_box.grid(row=3, column=1)
+
+        label = ttk.Label(self, text="Upper perc.")
+        label.grid(row=2, column=2)
+        spin_box = ttk.Spinbox(self, from_=0, to=100, increment=0.5, format="%.1f",
+                               textvariable=self.upper_var)
+        spin_box.grid(row=3, column=2)
+
+        label = ttk.Label(self, text="Exposure (ms)")
+        label.grid(row=2, column=3)
+        spin_box = ttk.Spinbox(self, from_=0, to=10000, increment=10, format="%.1f",
+                               textvariable=self.exposure_var)
+        spin_box.grid(row=3, column=3)
 
     def reset_acquisition(self):
         """
@@ -377,11 +566,13 @@ class CameraWindow(Frame):
     def figure_setup(self):
         self.fig = Figure(figsize=(5, 4))
         self.ax = self.fig.add_subplot(111)
-        self.im_plot= self.ax.imshow(self.img)
+        self.im_plot = self.ax.imshow(self.img)
 
     def read_image(self, img, *args, **kwargs):
+
         if img is not None and img != []:
-            print("LLL:{},{}".format(img, args))
+            self.raw_image = img.copy()
+            # print("LLL:{},{}".format(img, args))
 
             img = self._pre_plot_image(img)
             self.img = img
@@ -389,9 +580,7 @@ class CameraWindow(Frame):
 
     # noinspection PyUnresolvedReferences
     def update_image(self, *args):
-        print(self.img.max())
         if self._update_img:
-            print("UU")
             self.im_plot.set_data(self.img)
             vmax = np.max(self.img)
             vmin = np.min(self.img)
@@ -401,14 +590,35 @@ class CameraWindow(Frame):
         return [self.im_plot]
 
     def _pre_plot_image(self, image):
-        #image = adjust_gamma(image, gamma=self.gamma, gain=self.gain)
-        low, hi = np.percentile(image, self.percentiles)
+        # image = adjust_gamma(image, gamma=self.gamma, gain=self.gain)
+        try:
+            self.percentiles = [self.lower_var.get(), self.upper_var.get()]
+        except Exception as e:
+            pass
 
+        print(self.percentiles)
+        low, hi = np.percentile(image, self.percentiles)
+        print(low, hi)
         img_rescale = exposure.rescale_intensity(image, in_range=(low, hi))
-        return image
+        print(img_rescale)
+        return img_rescale
 
     def update_dims(self, data, *args):
         self.dims = data
+
+    def snap_image(self, *args):
+        img = self.raw_image.copy()
+        file = filedialog.asksaveasfilename(defaultextension=".tif", filetypes=[("Raw Image Tiffs", "*.tif")])
+        if file is not None:
+            imsave(file, img)
+
+    def adjust_exposure(self, *args):
+        try:
+            exp = self.exposure_var.get()
+            if exp > 0:
+                self.parent.system_queue.send_command('system.camera.set_exposure', exp)
+        except Exception as e:
+            print(e)
 
 
 class MethodWindow(Frame):
@@ -416,30 +626,73 @@ class MethodWindow(Frame):
     Displays the Methods that will be run, their order, and their repetitions.
     """
 
-    def __init__(self, parent, **kw):
+    def __init__(self, parent: RootWindow, **kw):
         window = self.window = Toplevel(parent)
+        self.methods = []
         super().__init__(window, **kw)
 
         text = Text(window, state='disabled', width=80, height=10, wrap='none')
         text['state'] = 'normal'
-        text.insert('1.0+3c', 'Method Name', ('header'))
-        text.tag_add('method_line', 2.0, 10.0)
+        text.insert('1.0+3c', 'Method Name \n', ('header'))
+        text.tag_add('method_line', 1.0, 10.0)
         text.grid(row=0, column=0, columnspan=4, sticky="NSEW")
         text['state'] = 'disabled'
         text.tag_bind('method_line', '<<Selection>>', lambda event, text=text: print(text.tag_ranges('sel')))
-
-        btn = ttk.Button(window, text="Add New")
+        btn = ttk.Button(window, text="Add New", command=self.add_method)
         btn.grid(row=1, column=0, sticky="NSEW")
 
-        btn = ttk.Button(window, text="Delete Selected")
+        btn = ttk.Button(window, text="Delete Selected", command=self.delete_method)
         btn.grid(row=1, column=1, sticky="NSEW")
 
         spin_label = ttk.Label(window, text="Repetitions")
         spin_label.grid(row=1, column=2, sticky="NSE")
-        spin_box = ttk.Spinbox(window)
+        spin_box = ttk.Spinbox(window, from_=1, to=1000, increment=1)
+        spin_box.set(1)
+        self.reps = spin_box
         spin_box.grid(row=1, column=3, sticky="NSW")
-
         text.tag_ranges('sel')
+
+        btn = ttk.Button(window, text="Start Run", command=self.start_method)
+        btn.grid(row=2, column=2, sticky="NSEW")
+        btn = ttk.Button(window, text="Stop Run", command=self.stop_method)
+        btn.grid(row=2, column=3, sticky="NSEW")
+
+        self.text = text
+        self.root_window = parent
+
+    def add_method(self):
+        f_name = filedialog.askopenfilename()
+        if f_name is not None:
+            self.methods.append(f_name)
+            self.update_message()
+
+    def update_message(self):
+        self.text['state'] = 'normal'
+        self.text.delete(1.0, END)
+        self.text.insert(1.0, 'Method Name \n')
+        for idx, line in enumerate(self.methods):
+            self.text.insert(END, f'{idx + 1}   ' + line + '\n')
+        self.text['state'] = 'disabled'
+
+    def delete_method(self):
+        try:
+            start, stop = self.text.tag_ranges('sel')
+            line_start = int(start.string.split('.')[0])
+            # line_stop = int(stop.string.split('.')[0])
+            self.methods.remove(self.methods[line_start - 2])
+            self.update_message()
+        except ValueError:
+            pass
+
+    def start_method(self):
+        value = self.reps.get()
+        self.root_window.system_queue.send_command('auto_run.repetitions',value)
+        for method in self.methods:
+            self.root_window.system_queue.send_command('auto_run.add_method', method)
+        self.root_window.system_queue.send_command('auto_run.start_run')
+
+    def stop_method(self):
+        self.root_window.system_queue.send_command('auto_run.stop')
 
 
 class TerminalWindow(Frame):

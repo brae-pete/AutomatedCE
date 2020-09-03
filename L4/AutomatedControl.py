@@ -685,10 +685,16 @@ class AutoRun:
         it may create an error.
         :return:
         """
+        self.system.stop_ce()
         # Kill the thread using the trace and wait till the thread has been killed before continuing
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+            except Exception as e:
+                pass
+        self.is_running.clear()
         self.traced_thread.kill()
 
-        self.system.stop_ce()
 
     def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
         """Calls the continue_callbacks  for the user to set the continue_event before continuing
