@@ -646,7 +646,9 @@ class MethodWindow(Frame):
 
         spin_label = ttk.Label(window, text="Repetitions")
         spin_label.grid(row=1, column=2, sticky="NSE")
-        spin_box = ttk.Spinbox(window)
+        spin_box = ttk.Spinbox(window, from_=1, to=1000, increment=1)
+        spin_box.set(1)
+        self.reps = spin_box
         spin_box.grid(row=1, column=3, sticky="NSW")
         text.tag_ranges('sel')
 
@@ -683,6 +685,8 @@ class MethodWindow(Frame):
             pass
 
     def start_method(self):
+        value = self.reps.get()
+        self.root_window.system_queue.send_command('auto_run.repetitions',value)
         for method in self.methods:
             self.root_window.system_queue.send_command('auto_run.add_method', method)
         self.root_window.system_queue.send_command('auto_run.start_run')
