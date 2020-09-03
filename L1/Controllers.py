@@ -161,7 +161,7 @@ class ArduinoController(ControllerAbstraction):
         # todo output to logger when there is no response
         try:
             return response[-1].decode()
-        except AttributeError or IndexError:
+        except (AttributeError, IndexError) as e:
             return response
 
 
@@ -169,6 +169,10 @@ class PycromanagerController(ControllerAbstraction):
     """
     Controller class for the Pycromanager library. This doesn't require a python2 server and will likely have more
     support going forward.
+
+    Check out this site for documentation on the Core element of Micromanager:
+    https://valelab4.ucsf.edu/~MM/doc/mmcorej/mmcorej/CMMCore.html
+0
     """
 
     def __init__(self, port=0, config='default', **kwargs):

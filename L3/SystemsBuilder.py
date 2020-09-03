@@ -272,10 +272,12 @@ class ConcreteDirector(Director):
         """
         for utility in utility_list:
             settings = utility.split(',')
+            print(settings)
+            settings=[x.split('&')  if ('&' in x) else x for x in settings]
+            print(settings)
             utility_type = settings[2]
-            if '&' in settings[1]:
-                controller = (settings[1].split('&'))
-                controller = [controllers[x] for x in controller]
+            if type(settings[1]) is list:
+                controller = [controllers[x] for x in settings[1]]
             else:
                 controller = controllers[settings[1]]
             if utility_type == 'pressure':

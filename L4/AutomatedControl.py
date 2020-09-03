@@ -7,6 +7,9 @@ import string
 import threading
 import time
 from queue import Queue
+
+from skimage.io import imsave
+
 from L3.SystemsBuilder import CESystem
 from L4 import Util, Trajectory, FileIO, Electropherogram
 from L1.Util import get_system_var
@@ -42,6 +45,31 @@ def get_standard_unit(value):
             value[0] *= units[value[1]]
     return value[0]
 
+
+def get_chip_voltage(arg: str):
+    value = arg.split(' ')
+    assert value[0] != '', "Voltage must be a number, 'T', or 'G'. "
+
+    if value[0] == 'T':
+        return 'T'
+    elif value[0] == 'G':
+        return 'G'
+    elif value[0].isnumeric():
+        return get_standard_unit(arg)
+    else:
+        raise ValueError("Voltage must be a number 'T', or 'G'. Given: {} -> {}".format(arg, value[0]), )
+
+
+def get_true_false(value):
+    value = value.upper()
+    if value == '1' or value == 'TRUE' or value == 'T':
+        return True
+    else:
+        return False
+
+def get_channels(line):
+    channels = line.split('\t')[1:]
+    return channels
 
 class Step:
     """
@@ -114,6 +142,47 @@ class Step:
         self.data = self._get_true_false(columns[9])
 
 
+class ChipStep:
+
+    def __init__(self, line, channels):
+        """
+        Microchip method as Step, time, Voltage, Camera options for each line in the method (*in that order).
+        :param line:
+        """
+        self.name = "Step"
+        self.voltage = []
+        self.camera = False
+        self.time = 0
+        self.read_line(line)
+        self.line = line
+        self.channels = channels
+    def read_line(self, line):
+        """
+        Read information from a tab seperated line.
+
+        column order:
+        Name, Time, Voltage, Camera
+        :param line:
+        :return:
+        """
+
+        # Split into columns and remove white space
+        columns = line.rstrip('\n').split('\t')
+        columns = [x.rstrip().lstrip() for x in columns]
+
+        # add name
+        self.name = columns[0]
+
+        # Get the time
+        self.time = get_standard_unit(columns[1])
+
+        # Get the Voltages
+        self.voltage = [get_chip_voltage(col.rstrip().lstrip()) for col in columns[2].split(',')]
+
+        # Get camera
+        self.camera = get_true_false(columns[3])
+
+
 class Method(object):
     """
     Creates a Method object that groups automation steps in a sequential order for automated analysis. Well locations
@@ -149,17 +218,51 @@ class Method(object):
         with open(method_file, 'r') as in_file:
             lines = in_file.readlines()
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
+        chip_method = False
         for idx, line in enumerate(method_lines):
-            if line.find('METHOD') > -1:
+            if line.find("CHIP"):
+                chip_method = True
+                chip_idx = idx
+            elif line.find('METHOD') > -1:
                 break
         method_lines = method_lines[idx + 2:]
 
         for line in method_lines:
-            if line.count('\t') == 9:
-                logging.info("Adding step {}".format(line))
-                self.method_steps.append(Step(line))
-            else:
-                raise "Error in method file: {} is not the right number of columns".format(line)
+            logging.info("Adding step {}".format(line))
+            self.method_steps.append(Step(line))
+
+
+class ChipMethod(Method):
+
+    def __init__(self, method_file):
+        super().__init__(method_file)
+
+    def open_file(self, method_file):
+        """
+        Read a text configuration file (tab delimited) where each column is an attribute of a step.
+        Columns:
+        Name, time, voltage (column separated for each channel), camera
+        :param method_file:
+        :return:
+        """
+
+        with open(method_file, 'r') as in_file:
+            lines = in_file.readlines()
+        method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
+        chip_method = False
+        for idx, line in enumerate(method_lines):
+            if line.find("CHIP")>-1:
+                chip_method = True
+                chip_idx = idx
+            elif line.find("VOLTAGE CHANNELS")>-1:
+                channels = get_channels(line)
+            elif line.find('METHOD') > -1:
+                break
+        method_lines = method_lines[idx + 2:]
+
+        for line in method_lines:
+            logging.info("Adding step {}".format(line))
+            self.method_steps.append(ChipStep(line, channels))
 
 
 class BasicTemplateShape(object):
@@ -377,6 +480,7 @@ class AutoRun:
         :param system:  CE system object that will be automated
         """
         self.system = system  # L3 CE Systems object
+        self.style= 'CE'
         self.methods = []
         self.gate = GateSpecial()
         self.repetitions = 1
@@ -401,7 +505,10 @@ class AutoRun:
         """
         if method_file.lower() == "default":
             method_file = os.path.abspath(os.path.join(os.getcwd(), '..', 'config\\method-test.txt'))
-        self.methods.append(Method(method_file))
+        if self.style == 'CE':
+            self.methods.append(Method(method_file))
+        elif self.style == 'CHIP':
+            self.methods.append(ChipMethod(method_file))
 
     def set_template(self, template_file=r'default'):
         """
@@ -421,7 +528,7 @@ class AutoRun:
         :param rep_style:
         :return:
         """
-        assert self.template is not None, "Template has not been defined"
+        assert (self.template is not None or self.style == 'CHIP'), "Template has not been defined"
         # Get repeition settings
         rep_style = self.repetition_style.lower()
         self.repetitions = int(self.repetitions)
@@ -578,10 +685,16 @@ class AutoRun:
         it may create an error.
         :return:
         """
+        self.system.stop_ce()
         # Kill the thread using the trace and wait till the thread has been killed before continuing
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+            except Exception as e:
+                pass
+        self.is_running.clear()
         self.traced_thread.kill()
 
-        self.system.stop_ce()
 
     def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
         """Calls the continue_callbacks  for the user to set the continue_event before continuing
@@ -606,6 +719,50 @@ class AutoRun:
         while not self.continue_event.is_set():
             time.sleep(0.2)
         return True
+
+
+class ChipRun(AutoRun):
+
+    def __init__(self, system: CESystem()):
+        super().__init__(system)
+        self.style='CHIP'
+
+    def _run(self,simulated,*args, **kwargs):
+        while not self._queue.empty():
+            (step,rep) = self._queue.get()
+            self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
+
+            # Change the voltages
+            for v, channel in zip(step.voltage, step.channels):
+                self.system.high_voltage.set_voltage(v, channel)
+
+            self.timed_step(step, simulated)
+
+    def timed_step(self, step, simulated):
+        st = time.time()
+        if step.camera:
+            file_path = FileIO.get_data_folder(step.name, self.data_dir)
+            self._img_folder=file_path
+            self.system.camera.add_callback(self.save_img, tag="temp")
+            self.system.camera.continuous_snap()
+
+        self.system.high_voltage.load_changes()
+        while time.time()-st < step.time and self.is_running.is_set() and not simulated:
+            time.sleep(0.05)
+
+        if step.camera:
+            self.system.camera.remove_callback("temp")
+
+    def save_img(self, img, *args, **kwargs):
+        """
+        saves the image to the corresping steps data folder.
+        :param img:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        file_name = FileIO.get_data_filename("IMG",self._img_folder, extension=".tif")
+        imsave(file_name, img, check_contrast=False)
 
 
 class PathTrace:
@@ -844,15 +1001,15 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import numpy as np
     import logging
-
+    import os
+    os.chdir(os.path.abspath('..'))
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     system = CESystem()
-    system.load_config()
+    system.load_config(config_file = r'E:\Scripts\AutomatedCE\config\TestChip.cfg')
     system.open_controllers()
-    system.detector.set_oversample_frequency(20000, 10)
-    auto = AutoRun(system)
-    auto.add_method()
-    auto.set_template()
+    auto = ChipRun(system)
+    auto.add_method(r'E:\Scripts\AutomatedCE\config\methods-chep.txt')
+    #auto.set_template()
     auto.repetitions = 2
-    auto.start_run()
+    #auto.start_run()

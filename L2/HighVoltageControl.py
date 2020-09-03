@@ -90,8 +90,7 @@ class PMOD_DAC(HighVoltageAbstraction):
         Output Current Channels correspond to the daq input ins connected to the bertan current readout.
 
         Config example:
-        utility, (daq1,ard1), high_voltage, chip_voltage, bertan, [3,4,5], ['ai3','ai5','NA'], ['ai4','ai6','NA']
-
+        utility, (daq1&ard1), high_voltage, chip_voltage, bertan, [3,4,5], ['ai3','ai5','NA'], ['ai4','ai6','NA']
         * The Output voltage and current channels must be the same length as the input channels. If there is no
         port available, or the outputs from the power supply don't need to be recorded pass 'NA' instead. In the above
         example channel 5 of the bertan does not have voltage or current readout.
@@ -107,7 +106,7 @@ class PMOD_DAC(HighVoltageAbstraction):
         except TypeError:
             self.daqcontroller=controller
             self.controller = controller
-
+        print(input_channels, output_voltage, output_current)
         assert len(output_current) == len(input_channels) == len(output_voltage), "All Bertan config channel lengths" \
                                                                                   "must match"
         # Set up DAC information
@@ -118,21 +117,23 @@ class PMOD_DAC(HighVoltageAbstraction):
         for in_ch, out_voltage, out_current in zip(input_channels, output_voltage, output_current) :
             self.voltages[in_ch] = [0, 0]
             if out_voltage.upper() != "NA":
-                self.daqcontroller.add_analog_input(out_voltage)
+                self.daqcontroller.add_analog_input(out_voltage, terminal_config='NRSE')
             if out_current.upper() != "NA":
-                self.daqcontroller.add_analog_input(out_current)
+                self.daqcontroller.add_analog_input(out_current, terminal_config='NRSE')
 
             self._input_channels.append(out_voltage)
             self._input_channels.append(out_current)
 
         self.daqcontroller.add_callback(self._read_data, self._input_channels, 'wave', ())
     def _reset_data(self):
-        data = {}
+        v_data = {}
+        c_data = {}
         for i in self.voltages.keys():
-            data[i]=[]
+            v_data[i]=[]
+            c_data[i]=[]
         with self.lock:
-            self.data['voltage']=data.copy()
-            self.data['current']=data
+            self.data['voltage']=v_data
+            self.data['current']=c_data
 
 
     def get_current(self):
@@ -191,7 +192,7 @@ class PMOD_DAC(HighVoltageAbstraction):
     def start(self):
         with self.lock:
             self._reset_data()
-        self.daqcontroller.start_voltage()
+        self.load_changes()
         self.daqcontroller.start_measurement()
 
     def stop(self):
@@ -217,19 +218,24 @@ class PMOD_DAC(HighVoltageAbstraction):
         :return:
         """
         self.voltages[channel][1] = voltage
-        if -self._max_voltage > voltage > self._max_voltage:
-            logging.warning("Absolute voltage value must be less than {}} Volts".format(voltage))
-        # PMOD_DAC is between 0 and 2.5 V
-        if voltage > self._max_voltage:
-            logging.error("ERROR: Voltage set beyond DAC capability")
-            voltage = self._max_voltage
-        # Convert to 16 bit unisigned int
-        vout = int(voltage * 2 ** 12 / self._max_voltage)
-        msb, lsb = divmod(vout, 0x100)
-        with self.lock:
-            self.controller.send_command("S{}".format(channel))
-            self.controller.send_command(bytearray([msb, lsb]))
-            self.controller.send_command("\n".encode())
+        if voltage == 'T':
+            pass
+        elif voltage == 'G':
+            pass
+        else:
+            if -self._max_voltage > voltage > self._max_voltage:
+                logging.warning("Absolute voltage value must be less than {}} Volts".format(voltage))
+            # PMOD_DAC is between 0 and 2.5 V
+            if voltage > self._max_voltage:
+                logging.error("ERROR: Voltage set beyond DAC capability")
+                voltage = self._max_voltage
+            # Convert to 16 bit unisigned int
+            vout = int(voltage * 2 ** 12 / self._max_voltage)
+            msb, lsb = divmod(vout, 0x100)
+            with self.lock:
+                self.controller.send_command("S{}".format(channel))
+                self.controller.send_command(bytearray([msb, lsb]))
+                self.controller.send_command("\n".encode())
 
     @staticmethod
     def _interpret_bytes(byte_data):
@@ -270,24 +276,29 @@ class PMOD_DAC(HighVoltageAbstraction):
         output_channels = list(self.voltages.keys())
         with self._data_lock:
             idx = 0
+            outputs = []
             for odd_even, channel in enumerate(self._input_channels):
                 # Only add data if we are getting data from our channels, channels that aren't recorded have the NA name
                 scalar = scalars[odd_even%2]
                 if channel.upper() != "NA":
                     data = np.mean(samples[idx] / scalar)
                     idx += 1
+                    #print(len(samples))
                 else:
                     data = np.nan
                 try:
                     if odd_even%2 > 0:
-                        self.data['current'][output_channels[int(odd_even/2)]].append(data)
+                        self.data['current'][output_channels[int((odd_even-1)/2)]].append(data)
+                    elif odd_even%2 == 0:
+                        self.data['voltage'][output_channels[int((odd_even)/2)]].append(data)
                     else:
-                        self.data['voltage'][output_channels[int((odd_even-1)/2)]].append(data)
+                        print("??")
                 except IndexError:
-                    print(odd_even, len(output_channels))
+                    print("Index Error: ",odd_even, len(output_channels))
 
 
             self.data['time_data'].append(time_elapsed)
+
 
 
 class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
@@ -423,6 +434,8 @@ class HighVoltageFactory(UtilityFactory):
         if settings[4] == 'spellman':
             return SpellmanPowerSupply(controller, role, settings[5], settings[6], settings[7])
         elif settings[4] == 'pmod':
+            print(settings[5],settings[6],settings[7])
+
             return PMOD_DAC(controller, role, settings[5], settings[6], settings[7] )
         else:
             return None

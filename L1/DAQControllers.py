@@ -478,6 +478,8 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             """
             if terminal_config.upper() == "RSE":
                 return TerminalConfiguration.RSE
+            elif terminal_config.upper() == 'NRSE':
+                return TerminalConfiguration.NRSE
             elif terminal_config.upper() == "DIFF":
                 return TerminalConfiguration.DIFFERENTIAL
             elif terminal_config.upper() == 'PSUEDO':
