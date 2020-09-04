@@ -85,9 +85,12 @@ class PMOD_DAC(HighVoltageAbstraction):
         """
         This class uses an arduino controller to create a analog output to control the bertan power supply. It uses
         a daqcontroller to read the current and voltage inputs
-        Input channels correspond to the channel number on the Bertan starting at 1 and going up to 6.
+        Input channels correspond to the channel number on the PMOD DAC starting at 0 and going up to 8.
+        *These PMOD DAC channels should be wired into the approriate terminals on the Bertan.
         Ouput Voltage correspond to the daq input pins connected to the bertan redaout for a channels  voltage
         Output Current Channels correspond to the daq input ins connected to the bertan current readout.
+        * This class assumes a terminal config of NRSE which may change depending on how the analog inputs are wired to
+        the daq controlelr.
 
         Config example:
         utility, (daq1&ard1), high_voltage, chip_voltage, bertan, [3,4,5], ['ai3','ai5','NA'], ['ai4','ai6','NA']
