@@ -36,14 +36,17 @@ class RootWindow(Frame):
         method_button = ttk.Button(root, text='Method', command=lambda x=self: MethodWindow(x))
         method_button.grid(column=2, row=0)
 
-        egram_button = ttk.Button(root, text='Egram')
+        egram_button = ttk.Button(root, text='Manual Cell', command=lambda x=self: InjectionWindow(x))
         egram_button.grid(column=3, row=0)
 
-        egram_button = ttk.Button(root, text='Camera', command=lambda x=self: CameraWindow(x))
+        egram_button = ttk.Button(root, text='Egram')
         egram_button.grid(column=4, row=0)
 
-        egram_button = ttk.Button(root, text='Terminal', command=lambda x=self: TerminalWindow(x))
+        egram_button = ttk.Button(root, text='Camera', command=lambda x=self: CameraWindow(x))
         egram_button.grid(column=5, row=0)
+
+        egram_button = ttk.Button(root, text='Terminal', command=lambda x=self: TerminalWindow(x))
+        egram_button.grid(column=6, row=0)
 
         root.title('Automated Chip')
 
@@ -437,6 +440,8 @@ class InitFrame(Frame):
         super().__init__(window, **kw)
         self.setup()
         self.parent = parent
+        self.grid()
+        self.setup()
 
     def setup(self):
         """ Place the buttons"""
@@ -621,6 +626,89 @@ class CameraWindow(Frame):
             print(e)
 
 
+class InjectionWindow(Frame):
+    """
+    Displays control buttons for the CE system Controller
+    """
+    calibration = []
+    def __init__(self, parent: RootWindow, **kw):
+        window = self.window = Toplevel(parent)
+        self.methods = []
+        super().__init__(window, **kw)
+        self.root_window = parent
+        self.grid()
+        self.time_var = DoubleVar()
+        self.volt_var = DoubleVar()
+        self.drop_var = DoubleVar()
+        self.setup()
+
+    def setup(self):
+
+        # Calibration Control Buttons
+        lf = ttk.LabelFrame(self, text='Objective-Capillary Calibration')
+        lf.grid()
+        bt = ttk.Button(lf, text='Set Objective Focus')
+        bt.grid()
+        bt = ttk.Button(lf, text='Set Capillary Focus')
+        bt.grid()
+        spn = ttk.Spinbox(lf, from_=-0.5, to=10)
+        spn.grid()
+
+        # Capillary Adjustments
+        lf = ttk.LabelFrame(self, text='Capillary Adjustments')
+        lf.grid()
+        bt = ttk.Button(lf, text='Lower Capillary')
+        bt.grid(row=0, column=0)
+        moves = [('-10', -0.01),
+                 ('-5', -0.005),
+                 ('-2', -0.002),
+                 ('2', 0.002),
+                 ('5', 0.005),
+                 ('10', 0.01)]
+        c_idx = 0
+        r_idx = 1
+        for lbl, dis in moves:
+            bt = ttk.Button(lf, text=lbl,
+                            command=lambda: self.root_window.system_queue.send_command('system.inlet_z.set_rel_z', dis))
+            bt.grid(row=r_idx, column=c_idx)
+            c_idx += 1
+
+        # Injection Parameters
+        lf = ttk.LabelFrame(self, text='Injection Parameters')
+        lf.grid()
+        params = [('Time (s)', self.time_var, 0, 1000),
+                  ('Voltage (V)', self.volt_var, 0, 1000),
+                  ('Drop (mm)', self.drop_var, -10, 10)]
+        c_idx = 0
+        r_idx = 0
+        for lbl, var, lw, hi in params:
+            lb = ttk.Label(lf, text=lbl)
+            lb.grid(row=r_idx, column=c_idx)
+            sp = ttk.Spinbox(lf, from_=lw, to=hi, textvariable=var)
+            sp.grid(row=r_idx + 1, column=c_idx)
+            c_idx += 1
+        btn = ttk.Button(lf, text='Start')
+        btn.grid(row=r_idx + 2, column=c_idx - 1)
+
+        # Method Commands
+        lf = ttk.LabelFrame(self, text='Method Control')
+        lf.grid()
+        btn = ttk.Button(lf, text='Continue Method')
+        btn.grid()
+
+    def start_injection(self):
+        """Injection"""
+        volts =self.volt_var.get()
+        drop = self.drop_var.get()
+        dt = self.time_var.get()
+
+        # Make sure inputs are floats
+        if type(volts) != float or type(drop)!= float or type(dt) != float:
+            return
+
+        self.root_window.system_queue.send_command('auto_run.injection',dt,volts,drop)
+
+
 class MethodWindow(Frame):
     """
     Displays the Methods that will be run, their order, and their repetitions.
@@ -686,7 +774,7 @@ class MethodWindow(Frame):
 
     def start_method(self):
         value = self.reps.get()
-        self.root_window.system_queue.send_command('auto_run.repetitions',value)
+        self.root_window.system_queue.send_command('auto_run.repetitions', value)
         for method in self.methods:
             self.root_window.system_queue.send_command('auto_run.add_method', method)
         self.root_window.system_queue.send_command('auto_run.start_run')

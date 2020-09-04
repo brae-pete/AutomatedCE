@@ -89,7 +89,8 @@ class Step:
         self.data = False
 
         # Read step
-        self.read_line(line)
+        if line != 'INJ':
+            self.read_line(line)
 
     @staticmethod
     def _get_true_false(value):
@@ -637,6 +638,24 @@ class AutoRun:
             skip_z = False
         return xyz0, xyz1, step.well_location[rep % len(step.well_location)], skip_z
 
+    def injection(self, inj_time, voltage, drop):
+        """
+        Run a timed injection step when requested
+        :param inj_time:
+        :param voltage:
+        :param drop:
+        :return:
+        """
+
+        step = Step('INJ')
+        step.voltage=voltage
+        step.time=inj_time
+        step.pressure=False
+        step.vacuum=False
+        self.system.outlet_z.set_rel_z(-drop)
+        self.timed_step(step,False)
+        self.system.outlet_z.set_rel_z(drop)
+
     def timed_step(self, step, simulated):
         """
         Run a timed step, applying the pressure, vacuum, and voltage as specified by the step
@@ -991,6 +1010,7 @@ class TemplateMaker:
         :return:
         """
         self.dimensions = [left_x, lower_y, right_x, upper_y]
+
 
 
 class AutoSpecial:
