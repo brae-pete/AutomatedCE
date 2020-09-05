@@ -219,17 +219,15 @@ class Method(object):
         with open(method_file, 'r') as in_file:
             lines = in_file.readlines()
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
-        chip_method = False
         for idx, line in enumerate(method_lines):
-            if line.find("CHIP"):
-                chip_method = True
-                chip_idx = idx
-            elif line.find('METHOD') > -1:
+            if line.find('METHOD') > -1:
                 break
-        method_lines = method_lines[idx + 2:]
 
+        method_lines = method_lines[idx + 2:]
+        print("WHASSUZ", method_lines)
         for line in method_lines:
-            logging.info("Adding step {}".format(line))
+            print("ADDING")
+            logging.warning("Adding step {}".format(line))
             self.method_steps.append(Step(line))
 
 
@@ -481,7 +479,7 @@ class AutoRun:
         :param system:  CE system object that will be automated
         """
         self.system = system  # L3 CE Systems object
-        self.style= 'CE'
+        self.style='CE'
         self.methods = []
         self.gate = GateSpecial()
         self.repetitions = 1
