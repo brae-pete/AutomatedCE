@@ -197,11 +197,11 @@ class ZExpandable(CollapsiblePane):
         self.root_window.system_queue.send_command('system.{}.startup'.format(self.name))
 
     def rel_z(self, direction: int, *args):
-        value = self.z_step.get() * direction
+        value = float(self.z_step.get()) * direction
         self.root_window.system_queue.send_command('system.{}.set_rel_z'.format(self.name), value)
 
     def go_abs(self):
-        value = self.z_abs.get()
+        value = float(self.z_abs.get())
         self.root_window.system_queue.send_command('system.{}.set_z'.format(self.name), value)
 
 
@@ -685,8 +685,8 @@ class MethodWindow(Frame):
             pass
 
     def start_method(self):
-        value = self.reps.get()
-        self.root_window.system_queue.send_command('auto_run.repetitions',value)
+        value = float(self.reps.get())
+        self.root_window.system_queue.send_command('auto_run.set_repetitions',value)
         for method in self.methods:
             self.root_window.system_queue.send_command('auto_run.add_method', method)
         self.root_window.system_queue.send_command('auto_run.start_run')

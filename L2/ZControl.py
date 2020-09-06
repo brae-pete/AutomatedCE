@@ -171,8 +171,15 @@ class ArduinoZ(ZAbstraction, UtilityControl):
     def read_z(self):
         """ Reads the z position"""
         z = self.controller.send_command("M0L?\n")
+        ct = 0
         while "L?" != z[0:2]:
+            print(z, "  IS Z")
             z = self.controller.read_buffer()
+            if ct >= 5:
+                z = self.controller.send_command("M0L?\n")
+            elif ct >=10:
+                return self.pos
+            ct+=1
         z = self._scale_values(float(z.strip('L?').strip('\n').strip('\r')))
         self.pos = z
         return z
@@ -586,7 +593,9 @@ class ZControlFactory(UtilityFactory):
 if __name__ == "__main__":
     from L1 import Controllers
 
-    ctl = Controllers.MicroManagerController()
+    ctl = Controllers.ArduinoController('COM7')
     ctl.open()
-    Z = ZControlFactory().build_object(ctl, 'test')
-    Z.set_z(20)
+    Z = ArduinoZ(ctl, 'inlet_z')
+    Z.startup()
+    print(Z.read_z())
+    print(Z.read_z())

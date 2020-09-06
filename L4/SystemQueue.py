@@ -55,6 +55,7 @@ class SystemsRoutine:
         self.info_queue = mp.Queue() # Queue that contains data from the CE system
         self.error_queue = mp.Queue() # Queueue that contains error messages from the CE system
         self.command_queue = mp.Queue() # Queue that contains commands sent to the CE system
+        self.update_queue = mp.Queue()
         self.process = None # Python Process containing the CE system
         self.updates={} # Dictionary of command msgs and a list of callbacks to call for each data recieved
         self.error_updates=[] # List of callbacks to send the error information to
@@ -99,7 +100,7 @@ class SystemsRoutine:
         :return:
         """
         self.process = mp.Process(target=wait_n_read, args=(self.info_queue, self.error_queue,
-                                                            self.command_queue))
+                                                            self.command_queue, self.update_queue))
         self.process.start()
 
         # clear all previous commands
@@ -111,6 +112,8 @@ class SystemsRoutine:
        # Send new commands
         if self.config is not None:
             self.send_command('system.load_config',config_file=self.config)
+            self.send_command('system.open_controllers')
+            self.send_command('system.startup_utilities')
 
 
     def stop_process(self):
@@ -133,6 +136,10 @@ class SystemsRoutine:
 
     def send_command(self, cmd, *args, **kwargs):
         self.command_queue.put((cmd, args, kwargs))
+        return
+
+    def update_command(self, cmd, *args, **kwargs):
+        self.update_queue.put((cmd, args, kwargs))
         return
 
     def add_info_callback(self, msg, fnc):
@@ -171,7 +178,7 @@ class SystemsRoutine:
         :return:
         """
         for msg in self.update_commands:
-            self.send_command(msg)
+            self.update_command(msg)
         return
 
 
@@ -185,7 +192,7 @@ class SystemsInterpreter:
         self.info_queue = info
         self.error_queue = error
         self.system = SystemsBuilder.CESystem()
-        self.auto = AutomatedControl.AutoRun(self.system)
+        self.auto_run = AutomatedControl.AutoRun(self.system)
 
     def create_systems_object(self, config=None):
         """
@@ -226,12 +233,13 @@ class SystemsInterpreter:
 
         try:
             # Identify which component to control, CE System (system), AutoRun (auto_run), or reset.
-            if command.find('system') >= 0:
+            if command.find('.') >= 0:
                 #_, utility, cmd = command.split('.')
                 self.error_queue.put(("info", "{}::{}::{}\n".format(command,args,kwargs)))
                 resp = call_method(self, command, *args, **kwargs)
                 #resp = self.system.__getattribute__(utility).__getattribute(cmd)(*args)
                 self.info_queue.put((command, [resp]))
+
                 """ This should no longer be needed but lets test before we remove it
                 elif command.find('auto_run')>=0:
                     _, cmd = command.split('.')
@@ -252,11 +260,21 @@ class SystemsInterpreter:
             self.error_queue.put(('error-2',"{}::{}\n".format(e,command)))
 
 
-def wait_n_read(info: mp.Queue, error: mp.Queue, command: mp.Queue):
+def wait_n_read(info: mp.Queue, error: mp.Queue, command: mp.Queue, update: mp.Queue):
     interpret = SystemsInterpreter(info, error)
     while True:
+        if not command.empty():
+            try:
+
+                cmd, args, kwargs = command.get()
+                if cmd == 'stop':
+                    return 0
+                interpret.interpret_and_respond(cmd, *args, **kwargs)
+            except Exception as e:
+                error.put(('error-1',e))
+
         try:
-            cmd, args, kwargs = command.get()
+            cmd, args, kwargs = update.get()
             if cmd == 'stop':
                 return 0
             interpret.interpret_and_respond(cmd, *args, **kwargs)

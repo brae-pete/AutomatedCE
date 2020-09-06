@@ -21,7 +21,7 @@ class ControllerAbstraction(ABC):
 
     def __init__(self, port):
         self.port = port
-        self.lock = Lock()
+        self.lock = threading.RLock()
 
     def __str__(self):
         return repr(self) + " using port: " + self.port

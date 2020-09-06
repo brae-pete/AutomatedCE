@@ -510,6 +510,15 @@ class AutoRun:
         elif self.style == 'CHIP':
             self.methods.append(ChipMethod(method_file))
 
+    def set_repetitions(self, reps:int):
+        """
+        Sets the numberof repeitions to repead the methods
+        :param reps:
+        :return:
+        """
+        self.repetitions=reps
+
+
     def set_template(self, template_file=r'default'):
         """
         Sets the template that should be used. Uses a template config file to definen the well positions and
@@ -593,7 +602,7 @@ class AutoRun:
                 self.error_message(state, "Outlet Move Down")
 
             # Run the special command for injections here
-            print('Step Special command is : {}'.format(step.special))
+            #print('Step Special command is : {}'.format(step.special))
             if step.special == "manual_cell":
                 state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
                 self.error_message(state, "Manual Cell Injection")
