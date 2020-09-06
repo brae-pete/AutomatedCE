@@ -71,6 +71,13 @@ def get_channels(line):
     channels = line.split('\t')[1:]
     return channels
 
+
+class ExitRun(Exception):
+    """
+    Program exits the runtime commands
+    """
+    pass
+
 class Step:
     """
     Standardize data object containing all the information needed for a given automation step
@@ -89,7 +96,8 @@ class Step:
         self.data = False
 
         # Read step
-        self.read_line(line)
+        if line != 'INJ':
+            self.read_line(line)
 
     @staticmethod
     def _get_true_false(value):
@@ -218,17 +226,15 @@ class Method(object):
         with open(method_file, 'r') as in_file:
             lines = in_file.readlines()
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
-        chip_method = False
         for idx, line in enumerate(method_lines):
-            if line.find("CHIP"):
-                chip_method = True
-                chip_idx = idx
-            elif line.find('METHOD') > -1:
+            if line.find('METHOD') > -1:
                 break
-        method_lines = method_lines[idx + 2:]
 
+        method_lines = method_lines[idx + 2:]
+        print("WHASSUZ", method_lines)
         for line in method_lines:
-            logging.info("Adding step {}".format(line))
+            print("ADDING")
+            logging.warning("Adding step {}".format(line))
             self.method_steps.append(Step(line))
 
 
@@ -480,7 +486,7 @@ class AutoRun:
         :param system:  CE system object that will be automated
         """
         self.system = system  # L3 CE Systems object
-        self.style= 'CE'
+        self.style='CE'
         self.methods = []
         self.gate = GateSpecial()
         self.repetitions = 1
@@ -558,49 +564,60 @@ class AutoRun:
         # Create a traced thread we can kill on demand
         self.traced_thread = Util.TracedThread(target=self._run, args=(simulated,))
         self.traced_thread.name = 'AutoRun'
-        self.traced_thread.start()
         self.is_running.set()
         self.continue_event.set()
+        self.traced_thread.start()
+
 
     def error_message(self, state, process):
         if not state:
             logging.error("Error while moving during {}. Aborting".format(process))
             self.stop_run()
+            raise ExitRun
 
     def _run(self, simulated=False):
         """
         Makes the individual step calls for a compiled method sequence.
         :return:
         """
-        while not self._queue.empty():
-            (step, rep) = self._queue.get()
+        try:
 
-            # Get the move positions
-            xyz0, xyz1, well_name, skip_z = self._get_move_positions(step, rep)
+            while not self._queue.empty() and self.is_running.is_set():
+                (step, rep) = self._queue.get()
 
-            self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
-            self.path_information.append(f"Preparing for move to well {well_name}")
-            # Move the System Safely
-            if self.safe_enabled:
-                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated,
-                                            self.path_information).move()
-            else:
-                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated,
-                                            self.path_information).move()
-            self.error_message(state, "System Move")
+                # Get the move positions
+                xyz0, xyz1, well_name, skip_z = self._get_move_positions(step, rep)
 
-            # Move the inlet
-            self.path_information.append(f"Outlet Height set to {step.outlet_height} mm")
-            if not simulated:
-                self.system.outlet_z.set_z(step.outlet_height)
+                self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
+                self.path_information.append(f"Preparing for move to well {well_name}")
+                # Move the System Safely
+                if self.safe_enabled:
+                    state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated,
+                                                self.path_information).move()
+                else:
+                    state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated,
+                                                self.path_information).move()
+                self.error_message(state, "System Move")
 
-                # Wait for both Z Stages to stop moving
-                state = self.system.inlet_z.wait_for_target(xyz1[2])
-                self.error_message(state, "Inlet Move Down")
+                # Move the inlet
+                self.path_information.append(f"Outlet Height set to {step.outlet_height} mm")
+                if not simulated:
+                    self.system.outlet_z.set_z(step.outlet_height)
 
-                state = self.system.outlet_z.wait_for_target(step.outlet_height)
-                self.error_message(state, "Outlet Move Down")
+                    # Wait for both Z Stages to stop moving
+                    state = self.system.inlet_z.wait_for_target(xyz1[2])
+                    self.error_message(state, "Inlet Move Down")
 
+                    state = self.system.outlet_z.wait_for_target(step.outlet_height)
+                    self.error_message(state, "Outlet Move Down")
+
+                # Run the special command for injections here
+                print('Step Special command is : {}'.format(step.special))
+                if step.special == "manual_cell":
+                    state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
+                    self.error_message(state, "Manual Cell Injection")
+                elif step.special == 'wait':
+                    self.wait_to_continue()
             # Run the special command for injections here
             #print('Step Special command is : {}'.format(step.special))
             if step.special == "manual_cell":
@@ -609,19 +626,21 @@ class AutoRun:
             elif step.special == 'wait':
                 self.wait_to_continue()
 
-            after_special = True  # change this to false if we don't need to run the timed part of the step after
+                after_special = True  # change this to false if we don't need to run the timed part of the step after
 
-            # Run the special for Gating the separation here (get peak areas and set the next collection well)
+                # Run the special for Gating the separation here (get peak areas and set the next collection well)
 
-            # Run the timed step
-            if after_special:
-                self.timed_step(step, simulated)
-            # Output the electropherogram data
-            if step.data:
-                file_path = FileIO.get_data_filename(step.name, self.data_dir)
-                self.path_information.append(f"Saving Data to {file_path}")
-                if not simulated:
-                    FileIO.OutputElectropherogram(self.system, file_path)
+                # Run the timed step
+                if after_special:
+                    self.timed_step(step, simulated)
+                # Output the electropherogram data
+                if step.data:
+                    file_path = FileIO.get_data_filename(step.name, self.data_dir)
+                    self.path_information.append(f"Saving Data to {file_path}")
+                    if not simulated:
+                        FileIO.OutputElectropherogram(self.system, file_path)
+        except ExitRun:
+            logging.error("Exiting the run...")
 
     def _get_move_positions(self, step, rep):
         """
@@ -645,6 +664,24 @@ class AutoRun:
         else:
             skip_z = False
         return xyz0, xyz1, step.well_location[rep % len(step.well_location)], skip_z
+
+    def injection(self, inj_time, voltage, drop):
+        """
+        Run a timed injection step when requested
+        :param inj_time:
+        :param voltage:
+        :param drop:
+        :return:
+        """
+
+        step = Step('INJ')
+        step.voltage=voltage
+        step.time=inj_time
+        step.pressure=False
+        step.vacuum=False
+        self.system.outlet_z.set_rel_z(-drop)
+        self.timed_step(step,False)
+        self.system.outlet_z.set_rel_z(drop)
 
     def timed_step(self, step, simulated):
         """
@@ -1000,6 +1037,7 @@ class TemplateMaker:
         :return:
         """
         self.dimensions = [left_x, lower_y, right_x, upper_y]
+
 
 
 class AutoSpecial:
