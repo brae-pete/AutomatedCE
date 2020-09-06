@@ -774,7 +774,7 @@ class MethodWindow(Frame):
 
     def start_method(self):
         value = self.reps.get()
-        self.root_window.system_queue.send_command('auto_run.repetitions', value)
+        self.root_window.system_queue.send_command('auto_run.set_repetitions', value)
 
         for method in self.methods:
             self.root_window.system_queue.send_command('auto_run.add_method', method)
