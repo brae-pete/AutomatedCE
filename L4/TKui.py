@@ -781,7 +781,7 @@ class MethodWindow(Frame):
         self.root_window.system_queue.send_command('auto_run.start_run')
 
     def stop_method(self):
-        self.root_window.system_queue.send_command('auto_run.stop')
+        self.root_window.system_queue.send_command('auto_run.stop_run')
 
 
 class TerminalWindow(Frame):

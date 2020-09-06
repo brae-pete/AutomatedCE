@@ -114,6 +114,7 @@ class SystemsRoutine:
             self.send_command('system.load_config',config_file=self.config)
             self.send_command('system.open_controllers')
             self.send_command('system.startup_utilities')
+            print("start here", self.config)
 
 
     def stop_process(self):
@@ -239,7 +240,7 @@ class SystemsInterpreter:
                 resp = call_method(self, command, *args, **kwargs)
                 #resp = self.system.__getattribute__(utility).__getattribute(cmd)(*args)
                 self.info_queue.put((command, [resp]))
-
+                print(command, resp)
                 """ This should no longer be needed but lets test before we remove it
                 elif command.find('auto_run')>=0:
                     _, cmd = command.split('.')
@@ -269,6 +270,7 @@ def wait_n_read(info: mp.Queue, error: mp.Queue, command: mp.Queue, update: mp.Q
                 cmd, args, kwargs = command.get()
                 if cmd == 'stop':
                     return 0
+                print(cmd)
                 interpret.interpret_and_respond(cmd, *args, **kwargs)
             except Exception as e:
                 error.put(('error-1',e))

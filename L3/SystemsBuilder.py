@@ -403,6 +403,7 @@ class SystemAbstraction(ABC):
         :return:
         """
         for name, controller in self.controllers.items():
+            print("OPENING: ", name, controller)
             controller.open()
 
     def close_controllers(self):
