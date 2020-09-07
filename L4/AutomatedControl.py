@@ -619,27 +619,23 @@ class AutoRun:
                     state = self.system.outlet_z.wait_for_target(step.outlet_height)
                     self.error_message(state, "Outlet Move Down")
 
+
                 # Run the special command for injections here
-                print('Step Special command is : {}'.format(step.special))
+                after_special = True  # change this to false if we don't need to run the timed part of the step after
+
+                # print('Step Special command is : {}'.format(step.special))
                 if step.special == "manual_cell":
                     state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
                     self.error_message(state, "Manual Cell Injection")
                 elif step.special == 'wait':
                     self.wait_to_continue()
-            # Run the special command for injections here
-            # print('Step Special command is : {}'.format(step.special))
-            if step.special == "manual_cell":
-                state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
-                self.error_message(state, "Manual Cell Injection")
-            elif step.special == 'wait':
-                self.wait_to_continue()
 
-                after_special = True  # change this to false if we don't need to run the timed part of the step after
 
                 # Run the special for Gating the separation here (get peak areas and set the next collection well)
-
+                print("After special", after_special)
                 # Run the timed step
                 if after_special:
+
                     self.timed_step(step, simulated)
                 # Output the electropherogram data
                 if step.data:
@@ -707,7 +703,7 @@ class AutoRun:
         """
         # Keep track of the time_data we started applying forces
         st = time.time()
-
+        print("Time to wait is ", step.time)
         # Apply Hydrodynamic Forces
         self.path_information.append(
             f"Pressure state changed to {step.pressure}, Vaccuum state changed to {step.vacuum}")

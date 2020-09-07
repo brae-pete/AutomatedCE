@@ -40,7 +40,7 @@ class RootWindow(Frame):
         egram_button = ttk.Button(root, text='Manual Cell', command=lambda x=self: InjectionWindow(x))
         egram_button.grid(column=3, row=0)
 
-        egram_button = ttk.Button(root, text='Egram')
+        egram_button = ttk.Button(root, text='Egram', command=lambda x=self:EgramWindow(x))
         egram_button.grid(column=4, row=0)
 
         egram_button = ttk.Button(root, text='Camera', command=lambda x=self: CameraWindow(x))
@@ -522,6 +522,88 @@ class InitFrame(Frame):
         well_name=self.well_var.get()
         if well_name != 'Select':
             self.parent.system_queue.send_command('auto_run.move_to_well',well_name)
+class EgramWindow(Frame):
+    def __init__(self, parent: RootWindow, **kw):
+        self.parent = parent
+        window = self.window = Toplevel(parent)
+        super().__init__(window, **kw)
+        self.fig = None  # type: Figure
+        self.ax = None
+        self._update = False
+        self.time = [1,2,3]
+        self.data={}
+        self.power_data={}
+        self.current= [0,0,0]
+        self.im_plot = None
+        self.canvas = None
+        self._artists=[]
+        self.plot_axes=[]
+        self.figure_setup()
+        self.setup()
+        self.ani = animation.FuncAnimation(self.fig, self.update_graph, interval=2000)
+
+        parent.system_queue.add_info_callback('system.detector.get_data', self.add_data)
+        parent.system_queue.add_info_callback('system.high_voltage.get_data', self.add_power_data)
+
+    def setup(self):
+
+        self.grid()
+
+        canvas = FigureCanvasTkAgg(self.fig, master=self)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, columnspan=6)
+
+        frame = Frame(self)
+        frame.grid(row=1, column=0)
+        toolbar = NavigationToolbar2Tk(canvas, frame)
+        toolbar.update()
+        # canvas.get_tk_widget().pack()
+        self.canvas = canvas
+
+
+
+    def add_data(self, data, *args, **kwargs):
+        if data is not None:
+            self.data = data
+            self._update=True
+
+    def add_power_data(self, data, *args, **kwargs):
+        if data is not None:
+            self.power_data=data
+            self._update = True
+
+    def figure_setup(self):
+        self.fig = fig = Figure(figsize=(5, 4))
+        gs = fig.add_gridspec(10, 1)
+        ax1 = fig.add_subplot(gs[0:9])
+        ax2 = ax1.twinx()
+        ax1.set_ylabel('PMT (V)')
+        ax2.set_ylabel('Current (uA)')
+        ax2.set_ylim(-10, 100)
+        self._artists = []
+        self._artists.append(ax1.plot([0], [0], c='forestgreen')[0])
+        self._artists.append(ax2.plot([0], [0], c='darkorange')[0])
+        self.plot_axes = [ax1, ax2]
+        ax1.set_title("CE Live View")
+
+    def update_graph(self, *args):
+        if self._update:
+            self._update=False
+            data = self.data
+            power_data = self.power_data
+            ax1, ax2 = self.plot_axes[0:2]
+            try:
+                ax1.set_xlim(min(data['time_data']), max(data['time_data']))
+                ax1.set_ylim(min(data['rfu']) * 0.95, max(data['rfu'] * 1.05))
+                ax2.set_ylim(0 * 0.7, max(power_data['current']) * 1.03)
+                # ax2.set_ylim(min(power_data['current'])*0.95, max(power_data['current'])*1.05)
+            except (ValueError, KeyError):
+                return self._artists
+            self._artists[0].set_data(data['time_data'], data['rfu'])
+            self._artists[1].set_data(power_data['time_data'], power_data['current'])
+            self.canvas.draw()
+        return self._artists
+
 
 class CameraWindow(Frame):
 
@@ -873,10 +955,9 @@ class MethodWindow(Frame):
         self.style=style
 
         self.root_window.system_queue.send_command(f'{style}.set_repetitions', value)
-
         for method in self.methods:
             self.root_window.system_queue.send_command(f'{style}.add_method', method)
-        self.root_window.system_queue.send_command(f'{style}.start_run')
+        self.root_window.system_queue.send_command(f'{style}.start_run', simulated=False)
 
     def stop_method(self):
         self.root_window.system_queue.send_command(f'{self.style}.stop_run')
