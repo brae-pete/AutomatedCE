@@ -194,6 +194,7 @@ class SystemsInterpreter:
         self.error_queue = error
         self.system = SystemsBuilder.CESystem()
         self.auto_run = AutomatedControl.AutoRun(self.system)
+        self.chip_run = AutomatedControl.ChipRun(self.system)
 
     def create_systems_object(self, config=None):
         """
@@ -206,7 +207,8 @@ class SystemsInterpreter:
             self.system.load_config(config)
             self.system.open_controllers()
             self.system.startup_utilities()
-        self.auto.system = self.system
+        self.auto_run.system = self.system
+        self.auto_run.add_to_simple_wait_callback(AutomatedControl.send_wait_signal,("WAITING", self.info_queue))
 
     def create_auto_object(self):
         """
@@ -240,7 +242,7 @@ class SystemsInterpreter:
                 resp = call_method(self, command, *args, **kwargs)
                 #resp = self.system.__getattribute__(utility).__getattribute(cmd)(*args)
                 self.info_queue.put((command, [resp]))
-                print(command, resp)
+                #print(command, resp)
                 """ This should no longer be needed but lets test before we remove it
                 elif command.find('auto_run')>=0:
                     _, cmd = command.split('.')
@@ -270,7 +272,7 @@ def wait_n_read(info: mp.Queue, error: mp.Queue, command: mp.Queue, update: mp.Q
                 cmd, args, kwargs = command.get()
                 if cmd == 'stop':
                     return 0
-                print(cmd)
+                #print(cmd)
                 interpret.interpret_and_respond(cmd, *args, **kwargs)
             except Exception as e:
                 error.put(('error-1',e))

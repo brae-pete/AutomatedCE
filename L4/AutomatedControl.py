@@ -67,6 +67,7 @@ def get_true_false(value):
     else:
         return False
 
+
 def get_channels(line):
     channels = line.split('\t')[1:]
     return channels
@@ -77,6 +78,7 @@ class ExitRun(Exception):
     Program exits the runtime commands
     """
     pass
+
 
 class Step:
     """
@@ -164,6 +166,7 @@ class ChipStep:
         self.read_line(line)
         self.line = line
         self.channels = channels
+
     def read_line(self, line):
         """
         Read information from a tab seperated line.
@@ -257,10 +260,10 @@ class ChipMethod(Method):
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
         chip_method = False
         for idx, line in enumerate(method_lines):
-            if line.find("CHIP")>-1:
+            if line.find("CHIP") > -1:
                 chip_method = True
                 chip_idx = idx
-            elif line.find("VOLTAGE CHANNELS")>-1:
+            elif line.find("VOLTAGE CHANNELS") > -1:
                 channels = get_channels(line)
             elif line.find('METHOD') > -1:
                 break
@@ -486,7 +489,7 @@ class AutoRun:
         :param system:  CE system object that will be automated
         """
         self.system = system  # L3 CE Systems object
-        self.style='CE'
+        self.style = 'CE'
         self.methods = []
         self.gate = GateSpecial()
         self.repetitions = 1
@@ -495,6 +498,7 @@ class AutoRun:
         self.is_running = threading.Event()
         self.continue_event = threading.Event()
         self.continue_callbacks = {}
+        self.simple_wait_callbacks = []
         self.traced_thread = Util.TracedThread()
         self.traced_thread.name = 'AutoRun'
         self.data_dir = get_system_var('data_dir')[0]
@@ -516,14 +520,13 @@ class AutoRun:
         elif self.style == 'CHIP':
             self.methods.append(ChipMethod(method_file))
 
-    def set_repetitions(self, reps:int):
+    def set_repetitions(self, reps: int):
         """
         Sets the numberof repeitions to repead the methods
         :param reps:
         :return:
         """
-        self.repetitions=reps
-
+        self.repetitions = reps
 
     def set_template(self, template_file=r'default'):
         """
@@ -567,7 +570,6 @@ class AutoRun:
         self.is_running.set()
         self.continue_event.set()
         self.traced_thread.start()
-
 
     def error_message(self, state, process):
         if not state:
@@ -619,7 +621,7 @@ class AutoRun:
                 elif step.special == 'wait':
                     self.wait_to_continue()
             # Run the special command for injections here
-            #print('Step Special command is : {}'.format(step.special))
+            # print('Step Special command is : {}'.format(step.special))
             if step.special == "manual_cell":
                 state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
                 self.error_message(state, "Manual Cell Injection")
@@ -675,12 +677,12 @@ class AutoRun:
         """
 
         step = Step('INJ')
-        step.voltage=voltage
-        step.time=inj_time
-        step.pressure=False
-        step.vacuum=False
+        step.voltage = voltage
+        step.time = inj_time
+        step.pressure = False
+        step.vacuum = False
         self.system.outlet_z.set_rel_z(-drop)
-        self.timed_step(step,False)
+        self.timed_step(step, False)
         self.system.outlet_z.set_rel_z(drop)
 
     def timed_step(self, step, simulated):
@@ -741,7 +743,6 @@ class AutoRun:
         self.is_running.clear()
         self.traced_thread.kill()
 
-
     def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
         """Calls the continue_callbacks  for the user to set the continue_event before continuing
         There are two methods that could be employed. The first is the callback may return True when ready
@@ -761,21 +762,32 @@ class AutoRun:
                         return False
                     elif resp:
                         return True
+        else:
+            for fnc, args in self.simple_wait_callbacks:
+                fnc(*args)
+
         # otherwise use the flag
         while not self.continue_event.is_set():
             time.sleep(0.2)
         return True
+
+    def add_to_simple_wait_callback(self, fnc, *args):
+        self.simple_wait_callbacks.append([fnc, args])
+
+
+def send_wait_signal(msg, queue: Queue):
+    queue.put(msg)
 
 
 class ChipRun(AutoRun):
 
     def __init__(self, system: CESystem()):
         super().__init__(system)
-        self.style='CHIP'
+        self.style = 'CHIP'
 
-    def _run(self,simulated,*args, **kwargs):
+    def _run(self, simulated, *args, **kwargs):
         while not self._queue.empty():
-            (step,rep) = self._queue.get()
+            (step, rep) = self._queue.get()
             self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
 
             # Change the voltages
@@ -788,12 +800,12 @@ class ChipRun(AutoRun):
         st = time.time()
         if step.camera:
             file_path = FileIO.get_data_folder(step.name, self.data_dir)
-            self._img_folder=file_path
+            self._img_folder = file_path
             self.system.camera.add_callback(self.save_img, tag="temp")
             self.system.camera.continuous_snap()
 
         self.system.high_voltage.load_changes()
-        while time.time()-st < step.time and self.is_running.is_set() and not simulated:
+        while time.time() - st < step.time and self.is_running.is_set() and not simulated:
             time.sleep(0.05)
 
         if step.camera:
@@ -807,7 +819,7 @@ class ChipRun(AutoRun):
         :param kwargs:
         :return:
         """
-        file_name = FileIO.get_data_filename("IMG",self._img_folder, extension=".tif")
+        file_name = FileIO.get_data_filename("IMG", self._img_folder, extension=".tif")
         imsave(file_name, img, check_contrast=False)
 
 
@@ -1039,7 +1051,6 @@ class TemplateMaker:
         self.dimensions = [left_x, lower_y, right_x, upper_y]
 
 
-
 class AutoSpecial:
     pass
 
@@ -1049,14 +1060,15 @@ if __name__ == "__main__":
     import numpy as np
     import logging
     import os
+
     os.chdir(os.path.abspath('..'))
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     system = CESystem()
-    system.load_config(config_file = r'E:\Scripts\AutomatedCE\config\TestChip.cfg')
+    system.load_config(config_file=r'E:\Scripts\AutomatedCE\config\TestChip.cfg')
     system.open_controllers()
     auto = ChipRun(system)
     auto.add_method(r'E:\Scripts\AutomatedCE\config\methods-chep.txt')
-    #auto.set_template()
+    # auto.set_template()
     auto.repetitions = 2
-    #auto.start_run()
+    # auto.start_run()

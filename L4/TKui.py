@@ -745,6 +745,12 @@ class MethodWindow(Frame):
         btn = ttk.Button(window, text="Stop Run", command=self.stop_method)
         btn.grid(row=2, column=3, sticky="NSEW")
 
+        self.method_style=StringVar(value='CE')
+        rd = ttk.Radiobutton(window, text='CE Style', variable=self.method_style, value='CE')
+        rd.grid(row=2, column=0)
+        rd = ttk.Radiobutton(window, text='CHIP Style', variable=self.method_style, value='CHIP')
+        rd.grid(row=2, column=1)
+        self.style='auto_run'
         self.text = text
         self.root_window = parent
 
@@ -773,15 +779,22 @@ class MethodWindow(Frame):
             pass
 
     def start_method(self):
+
+        if self.method_style.get()=='CE':
+            style='auto_run'
+        else:
+            style='chip_run'
         value = self.reps.get()
-        self.root_window.system_queue.send_command('auto_run.set_repetitions', value)
+        self.style=style
+
+        self.root_window.system_queue.send_command(f'{style}.set_repetitions', value)
 
         for method in self.methods:
-            self.root_window.system_queue.send_command('auto_run.add_method', method)
-        self.root_window.system_queue.send_command('auto_run.start_run')
+            self.root_window.system_queue.send_command(f'{style}.add_method', method)
+        self.root_window.system_queue.send_command(f'{style}.start_run')
 
     def stop_method(self):
-        self.root_window.system_queue.send_command('auto_run.stop_run')
+        self.root_window.system_queue.send_command(f'{self.style}.stop_run')
 
 
 class TerminalWindow(Frame):
