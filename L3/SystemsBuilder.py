@@ -272,9 +272,9 @@ class ConcreteDirector(Director):
         """
         for utility in utility_list:
             settings = utility.split(',')
-            print(settings)
+            #print(settings)
             settings=[x.split('&')  if ('&' in x) else x for x in settings]
-            print(settings)
+            #print(settings)
             utility_type = settings[2]
             if type(settings[1]) is list:
                 controller = [controllers[x] for x in settings[1]]
@@ -403,6 +403,7 @@ class SystemAbstraction(ABC):
         :return:
         """
         for name, controller in self.controllers.items():
+            print("OPENING: ", name, controller)
             controller.open()
 
     def close_controllers(self):
@@ -423,6 +424,7 @@ class SystemAbstraction(ABC):
             if utility is None:
                 logging.info(f"{name} not configured.")
                 continue
+            print("Starting up: {}, {}".format(name, utility))
             utility.startup()
 
     def shutdown_utilities(self):

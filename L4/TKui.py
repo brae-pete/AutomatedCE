@@ -26,6 +26,7 @@ class RootWindow(Frame):
         super().__init__(root, **kw)
         self.system_queue = SystemQueue.SystemsRoutine()
         self.root = root
+        self.injection_data = InjectionData(self)
         # Add the main Buttons
         system_button = ttk.Button(root, text='System', command=lambda x=self: CESystemWindow(x))
         system_button.grid(column=0, row=0)
@@ -36,14 +37,17 @@ class RootWindow(Frame):
         method_button = ttk.Button(root, text='Method', command=lambda x=self: MethodWindow(x))
         method_button.grid(column=2, row=0)
 
-        egram_button = ttk.Button(root, text='Egram')
+        egram_button = ttk.Button(root, text='Manual Cell', command=lambda x=self: InjectionWindow(x))
         egram_button.grid(column=3, row=0)
 
-        egram_button = ttk.Button(root, text='Camera', command=lambda x=self: CameraWindow(x))
+        egram_button = ttk.Button(root, text='Egram', command=lambda x=self:EgramWindow(x))
         egram_button.grid(column=4, row=0)
 
-        egram_button = ttk.Button(root, text='Terminal', command=lambda x=self: TerminalWindow(x))
+        egram_button = ttk.Button(root, text='Camera', command=lambda x=self: CameraWindow(x))
         egram_button.grid(column=5, row=0)
+
+        egram_button = ttk.Button(root, text='Terminal', command=lambda x=self: TerminalWindow(x))
+        egram_button.grid(column=6, row=0)
 
         root.title('Automated Chip')
 
@@ -197,11 +201,11 @@ class ZExpandable(CollapsiblePane):
         self.root_window.system_queue.send_command('system.{}.startup'.format(self.name))
 
     def rel_z(self, direction: int, *args):
-        value = self.z_step.get() * direction
+        value = float(self.z_step.get()) * direction
         self.root_window.system_queue.send_command('system.{}.set_rel_z'.format(self.name), value)
 
     def go_abs(self):
-        value = self.z_abs.get()
+        value = float(self.z_abs.get())
         self.root_window.system_queue.send_command('system.{}.set_z'.format(self.name), value)
 
 
@@ -435,9 +439,12 @@ class InitFrame(Frame):
     def __init__(self, parent: RootWindow, **kw):
         self.window = window = Toplevel(parent)
         super().__init__(window, **kw)
+        self.well_var = StringVar(value="Select")
+
         self.setup()
         self.parent = parent
-
+        self.grid()
+        self.setup()
     def setup(self):
         """ Place the buttons"""
         window = self.window
@@ -449,24 +456,37 @@ class InitFrame(Frame):
         header_lbl = ttk.Label(instruction_frame, text='Initialize System')
         header_lbl.grid(row=0, column=0)
 
-        step_1_lbl = ttk.Label(instruction_frame, text=" 1. Load the System ")
+        step_1_lbl = ttk.LabelFrame(instruction_frame, text=" 1. Load the System ")
         step_1_lbl.grid()
 
-        step_1_file_button = ttk.Button(instruction_frame, text='Select Config',
+        step_1_file_button = ttk.Button(step_1_lbl, text='Select Config',
                                         command=self.set_config)
         step_1_file_button.grid()
 
-        step_2_lbl = ttk.Label(instruction_frame, text='2. Load the Template')
+        step_2_lbl = ttk.LabelFrame(instruction_frame, text='2. Load the Template')
         step_2_lbl.grid()
 
-        step_2_btn = ttk.Button(instruction_frame, text='Select Template', command=self.set_template)
+        step_2_btn = ttk.Button(step_2_lbl, text='Select Template', command=self.set_template)
         step_2_btn.grid()
 
-        step_3_lbl = ttk.Label(instruction_frame, text="3. Calibrate the CE Apparatus")
+        step_3_lbl = ttk.LabelFrame(instruction_frame, text="3. Calibrate the CE Apparatus")
         step_3_lbl.grid()
 
-        step_4_lbl = ttk.Label(instruction_frame, text="4. Calibration Check")
+        btn = ttk.Button(step_3_lbl, text='Home Z Stage', command=self.z_home)
+        btn.grid()
+
+        btn = ttk.Button(step_3_lbl, text = 'Set XY Home', command=self.xy_home)
+        btn.grid()
+
+        step_4_lbl = ttk.LabelFrame(instruction_frame, text="4. Calibration Check")
         step_4_lbl.grid()
+
+        lbl = ttk.Label(step_4_lbl, text='Select a Box')
+        lbl.grid(row=0)
+        cbx = ttk.Entry(step_4_lbl, textvariable=self.well_var)
+        cbx.grid(row=1)
+        btn = ttk.Button(step_4_lbl, text='Move to well', command=self.move_to_well)
+        btn.grid()
 
         picture_frame = ttk.Frame(window)
         picture_frame.grid(row=0, column=1)
@@ -486,6 +506,103 @@ class InitFrame(Frame):
         f_name = filedialog.askopenfilename()
         if f_name is not None:
             self.parent.system_queue.send_command('auto_run.set_template', template_file=f_name)
+
+    def xy_home(self):
+        """Sets the XY home position"""
+        self.parent.system_queue.send_command('system.xy_stage.set_home')
+
+    def z_home(self):
+        """ Moves to the Z inlet home position"""
+        self.parent.system_queue.send_command('system.inlet_z.homing')
+
+    def move_to_well(self):
+        """
+        Moves to a well
+        """
+        well_name=self.well_var.get()
+        if well_name != 'Select':
+            self.parent.system_queue.send_command('auto_run.move_to_well',well_name)
+class EgramWindow(Frame):
+    def __init__(self, parent: RootWindow, **kw):
+        self.parent = parent
+        window = self.window = Toplevel(parent)
+        super().__init__(window, **kw)
+        self.fig = None  # type: Figure
+        self.ax = None
+        self._update = False
+        self.time = [1,2,3]
+        self.data={}
+        self.power_data={}
+        self.current= [0,0,0]
+        self.im_plot = None
+        self.canvas = None
+        self._artists=[]
+        self.plot_axes=[]
+        self.figure_setup()
+        self.setup()
+        self.ani = animation.FuncAnimation(self.fig, self.update_graph, interval=2000)
+
+        parent.system_queue.add_info_callback('system.detector.get_data', self.add_data)
+        parent.system_queue.add_info_callback('system.high_voltage.get_data', self.add_power_data)
+
+    def setup(self):
+
+        self.grid()
+
+        canvas = FigureCanvasTkAgg(self.fig, master=self)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, columnspan=6)
+
+        frame = Frame(self)
+        frame.grid(row=1, column=0)
+        toolbar = NavigationToolbar2Tk(canvas, frame)
+        toolbar.update()
+        # canvas.get_tk_widget().pack()
+        self.canvas = canvas
+
+
+
+    def add_data(self, data, *args, **kwargs):
+        if data is not None:
+            self.data = data
+            self._update=True
+
+    def add_power_data(self, data, *args, **kwargs):
+        if data is not None:
+            self.power_data=data
+            self._update = True
+
+    def figure_setup(self):
+        self.fig = fig = Figure(figsize=(5, 4))
+        gs = fig.add_gridspec(10, 1)
+        ax1 = fig.add_subplot(gs[0:9])
+        ax2 = ax1.twinx()
+        ax1.set_ylabel('PMT (V)')
+        ax2.set_ylabel('Current (uA)')
+        ax2.set_ylim(-10, 100)
+        self._artists = []
+        self._artists.append(ax1.plot([0], [0], c='forestgreen')[0])
+        self._artists.append(ax2.plot([0], [0], c='darkorange')[0])
+        self.plot_axes = [ax1, ax2]
+        ax1.set_title("CE Live View")
+
+    def update_graph(self, *args):
+        if self._update:
+            self._update=False
+            data = self.data
+            power_data = self.power_data
+            ax1, ax2 = self.plot_axes[0:2]
+            try:
+                ax1.set_xlim(min(data['time_data']), max(data['time_data']))
+                ax1.set_ylim(min(data['rfu']) * 0.95, max(data['rfu'] * 1.05))
+                ax2.set_ylim(0 * 0.7, max(power_data['current']) * 1.03)
+                # ax2.set_ylim(min(power_data['current'])*0.95, max(power_data['current'])*1.05)
+            except (ValueError, KeyError):
+                return self._artists
+            self._artists[0].set_data(data['time_data'], data['rfu'])
+            self._artists[1].set_data(power_data['time_data'], power_data['current'])
+            self.canvas.draw()
+        return self._artists
 
 
 class CameraWindow(Frame):
@@ -620,6 +737,144 @@ class CameraWindow(Frame):
         except Exception as e:
             print(e)
 
+class InjectionData():
+    """ Object to hold collection data"""
+    def __init__(self, root_window:RootWindow):
+        self.last_obj = None  # type: float
+        self.difference = None  # type: float
+        self.cap_z = None # type: float
+        self.obj_z = None # type: float
+        self.add_cap = False
+        self.add_obj = False
+        self.dif_var = DoubleVar()
+        self.root_window=root_window
+        root_window.system_queue.add_info_callback('system.objective.read_z', self.obj_callback)
+        root_window.system_queue.add_info_callback('system.inlet_z.read_z', self.inlet_callback)
+
+    def get_difference(self):
+        if self.add_obj or self.add_cap:
+            self.root_window.root.after(1000, self.get_difference)
+        else:
+            assert self.obj_z is not None or self.cap_z is not None, "Did not have objective or inlet positions recorded"
+            self.difference = self.obj_z - self.cap_z
+            self.dif_var.set(self.difference)
+        print(self.difference)
+
+    def get_cap_height(self, obj_height):
+        assert self.difference is not None, "Difference must be calculated before calling get_cap_height"
+        cap_height = obj_height - self.difference
+        return cap_height
+
+    def obj_callback(self, z, *args, **kwargs):
+        if self.add_obj:
+            self.obj_z=z
+            self.add_obj=False
+            print(z)
+
+    def inlet_callback(self, z, *args, **kwargs):
+        if self.add_cap:
+            self.cap_z=z
+            self.add_cap=False
+            self.get_difference()
+
+
+
+
+class InjectionWindow(Frame):
+    """
+    Displays control buttons for the CE system Controller
+    """
+    calibration = []
+    def __init__(self, parent: RootWindow, **kw):
+        window = self.window = Toplevel(parent)
+        self.methods = []
+        super().__init__(window, **kw)
+        self.root_window = parent
+        self.grid()
+        self.time_var = DoubleVar()
+        self.volt_var = DoubleVar()
+        self.drop_var = DoubleVar()
+        self.setup()
+
+
+    def setup(self):
+
+        # Calibration Control Buttons
+        lf = ttk.LabelFrame(self, text='Objective-Capillary Calibration')
+        lf.grid()
+        bt = ttk.Button(lf, text='Set Objective Focus', command=self.objective_focus)
+        bt.grid()
+        bt = ttk.Button(lf, text='Set Capillary Focus', command=self.capillary_focus)
+        bt.grid()
+        spn = ttk.Spinbox(lf, from_=-0.5, to=10)
+        spn.grid()
+
+        # Capillary Adjustments
+        lf = ttk.LabelFrame(self, text='Capillary Adjustments')
+        lf.grid()
+        bt = ttk.Button(lf, text='Lower Capillary', command=self.lower_cap)
+        bt.grid(row=0, column=0)
+        moves = [('-10', -0.01),
+                 ('-5', -0.005),
+                 ('-2', -0.002),
+                 ('2', 0.002),
+                 ('5', 0.005),
+                 ('10', 0.01)]
+        c_idx = 0
+        r_idx = 1
+        for lbl, dis in moves:
+            bt = ttk.Button(lf, text=lbl,
+                            command=lambda x=dis: self.root_window.system_queue.send_command('system.inlet_z.set_rel_z', x))
+            bt.grid(row=r_idx, column=c_idx)
+            c_idx += 1
+
+        # Injection Parameters
+        lf = ttk.LabelFrame(self, text='Injection Parameters')
+        lf.grid()
+        params = [('Time (s)', self.time_var, 0, 1000),
+                  ('Voltage (V)', self.volt_var, 0, 1000),
+                  ('Drop (mm)', self.drop_var, -10, 10)]
+        c_idx = 0
+        r_idx = 0
+        for lbl, var, lw, hi in params:
+            lb = ttk.Label(lf, text=lbl)
+            lb.grid(row=r_idx, column=c_idx)
+            sp = ttk.Spinbox(lf, from_=lw, to=hi, textvariable=var)
+            sp.grid(row=r_idx + 1, column=c_idx)
+            c_idx += 1
+        btn = ttk.Button(lf, text='Start', command=self.start_injection)
+        btn.grid(row=r_idx + 2, column=c_idx - 1)
+
+        # Method Commands
+        lf = ttk.LabelFrame(self, text='Method Control')
+        lf.grid()
+        btn = ttk.Button(lf, text='Continue Method',command=self.continue_run )
+        btn.grid()
+
+    def continue_run(self):
+        self.root_window.system_queue.send_command('auto_run.continue_event.set')
+
+    def start_injection(self):
+        """Injection"""
+        volts =self.volt_var.get()
+        drop = self.drop_var.get()
+        dt = self.time_var.get()
+
+        # Make sure inputs are floats
+        if type(volts) != float or type(drop)!= float or type(dt) != float:
+            return
+
+        self.root_window.system_queue.send_command('auto_run.injection',dt,volts,drop)
+
+    def objective_focus(self):
+        self.root_window.injection_data.add_obj=True
+
+    def capillary_focus(self):
+        self.root_window.injection_data.add_cap=True
+
+    def lower_cap(self):
+        diff = self.root_window.injection_data.difference
+        self.root_window.system_queue.send_command('auto_run.lower_dif',diff)
 
 class MethodWindow(Frame):
     """
@@ -657,6 +912,12 @@ class MethodWindow(Frame):
         btn = ttk.Button(window, text="Stop Run", command=self.stop_method)
         btn.grid(row=2, column=3, sticky="NSEW")
 
+        self.method_style=StringVar(value='CE')
+        rd = ttk.Radiobutton(window, text='CE Style', variable=self.method_style, value='CE')
+        rd.grid(row=2, column=0)
+        rd = ttk.Radiobutton(window, text='CHIP Style', variable=self.method_style, value='CHIP')
+        rd.grid(row=2, column=1)
+        self.style='auto_run'
         self.text = text
         self.root_window = parent
 
@@ -685,14 +946,21 @@ class MethodWindow(Frame):
             pass
 
     def start_method(self):
+
+        if self.method_style.get()=='CE':
+            style='auto_run'
+        else:
+            style='chip_run'
         value = self.reps.get()
-        self.root_window.system_queue.send_command('auto_run.repetitions',value)
+        self.style=style
+
+        self.root_window.system_queue.send_command(f'{style}.set_repetitions', value)
         for method in self.methods:
-            self.root_window.system_queue.send_command('auto_run.add_method', method)
-        self.root_window.system_queue.send_command('auto_run.start_run')
+            self.root_window.system_queue.send_command(f'{style}.add_method', method)
+        self.root_window.system_queue.send_command(f'{style}.start_run', simulated=False)
 
     def stop_method(self):
-        self.root_window.system_queue.send_command('auto_run.stop')
+        self.root_window.system_queue.send_command(f'{self.style}.stop_run')
 
 
 class TerminalWindow(Frame):
