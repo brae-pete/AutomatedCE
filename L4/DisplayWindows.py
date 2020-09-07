@@ -276,6 +276,7 @@ class PLTCEDisplay(CEDisplayAbstraction):
         try:
             ax1.set_xlim(min(data['time_data']), max(data['time_data']))
             ax1.set_ylim(min(data['rfu']) * 0.95, max(data['rfu'] * 1.05))
+            ax2.set_ylim(min(power_data['current']) * 0.7, max(power_data['current']) * 1.3)
             # ax2.set_ylim(min(power_data['current'])*0.95, max(power_data['current'])*1.05)
         except ValueError:
             logging.warning("No data to plot")

@@ -67,9 +67,18 @@ def get_true_false(value):
     else:
         return False
 
+
 def get_channels(line):
     channels = line.split('\t')[1:]
     return channels
+
+
+class ExitRun(Exception):
+    """
+    Program exits the runtime commands
+    """
+    pass
+
 
 class Step:
     """
@@ -89,7 +98,8 @@ class Step:
         self.data = False
 
         # Read step
-        self.read_line(line)
+        if line != 'INJ':
+            self.read_line(line)
 
     @staticmethod
     def _get_true_false(value):
@@ -156,6 +166,7 @@ class ChipStep:
         self.read_line(line)
         self.line = line
         self.channels = channels
+
     def read_line(self, line):
         """
         Read information from a tab seperated line.
@@ -218,17 +229,15 @@ class Method(object):
         with open(method_file, 'r') as in_file:
             lines = in_file.readlines()
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
-        chip_method = False
         for idx, line in enumerate(method_lines):
-            if line.find("CHIP"):
-                chip_method = True
-                chip_idx = idx
-            elif line.find('METHOD') > -1:
+            if line.find('METHOD') > -1:
                 break
-        method_lines = method_lines[idx + 2:]
 
+        method_lines = method_lines[idx + 2:]
+        print("WHASSUZ", method_lines)
         for line in method_lines:
-            logging.info("Adding step {}".format(line))
+            print("ADDING")
+            logging.warning("Adding step {}".format(line))
             self.method_steps.append(Step(line))
 
 
@@ -251,10 +260,10 @@ class ChipMethod(Method):
         method_lines = [x.rstrip('\n').replace('"', '') for x in lines]
         chip_method = False
         for idx, line in enumerate(method_lines):
-            if line.find("CHIP")>-1:
+            if line.find("CHIP") > -1:
                 chip_method = True
                 chip_idx = idx
-            elif line.find("VOLTAGE CHANNELS")>-1:
+            elif line.find("VOLTAGE CHANNELS") > -1:
                 channels = get_channels(line)
             elif line.find('METHOD') > -1:
                 break
@@ -480,7 +489,7 @@ class AutoRun:
         :param system:  CE system object that will be automated
         """
         self.system = system  # L3 CE Systems object
-        self.style= 'CE'
+        self.style = 'CE'
         self.methods = []
         self.gate = GateSpecial()
         self.repetitions = 1
@@ -489,6 +498,7 @@ class AutoRun:
         self.is_running = threading.Event()
         self.continue_event = threading.Event()
         self.continue_callbacks = {}
+        self.simple_wait_callbacks = []
         self.traced_thread = Util.TracedThread()
         self.traced_thread.name = 'AutoRun'
         self.data_dir = get_system_var('data_dir')[0]
@@ -509,6 +519,14 @@ class AutoRun:
             self.methods.append(Method(method_file))
         elif self.style == 'CHIP':
             self.methods.append(ChipMethod(method_file))
+
+    def set_repetitions(self, reps: int):
+        """
+        Sets the numberof repeitions to repead the methods
+        :param reps:
+        :return:
+        """
+        self.repetitions = reps
 
     def set_template(self, template_file=r'default'):
         """
@@ -549,70 +567,92 @@ class AutoRun:
         # Create a traced thread we can kill on demand
         self.traced_thread = Util.TracedThread(target=self._run, args=(simulated,))
         self.traced_thread.name = 'AutoRun'
-        self.traced_thread.start()
         self.is_running.set()
         self.continue_event.set()
+        self.traced_thread.start()
 
     def error_message(self, state, process):
         if not state:
             logging.error("Error while moving during {}. Aborting".format(process))
             self.stop_run()
+            raise ExitRun
+
+    def lower_dif(self, diff):
+        obj = self.system.objective.read_z()
+        cap = obj-diff
+        dif_z = cap - self.system.inlet_z.read_z()
+        self.system.inlet_z.set_rel_z(dif_z)
 
     def _run(self, simulated=False):
         """
         Makes the individual step calls for a compiled method sequence.
         :return:
         """
-        while not self._queue.empty():
-            (step, rep) = self._queue.get()
+        try:
 
-            # Get the move positions
-            xyz0, xyz1, well_name, skip_z = self._get_move_positions(step, rep)
+            while not self._queue.empty() and self.is_running.is_set():
+                (step, rep) = self._queue.get()
 
-            self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
-            self.path_information.append(f"Preparing for move to well {well_name}")
-            # Move the System Safely
-            if self.safe_enabled:
-                state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated,
-                                            self.path_information).move()
-            else:
-                state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated,
-                                            self.path_information).move()
-            self.error_message(state, "System Move")
+                # Get the move positions
+                xyz0, xyz1, well_name, skip_z = self._get_move_positions(step, rep)
 
-            # Move the inlet
-            self.path_information.append(f"Outlet Height set to {step.outlet_height} mm")
-            if not simulated:
-                self.system.outlet_z.set_z(step.outlet_height)
+                self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
+                self.path_information.append(f"Preparing for move to well {well_name}")
+                # Move the System Safely
+                if self.safe_enabled:
+                    state = Trajectory.SafeMove(self.system, self.template, xyz0, xyz1, simulated,
+                                                self.path_information).move()
+                else:
+                    state = Trajectory.StepMove(self.system, self.template, xyz0, xyz1, simulated,
+                                                self.path_information).move()
+                self.error_message(state, "System Move")
 
-                # Wait for both Z Stages to stop moving
-                state = self.system.inlet_z.wait_for_target(xyz1[2])
-                self.error_message(state, "Inlet Move Down")
-
-                state = self.system.outlet_z.wait_for_target(step.outlet_height)
-                self.error_message(state, "Outlet Move Down")
-
-            # Run the special command for injections here
-            print('Step Special command is : {}'.format(step.special))
-            if step.special == "manual_cell":
-                state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
-                self.error_message(state, "Manual Cell Injection")
-            elif step.special == 'wait':
-                self.wait_to_continue()
-
-            after_special = True  # change this to false if we don't need to run the timed part of the step after
-
-            # Run the special for Gating the separation here (get peak areas and set the next collection well)
-
-            # Run the timed step
-            if after_special:
-                self.timed_step(step, simulated)
-            # Output the electropherogram data
-            if step.data:
-                file_path = FileIO.get_data_filename(step.name, self.data_dir)
-                self.path_information.append(f"Saving Data to {file_path}")
+                # Move the inlet
+                self.path_information.append(f"Outlet Height set to {step.outlet_height} mm")
                 if not simulated:
-                    FileIO.OutputElectropherogram(self.system, file_path)
+                    self.system.outlet_z.set_z(step.outlet_height)
+
+                    # Wait for both Z Stages to stop moving
+                    state = self.system.inlet_z.wait_for_target(xyz1[2])
+                    self.error_message(state, "Inlet Move Down")
+
+                    state = self.system.outlet_z.wait_for_target(step.outlet_height)
+                    self.error_message(state, "Outlet Move Down")
+
+
+                # Run the special command for injections here
+                after_special = True  # change this to false if we don't need to run the timed part of the step after
+
+                # print('Step Special command is : {}'.format(step.special))
+                if step.special == "manual_cell":
+                    state = self.wait_to_continue('manual_cell', "press continue when ready", step, simulated)
+                    self.error_message(state, "Manual Cell Injection")
+                elif step.special == 'wait':
+                    self.wait_to_continue()
+
+
+                # Run the special for Gating the separation here (get peak areas and set the next collection well)
+                print("After special", after_special)
+                # Run the timed step
+                if after_special:
+
+                    self.timed_step(step, simulated)
+                # Output the electropherogram data
+                if step.data:
+                    file_path = FileIO.get_data_filename(step.name, self.data_dir)
+                    self.path_information.append(f"Saving Data to {file_path}")
+                    if not simulated:
+                        FileIO.OutputElectropherogram(self.system, file_path)
+        except ExitRun:
+            logging.error("Exiting the run...")
+
+
+    def move_to_well(self, well_name):
+        assert self.template is not None, "Template must be selected first"
+        assert well_name in list(self.template.wells.keys()), f"{well_name} not in list of wells: \n {self.template.wells}"
+        well = self.template.wells[well_name]
+        self.system.xy_stage.set_xy(well.xy)
+
 
     def _get_move_positions(self, step, rep):
         """
@@ -637,6 +677,24 @@ class AutoRun:
             skip_z = False
         return xyz0, xyz1, step.well_location[rep % len(step.well_location)], skip_z
 
+    def injection(self, inj_time, voltage, drop):
+        """
+        Run a timed injection step when requested
+        :param inj_time:
+        :param voltage:
+        :param drop:
+        :return:
+        """
+
+        step = Step('INJ')
+        step.voltage = voltage
+        step.time = inj_time
+        step.pressure = False
+        step.vacuum = False
+        self.system.outlet_z.set_rel_z(-drop)
+        self.timed_step(step, False)
+        self.system.outlet_z.set_rel_z(drop)
+
     def timed_step(self, step, simulated):
         """
         Run a timed step, applying the pressure, vacuum, and voltage as specified by the step
@@ -645,7 +703,7 @@ class AutoRun:
         """
         # Keep track of the time_data we started applying forces
         st = time.time()
-
+        print("Time to wait is ", step.time)
         # Apply Hydrodynamic Forces
         self.path_information.append(
             f"Pressure state changed to {step.pressure}, Vaccuum state changed to {step.vacuum}")
@@ -695,7 +753,6 @@ class AutoRun:
         self.is_running.clear()
         self.traced_thread.kill()
 
-
     def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
         """Calls the continue_callbacks  for the user to set the continue_event before continuing
         There are two methods that could be employed. The first is the callback may return True when ready
@@ -715,21 +772,33 @@ class AutoRun:
                         return False
                     elif resp:
                         return True
+        else:
+            for fnc, args in self.simple_wait_callbacks:
+                fnc(*args)
+
         # otherwise use the flag
         while not self.continue_event.is_set():
             time.sleep(0.2)
         return True
+
+    def add_to_simple_wait_callback(self, fnc, *args):
+        self.simple_wait_callbacks.append([fnc, args])
+
+
+def send_wait_signal(msg, queue: Queue):
+    queue.put(msg)
+
 
 
 class ChipRun(AutoRun):
 
     def __init__(self, system: CESystem()):
         super().__init__(system)
-        self.style='CHIP'
+        self.style = 'CHIP'
 
-    def _run(self,simulated,*args, **kwargs):
+    def _run(self, simulated, *args, **kwargs):
         while not self._queue.empty():
-            (step,rep) = self._queue.get()
+            (step, rep) = self._queue.get()
             self.path_information.append(f"Performing Step '{step.name}' at rep {rep}")
 
             # Change the voltages
@@ -742,12 +811,12 @@ class ChipRun(AutoRun):
         st = time.time()
         if step.camera:
             file_path = FileIO.get_data_folder(step.name, self.data_dir)
-            self._img_folder=file_path
+            self._img_folder = file_path
             self.system.camera.add_callback(self.save_img, tag="temp")
             self.system.camera.continuous_snap()
 
         self.system.high_voltage.load_changes()
-        while time.time()-st < step.time and self.is_running.is_set() and not simulated:
+        while time.time() - st < step.time and self.is_running.is_set() and not simulated:
             time.sleep(0.05)
 
         if step.camera:
@@ -761,7 +830,7 @@ class ChipRun(AutoRun):
         :param kwargs:
         :return:
         """
-        file_name = FileIO.get_data_filename("IMG",self._img_folder, extension=".tif")
+        file_name = FileIO.get_data_filename("IMG", self._img_folder, extension=".tif")
         imsave(file_name, img, check_contrast=False)
 
 
@@ -1002,14 +1071,15 @@ if __name__ == "__main__":
     import numpy as np
     import logging
     import os
+
     os.chdir(os.path.abspath('..'))
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     system = CESystem()
-    system.load_config(config_file = r'E:\Scripts\AutomatedCE\config\TestChip.cfg')
+    system.load_config(config_file=r'E:\Scripts\AutomatedCE\config\TestChip.cfg')
     system.open_controllers()
     auto = ChipRun(system)
     auto.add_method(r'E:\Scripts\AutomatedCE\config\methods-chep.txt')
-    #auto.set_template()
+    # auto.set_template()
     auto.repetitions = 2
-    #auto.start_run()
+    # auto.start_run()
