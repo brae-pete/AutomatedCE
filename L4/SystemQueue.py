@@ -55,6 +55,7 @@ class SystemsRoutine:
         self.info_queue = mp.Queue() # Queue that contains data from the CE system
         self.error_queue = mp.Queue() # Queueue that contains error messages from the CE system
         self.command_queue = mp.Queue() # Queue that contains commands sent to the CE system
+
         self.update_queue = mp.Queue()
         self.process = None # Python Process containing the CE system
         self.updates={} # Dictionary of command msgs and a list of callbacks to call for each data recieved
@@ -272,18 +273,17 @@ def wait_n_read(info: mp.Queue, error: mp.Queue, command: mp.Queue, update: mp.Q
                 cmd, args, kwargs = command.get()
                 if cmd == 'stop':
                     return 0
-                #print(cmd)
                 interpret.interpret_and_respond(cmd, *args, **kwargs)
             except Exception as e:
                 error.put(('error-1',e))
-
-        try:
-            cmd, args, kwargs = update.get()
-            if cmd == 'stop':
-                return 0
-            interpret.interpret_and_respond(cmd, *args, **kwargs)
-        except Exception as e:
-            error.put(('error-1',e))
+        if not update.empty():
+            try:
+                cmd, args, kwargs = update.get()
+                if cmd == 'stop':
+                    return 0
+                interpret.interpret_and_respond(cmd, *args, **kwargs)
+            except Exception as e:
+                error.put(('error-1',e))
 
 
 

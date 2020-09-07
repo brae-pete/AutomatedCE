@@ -424,6 +424,7 @@ class SystemAbstraction(ABC):
             if utility is None:
                 logging.info(f"{name} not configured.")
                 continue
+            print("Starting up: {}, {}".format(name, utility))
             utility.startup()
 
     def shutdown_utilities(self):

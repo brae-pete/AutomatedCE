@@ -577,6 +577,12 @@ class AutoRun:
             self.stop_run()
             raise ExitRun
 
+    def lower_dif(self, diff):
+        obj = self.system.objective.read_z()
+        cap = obj-diff
+        dif_z = cap - self.system.inlet_z.read_z()
+        self.system.inlet_z.set_rel_z(dif_z)
+
     def _run(self, simulated=False):
         """
         Makes the individual step calls for a compiled method sequence.
@@ -643,6 +649,14 @@ class AutoRun:
                         FileIO.OutputElectropherogram(self.system, file_path)
         except ExitRun:
             logging.error("Exiting the run...")
+
+
+    def move_to_well(self, well_name):
+        assert self.template is not None, "Template must be selected first"
+        assert well_name in list(self.template.wells.keys()), f"{well_name} not in list of wells: \n {self.template.wells}"
+        well = self.template.wells[well_name]
+        self.system.xy_stage.set_xy(well.xy)
+
 
     def _get_move_positions(self, step, rep):
         """
@@ -777,6 +791,7 @@ class AutoRun:
 
 def send_wait_signal(msg, queue: Queue):
     queue.put(msg)
+
 
 
 class ChipRun(AutoRun):

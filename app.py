@@ -8,7 +8,7 @@ if __name__=="__main__":
     root = Tk()
     wn = RootWindow(root)
     root.protocol("WM_DELETE_WINDOW", wn.on_close)
-    FILE = r"C:\Users\Luke\Desktop\Barracuda\AutomatedCE\var\Eclipse.cfg"
+    FILE = r"C:\Users\NikonTE300CE\Desktop\Barracuda\AutomatedCE\var\TE300.cfg"
     wn.system_queue.config = FILE
     #wn.system_queue.send_command('system.load_config', FILE )
     #wn.system_queue.send_command('system.load_config', config_file=FILE)

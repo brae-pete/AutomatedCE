@@ -26,6 +26,7 @@ class RootWindow(Frame):
         super().__init__(root, **kw)
         self.system_queue = SystemQueue.SystemsRoutine()
         self.root = root
+        self.injection_data = InjectionData(self)
         # Add the main Buttons
         system_button = ttk.Button(root, text='System', command=lambda x=self: CESystemWindow(x))
         system_button.grid(column=0, row=0)
@@ -438,11 +439,12 @@ class InitFrame(Frame):
     def __init__(self, parent: RootWindow, **kw):
         self.window = window = Toplevel(parent)
         super().__init__(window, **kw)
+        self.well_var = StringVar(value="Select")
+
         self.setup()
         self.parent = parent
         self.grid()
         self.setup()
-
     def setup(self):
         """ Place the buttons"""
         window = self.window
@@ -454,24 +456,37 @@ class InitFrame(Frame):
         header_lbl = ttk.Label(instruction_frame, text='Initialize System')
         header_lbl.grid(row=0, column=0)
 
-        step_1_lbl = ttk.Label(instruction_frame, text=" 1. Load the System ")
+        step_1_lbl = ttk.LabelFrame(instruction_frame, text=" 1. Load the System ")
         step_1_lbl.grid()
 
-        step_1_file_button = ttk.Button(instruction_frame, text='Select Config',
+        step_1_file_button = ttk.Button(step_1_lbl, text='Select Config',
                                         command=self.set_config)
         step_1_file_button.grid()
 
-        step_2_lbl = ttk.Label(instruction_frame, text='2. Load the Template')
+        step_2_lbl = ttk.LabelFrame(instruction_frame, text='2. Load the Template')
         step_2_lbl.grid()
 
-        step_2_btn = ttk.Button(instruction_frame, text='Select Template', command=self.set_template)
+        step_2_btn = ttk.Button(step_2_lbl, text='Select Template', command=self.set_template)
         step_2_btn.grid()
 
-        step_3_lbl = ttk.Label(instruction_frame, text="3. Calibrate the CE Apparatus")
+        step_3_lbl = ttk.LabelFrame(instruction_frame, text="3. Calibrate the CE Apparatus")
         step_3_lbl.grid()
 
-        step_4_lbl = ttk.Label(instruction_frame, text="4. Calibration Check")
+        btn = ttk.Button(step_3_lbl, text='Home Z Stage', command=self.z_home)
+        btn.grid()
+
+        btn = ttk.Button(step_3_lbl, text = 'Set XY Home', command=self.xy_home)
+        btn.grid()
+
+        step_4_lbl = ttk.LabelFrame(instruction_frame, text="4. Calibration Check")
         step_4_lbl.grid()
+
+        lbl = ttk.Label(step_4_lbl, text='Select a Box')
+        lbl.grid(row=0)
+        cbx = ttk.Entry(step_4_lbl, textvariable=self.well_var)
+        cbx.grid(row=1)
+        btn = ttk.Button(step_4_lbl, text='Move to well', command=self.move_to_well)
+        btn.grid()
 
         picture_frame = ttk.Frame(window)
         picture_frame.grid(row=0, column=1)
@@ -492,6 +507,21 @@ class InitFrame(Frame):
         if f_name is not None:
             self.parent.system_queue.send_command('auto_run.set_template', template_file=f_name)
 
+    def xy_home(self):
+        """Sets the XY home position"""
+        self.parent.system_queue.send_command('system.xy_stage.set_home')
+
+    def z_home(self):
+        """ Moves to the Z inlet home position"""
+        self.parent.system_queue.send_command('system.inlet_z.homing')
+
+    def move_to_well(self):
+        """
+        Moves to a well
+        """
+        well_name=self.well_var.get()
+        if well_name != 'Select':
+            self.parent.system_queue.send_command('auto_run.move_to_well',well_name)
 
 class CameraWindow(Frame):
 
@@ -625,6 +655,48 @@ class CameraWindow(Frame):
         except Exception as e:
             print(e)
 
+class InjectionData():
+    """ Object to hold collection data"""
+    def __init__(self, root_window:RootWindow):
+        self.last_obj = None  # type: float
+        self.difference = None  # type: float
+        self.cap_z = None # type: float
+        self.obj_z = None # type: float
+        self.add_cap = False
+        self.add_obj = False
+        self.dif_var = DoubleVar()
+        self.root_window=root_window
+        root_window.system_queue.add_info_callback('system.objective.read_z', self.obj_callback)
+        root_window.system_queue.add_info_callback('system.inlet_z.read_z', self.inlet_callback)
+
+    def get_difference(self):
+        if self.add_obj or self.add_cap:
+            self.root_window.root.after(1000, self.get_difference)
+        else:
+            assert self.obj_z is not None or self.cap_z is not None, "Did not have objective or inlet positions recorded"
+            self.difference = self.obj_z - self.cap_z
+            self.dif_var.set(self.difference)
+        print(self.difference)
+
+    def get_cap_height(self, obj_height):
+        assert self.difference is not None, "Difference must be calculated before calling get_cap_height"
+        cap_height = obj_height - self.difference
+        return cap_height
+
+    def obj_callback(self, z, *args, **kwargs):
+        if self.add_obj:
+            self.obj_z=z
+            self.add_obj=False
+            print(z)
+
+    def inlet_callback(self, z, *args, **kwargs):
+        if self.add_cap:
+            self.cap_z=z
+            self.add_cap=False
+            self.get_difference()
+
+
+
 
 class InjectionWindow(Frame):
     """
@@ -642,14 +714,15 @@ class InjectionWindow(Frame):
         self.drop_var = DoubleVar()
         self.setup()
 
+
     def setup(self):
 
         # Calibration Control Buttons
         lf = ttk.LabelFrame(self, text='Objective-Capillary Calibration')
         lf.grid()
-        bt = ttk.Button(lf, text='Set Objective Focus')
+        bt = ttk.Button(lf, text='Set Objective Focus', command=self.objective_focus)
         bt.grid()
-        bt = ttk.Button(lf, text='Set Capillary Focus')
+        bt = ttk.Button(lf, text='Set Capillary Focus', command=self.capillary_focus)
         bt.grid()
         spn = ttk.Spinbox(lf, from_=-0.5, to=10)
         spn.grid()
@@ -657,7 +730,7 @@ class InjectionWindow(Frame):
         # Capillary Adjustments
         lf = ttk.LabelFrame(self, text='Capillary Adjustments')
         lf.grid()
-        bt = ttk.Button(lf, text='Lower Capillary')
+        bt = ttk.Button(lf, text='Lower Capillary', command=self.lower_cap)
         bt.grid(row=0, column=0)
         moves = [('-10', -0.01),
                  ('-5', -0.005),
@@ -669,7 +742,7 @@ class InjectionWindow(Frame):
         r_idx = 1
         for lbl, dis in moves:
             bt = ttk.Button(lf, text=lbl,
-                            command=lambda: self.root_window.system_queue.send_command('system.inlet_z.set_rel_z', dis))
+                            command=lambda x=dis: self.root_window.system_queue.send_command('system.inlet_z.set_rel_z', x))
             bt.grid(row=r_idx, column=c_idx)
             c_idx += 1
 
@@ -687,14 +760,17 @@ class InjectionWindow(Frame):
             sp = ttk.Spinbox(lf, from_=lw, to=hi, textvariable=var)
             sp.grid(row=r_idx + 1, column=c_idx)
             c_idx += 1
-        btn = ttk.Button(lf, text='Start')
+        btn = ttk.Button(lf, text='Start', command=self.start_injection)
         btn.grid(row=r_idx + 2, column=c_idx - 1)
 
         # Method Commands
         lf = ttk.LabelFrame(self, text='Method Control')
         lf.grid()
-        btn = ttk.Button(lf, text='Continue Method')
+        btn = ttk.Button(lf, text='Continue Method',command=self.continue_run )
         btn.grid()
+
+    def continue_run(self):
+        self.root_window.system_queue.send_command('auto_run.continue_event.set')
 
     def start_injection(self):
         """Injection"""
@@ -708,6 +784,15 @@ class InjectionWindow(Frame):
 
         self.root_window.system_queue.send_command('auto_run.injection',dt,volts,drop)
 
+    def objective_focus(self):
+        self.root_window.injection_data.add_obj=True
+
+    def capillary_focus(self):
+        self.root_window.injection_data.add_cap=True
+
+    def lower_cap(self):
+        diff = self.root_window.injection_data.difference
+        self.root_window.system_queue.send_command('auto_run.lower_dif',diff)
 
 class MethodWindow(Frame):
     """
