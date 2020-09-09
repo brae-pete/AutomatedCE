@@ -832,7 +832,7 @@ class InjectionWindow(Frame):
         lf = ttk.LabelFrame(self, text='Injection Parameters')
         lf.grid()
         params = [('Time (s)', self.time_var, 0, 1000),
-                  ('Voltage (V)', self.volt_var, 0, 1000),
+                  ('Voltage (kV)', self.volt_var, 0, 1000),
                   ('Drop (mm)', self.drop_var, -10, 10)]
         c_idx = 0
         r_idx = 0
