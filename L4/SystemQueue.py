@@ -62,6 +62,9 @@ class SystemsRoutine:
         self.error_updates=[] # List of callbacks to send the error information to
         self.update_commands = [] # List of commands that will be sent periodically
         self.config=None
+        self.has_returned = []
+
+        self.add_info_callback('system.startup_utilities',lambda x=self: self.has_returned.clear(), update=False)
 
     def check_info_queue(self):
         """
@@ -77,6 +80,11 @@ class SystemsRoutine:
         while not self.info_queue.empty():
             msg, data = self.info_queue.get()
             if msg in self.updates.keys():
+                #print(msg)
+                while msg in self.has_returned:
+                    #print("REMOVE YOURSELF")
+                    self.has_returned.pop(self.has_returned.index(msg))
+                    #print(self.has_returned)
                 for fnc in self.updates[msg]:
                     fnc(*data)
 
@@ -142,9 +150,10 @@ class SystemsRoutine:
 
     def update_command(self, cmd, *args, **kwargs):
         self.update_queue.put((cmd, args, kwargs))
+        self.has_returned.append(cmd)
         return
 
-    def add_info_callback(self, msg, fnc):
+    def add_info_callback(self, msg, fnc, update=True):
         """
         Adds a callback to a given system function where a return data is expected
         :param msg: string command given to the system
@@ -155,7 +164,8 @@ class SystemsRoutine:
         if msg not in self.updates.keys():
             self.updates[msg]=[]
         self.updates[msg].append(fnc)
-        self.add_update_command(msg)
+        if update:
+            self.add_update_command(msg)
 
     def add_error_callback(self, fnc):
         """
@@ -180,7 +190,11 @@ class SystemsRoutine:
         :return:
         """
         for msg in self.update_commands:
-            self.update_command(msg)
+            #print(msg, self.has_returned)
+            if str(msg) not in self.has_returned:
+                #print(self.has_returned.index(msg[0]))
+                self.update_command(msg)
+                self.has_returned.append(msg)
         return
 
 

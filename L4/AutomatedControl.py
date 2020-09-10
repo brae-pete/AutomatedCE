@@ -751,7 +751,9 @@ class AutoRun:
             except Exception as e:
                 pass
         self.is_running.clear()
+        self.methods = []
         self.traced_thread.kill()
+
 
     def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
         """Calls the continue_callbacks  for the user to set the continue_event before continuing

@@ -270,9 +270,12 @@ class PriorZ(ZAbstraction, UtilityControl):
         """ Read the current position"""
         response = self.controller.send_command("PZ \r").split(',')
         if len(response)>2:
-            response[0]=response[2]
+            print("oh no")
+        #    response[0]=response[2]
         while response[0]=='R' or response[0]=='':
-            response = self.controller.send_command("\r").split(',')
+            print("OH NO", response)
+            response = self.controller.send_command("PZ \r").split(',')
+            #return self.pos
         self.pos =float(response[0])
         self.pos = self._scale_values(self.pos)
         return self.pos
