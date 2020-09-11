@@ -30,7 +30,8 @@ def butter_lowpass_filter(data, kwargs):
 
     settings = {'cutoff': 3, 'fs': 10, 'order': 5, 'padlen': 24, 'padtype': 'constant'}
     settings.update(kwargs)
-
+    if len(data) < settings['padlen']:
+        return data
     b, a = butter_lowpass(settings['cutoff'], settings['fs'], order=settings['order'])
     y = signal.filtfilt(b, a, data, padlen=settings['padlen'], padtype=settings['padtype'])
 
@@ -79,7 +80,7 @@ class DetectorAbstraction(ABC):
         self._oversample = True
         self._oversample_buffer = np.asarray([])
         settings = {'cutoff': 1.5, 'fs': 10, 'order': 2, 'padlen': 24, 'padtype': 'constant'}
-        self._filter_type = [None, settings]
+        self._filter_type = ['butter', settings]
 
     @abstractmethod
     def get_data(self):
