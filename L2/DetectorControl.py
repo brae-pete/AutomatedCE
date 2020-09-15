@@ -80,7 +80,7 @@ class DetectorAbstraction(ABC):
         self._oversample = True
         self._oversample_buffer = np.asarray([])
         settings = {'cutoff': 1.5, 'fs': 10, 'order': 2, 'padlen': 24, 'padtype': 'constant'}
-        self._filter_type = ['butter', settings]
+        self._filter_type = [None, settings]
 
     @abstractmethod
     def get_data(self):

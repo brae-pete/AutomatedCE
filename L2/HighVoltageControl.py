@@ -334,13 +334,13 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
         inputs = []
         for channel in [hv_ai, ua_ai]:
             if channel.upper() != "NA":
-                self.daqcontroller.add_analog_input(channel)
+                self.daqcontroller.add_analog_input(channel, terminal_config='NRSE')
                 inputs.append(channel)
 
         self._input_channels = [hv_ai, ua_ai]
         self.daqcontroller.add_callback(self._read_data, inputs, 'wave', ())
         self._voltage_scalar = 1 / 30 * 10  # kV setting / 30 kV * 5 V
-        self._current_scalar = 1 / 3000 * 10  # uA / 100 uA * 5 V
+        self._current_scalar = 1 / 300 * 10  # uA / 100 uA * 5 V
 
     def startup(self):
         """

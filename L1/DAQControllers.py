@@ -441,7 +441,7 @@ if NIDAQMX_LOAD:  # Only create the class if the python module is downloaded
             for settings in self._ai_channels:
                 task.ai_channels.add_ai_voltage_chan('/' + self._device + '/' + settings['channel'],
                                                      terminal_config=settings['terminal_config'],
-                                                     min_val=-settings['volt_range'],
+                                                     min_val=0,
                                                      max_val=settings['volt_range'])
 
             self._task = task
