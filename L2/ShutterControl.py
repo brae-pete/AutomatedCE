@@ -17,6 +17,7 @@ class ShutterAbstraction(ABC):
         self.controller = controller
         self.role = role
         self._state = False
+        self.auto_capable = False
 
     @abstractmethod
     def open_shutter(self):
@@ -51,6 +52,21 @@ class ShutterAbstraction(ABC):
         :return:
         """
         pass
+
+    def set_auto_on(self):
+        """
+        Sets the auto shutter setting if possible
+        :return:
+        """
+        pass
+
+    def set_auto_off(self):
+        """
+        Sets the auto shutter off if possible
+        :return:
+        """
+        pass
+
 
 
 class MicroManagerShutter(ShutterAbstraction, UtilityControl):
@@ -97,6 +113,53 @@ class MicroManagerShutter(ShutterAbstraction, UtilityControl):
         self._state = self.controller.send_command('shutter,get,{}\n'.format(self._get_device()))
         return self._state
 
+
+class Pycromanager(ShutterAbstraction, UtilityControl):
+    """ Class to control the filter wheel"""
+
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
+        self._dev_name = "N/A"
+
+    def startup(self):
+        """
+        Do nothing special on start up
+        :return:
+        """
+        self._dev_name = self.controller.send_command(self.controller.get_device_name, args=('shutter',))
+
+    def shutdown(self):
+        """Do nothing special on shutdown. """
+        pass
+
+    def open_shutter(self):
+        """ Opens the shutter"""
+        self.controller.send_command(self.controller.core.set_shutter_open, args=(self._dev_name, True))
+        self._state=True
+
+    def close_shutter(self):
+        """closes the shutter"""
+        self.controller.send_command(self.controller.core.set_shutter_open, args=(self._dev_name, False))
+        self._state = False
+
+    def get_shutter(self):
+        """ Reads the shutter state"""
+        self._state = self.controller.send_command(self.controller.core.get_shutter_open, args=(self._dev_name,))
+        return self._state
+
+    def set_auto_on(self):
+        """
+        Sets the shutter to automaticlly open when an image is snapped (micromanager feature)
+        :return:
+        """
+        self.controller.send_command(self.controller.core.set_auto_shutter, args=(True,))
+
+    def set_auto_off(self):
+        """
+        Sets the shutter to automaticlly open when an image is snapped (micromanager feature)
+        :return:
+        """
+        self.controller.send_command(self.controller.core.set_auto_shutter, args=(False,))
 
 
 class ShutterFactory(UtilityFactory):

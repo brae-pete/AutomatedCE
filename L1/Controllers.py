@@ -239,8 +239,10 @@ class PycromanagerController(ControllerAbstraction):
         """Finds the appropriate device name
         XY = XY drive for the Nikon instruments.
         """
-        keys = {'XY': ['xy'], 'filter':['filter']}
+        keys = {'XY': ['xy'], 'filter':['filter'], 'shutter':['shutter']}
         devices = self.get_list(self.core.get_loaded_devices())
+        if id not in keys.keys():
+            keys[id]=[id.lower()]
         key = keys[id]
         for name in devices:
             for k in key:
