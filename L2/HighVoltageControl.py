@@ -222,7 +222,10 @@ class PMOD_DAC(HighVoltageAbstraction):
         """
         self.voltages[channel][1] = voltage
         if voltage == 'T':
-            pass
+            cmd = bytes("T{}".format(channel).encode())
+            msb, lsb = divmod(0, 0x100)
+            cmd = cmd + bytearray([msb, lsb])
+            cmd = cmd + bytes("\n".encode())
         elif voltage == 'G':
             pass
         else:
@@ -239,8 +242,8 @@ class PMOD_DAC(HighVoltageAbstraction):
             cmd = bytes("S{}".format(channel).encode())
             cmd = cmd + bytearray([msb, lsb])
             cmd = cmd + bytes("\n".encode())
-            with self.lock:
-                self.controller.send_command(cmd)
+        with self.lock:
+            self.controller.send_command(cmd)
 
     @staticmethod
     def _interpret_bytes(byte_data):
