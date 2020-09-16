@@ -106,12 +106,12 @@ class PycromanagerFilter(FilterWheelAbstraction, UtilityControl):
     def set_channel(self, channel):
         """ Sets the filter wheel to the corresponding channel (starting at zero) """
         channel = int(channel)
-        self.controller.send_command(self.controller.core.set_state, args=(self._get_device(), channel))
+        self.controller.send_command(self.controller.core.set_state, args=(self._dev_name, channel))
         self._state = channel
 
     def get_channel(self):
         """ Reads the filter wheel channel"""
-        self._state = self.controller.send_command(self.controller.core.get_state, args=(self._get_device(),))
+        self._state = self.controller.send_command(self.controller.core.get_state, args=(self._dev_name,))
         return self._state
 
     def define_channels(self, **kwargs):
@@ -129,6 +129,8 @@ class FilterWheelFactory(UtilityFactory):
     def build_object(self, controller, role, *args):
         if controller.id == 'micromanager':
             return MicroManagerFilterWheel(controller, role)
+        elif controller.id == 'pycromanager':
+            return PycromanagerFilter(controller, role)
         else:
             return None
 

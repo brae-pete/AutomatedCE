@@ -317,8 +317,8 @@ class PycromanagerZ(ZAbstraction, UtilityControl):
 
     def startup(self):
         """ Do nothing special on start up"""
-        self.set_z(0.0)
-
+        #self.set_z(0.0)
+        pass
     def shutdown(self):
         """ Do nothing special on shutdown """
         pass
