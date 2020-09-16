@@ -85,6 +85,44 @@ class MicroManagerFilterWheel(FilterWheelAbstraction, UtilityControl):
         return self._dev_name
 
 
+class PycromanagerFilter(FilterWheelAbstraction, UtilityControl):
+    """ Class to control the filter wheel"""
+
+    def __init__(self, controller, role):
+        super().__init__(controller, role)
+        self._dev_name = "N/A"
+
+    def startup(self):
+        """
+        Do nothing special on start up
+        :return:
+        """
+        self._dev_name = self.controller.send_command(self.controller.get_device_name, args=('filter',))
+
+    def shutdown(self):
+        """Do nothing special on shutdown. """
+        pass
+
+    def set_channel(self, channel):
+        """ Sets the filter wheel to the corresponding channel (starting at zero) """
+        channel = int(channel)
+        self.controller.send_command(self.controller.core.set_state, args=(self._get_device(), channel))
+        self._state = channel
+
+    def get_channel(self):
+        """ Reads the filter wheel channel"""
+        self._state = self.controller.send_command(self.controller.core.get_state, args=(self._get_device(),))
+        return self._state
+
+    def define_channels(self, **kwargs):
+        """
+        User defines channels where the key is the label (FITC, GFP, etc...) and the item is the channel integer
+        :param kwars: key item pairs for the filter, 'FITC'=1, 'GFP'=0, etc...
+        :return:
+        """
+        self.labels = kwargs
+
+
 class FilterWheelFactory(UtilityFactory):
     """ Determines the type of xy utility object to return according to the daqcontroller id"""
 

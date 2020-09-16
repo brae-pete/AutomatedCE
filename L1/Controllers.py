@@ -215,7 +215,6 @@ class PycromanagerController(ControllerAbstraction):
         settings.update(**kwargs)
         with self.lock:
             args = settings['args']
-
             try:
                 ans = command(*args)
             except Exception as e:
@@ -240,12 +239,13 @@ class PycromanagerController(ControllerAbstraction):
         """Finds the appropriate device name
         XY = XY drive for the Nikon instruments.
         """
-        keys = {'XY': 'xy'}
+        keys = {'XY': ['xy'], 'filter':['filter']}
         devices = self.get_list(self.core.get_loaded_devices())
         key = keys[id]
         for name in devices:
-            if key in name.lower():
-                return name
+            for k in key:
+                if k in name.lower():
+                    return name
         else:
             return 'ERR: {} not found {}'.format(key, devices)
 
