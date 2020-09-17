@@ -215,7 +215,6 @@ class PycromanagerController(ControllerAbstraction):
         settings.update(**kwargs)
         with self.lock:
             args = settings['args']
-
             try:
                 ans = command(*args)
             except Exception as e:
@@ -240,12 +239,16 @@ class PycromanagerController(ControllerAbstraction):
         """Finds the appropriate device name
         XY = XY drive for the Nikon instruments.
         """
-        keys = {'XY': 'xy'}
+        keys = {'XY': ['xy'], 'filter':['filter'],
+                'shutter':['shutter'], 'camera':["dcam", "coolsnap"]}
         devices = self.get_list(self.core.get_loaded_devices())
+        if id not in keys.keys():
+            keys[id]=[id.lower()]
         key = keys[id]
         for name in devices:
-            if key in name.lower():
-                return name
+            for k in key:
+                if k in name.lower():
+                    return name
         else:
             return 'ERR: {} not found {}'.format(key, devices)
 
@@ -345,7 +348,9 @@ class PriorController(ControllerAbstraction):
 
         """
         with self.lock:
+            self._read_lines()
             self._serial.write("{}".format(command).encode())
+            time.sleep(0.2)
             response = self._read_lines()
             if expected =='hikdkdk':
                 ct = 0

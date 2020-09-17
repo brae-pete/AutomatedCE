@@ -222,7 +222,10 @@ class PMOD_DAC(HighVoltageAbstraction):
         """
         self.voltages[channel][1] = voltage
         if voltage == 'T':
-            pass
+            cmd = bytes("T{}".format(channel).encode())
+            msb, lsb = divmod(0, 0x100)
+            cmd = cmd + bytearray([msb, lsb])
+            cmd = cmd + bytes("\n".encode())
         elif voltage == 'G':
             pass
         else:
@@ -239,8 +242,8 @@ class PMOD_DAC(HighVoltageAbstraction):
             cmd = bytes("S{}".format(channel).encode())
             cmd = cmd + bytearray([msb, lsb])
             cmd = cmd + bytes("\n".encode())
-            with self.lock:
-                self.controller.send_command(cmd)
+        with self.lock:
+            self.controller.send_command(cmd)
 
     @staticmethod
     def _interpret_bytes(byte_data):
@@ -334,13 +337,13 @@ class SpellmanPowerSupply(HighVoltageAbstraction, UtilityControl):
         inputs = []
         for channel in [hv_ai, ua_ai]:
             if channel.upper() != "NA":
-                self.daqcontroller.add_analog_input(channel)
+                self.daqcontroller.add_analog_input(channel, terminal_config='NRSE')
                 inputs.append(channel)
 
         self._input_channels = [hv_ai, ua_ai]
         self.daqcontroller.add_callback(self._read_data, inputs, 'wave', ())
         self._voltage_scalar = 1 / 30 * 10  # kV setting / 30 kV * 5 V
-        self._current_scalar = 1 / 3000 * 10  # uA / 100 uA * 5 V
+        self._current_scalar = 1 / 300 * 10  # uA / 100 uA * 5 V
 
     def startup(self):
         """

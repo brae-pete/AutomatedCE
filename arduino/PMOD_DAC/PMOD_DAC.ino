@@ -22,6 +22,11 @@ long LOAD_CLEAR_CODE = B0101;
 long LOAD_LDAC = B0110;
 long RESET = B0111;
 long SET_INTERNAL_REF = B1000;
+long TRISTATE = B11;
+long LARGEK = B10;
+long SMALLK = B01;
+long NORMAL = B00;
+
 
 //Address bytes for AD5628
 byte DAC_A = B0000;
@@ -34,6 +39,7 @@ byte DAC_G = B0110;
 byte DAC_H = B0111;
 byte ALL_DAC = B1111;
 
+byte channel = B00000000;
 
 // Class definitions
 
@@ -87,6 +93,7 @@ class DAC {
     void reset();
     void get_data(); 
     void send_command(byte command, byte addr, byte data_msb, byte data_lsb);
+    void set_tristate(byte channel_bit);
 };
 
 void DAC::get_data(){
@@ -163,6 +170,25 @@ void Oracle::interpret(){
       this -> send_data_array( dc.current_out, 8);
     }
       break;
+    case 'T':
+    {
+      Serial.println("Set Tristate");
+      chnl = _rx_msg[1]-'0';
+      int rx_char = (int)chnl;
+      byte fun = B00000000;
+      //Serial.println(fun);
+      bitSet(fun,rx_char);
+      //Serial.println(fun);
+      dc.set_tristate(fun);
+    }
+    break;
+
+    case 'Z':
+    {
+      Serial.println("Set Ref");
+      dc.set_ref();
+    }
+    break;
     case 'L':
     {
       Serial.println("Write and Load DAC");
@@ -195,6 +221,7 @@ void Oracle::interpret(){
     {
       //Serial.println("PowerDown");
       digitalWrite(ENABLE,LOW);
+      
       dc.reset();    
     }
       break;
@@ -320,6 +347,17 @@ void DAC::set_ref(){
   digitalWrite(CS,HIGH);
 }
 
+void DAC::set_tristate(byte channel_bit){
+  // xxxxc3c2c1c0  xxxxxxx  xxxxxD1D0 c7c6c5c4c3c2c1c0
+
+  digitalWrite(CS,LOW);
+  SPI.transfer(POWERDOWN);
+  SPI.transfer (TRISTATE);
+  SPI.transfer(channel_bit);
+  digitalWrite(CS,HIGH);
+}
+
+
 void DAC::send_command(byte command, byte addr, byte data_msb, byte data_lsb ){
   // xxxxc3c2c1c0  a3a2a1a0D11D10D9D8  D7D6D5D4D3D2D1D0 xxxxxxxx
   // command pattern (for everything but internal references. 
@@ -338,8 +376,7 @@ Oracle orc;
 void setup() {
   // put your setup code here, to run once:
   //Set Serial Settings
-  Serial.begin(BAUD)
-  ;
+  Serial.begin(BAUD);
   //Serial.println("Starting PMOD...");
   // Set up SPI Settings
   SPI.begin();

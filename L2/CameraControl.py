@@ -13,6 +13,8 @@ class CameraAbstraction(ABC):
     def __init__(self, controller, role):
         self.controller = controller
         self.role = role
+        self.exposure = 50
+        self.bin_size = 1
         self._callbacks = []
         self._callback_tags = {}
         self._last_image = []
@@ -89,6 +91,14 @@ class CameraAbstraction(ABC):
         """
         pass
 
+    def set_binning(self, bin_size:int):
+        """
+        Sets the camera bin_size
+        :param bin_size:
+        :return:
+        """
+        pass
+
     def get_exposure(self):
         """
         Returns the camera's current exposure setting
@@ -125,7 +135,7 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
     """
     def __init__(self, controller, role):
         super().__init__(controller, role)
-
+        self._dev_name = "NA"
 
     def snap(self):
         """
@@ -134,6 +144,7 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         """
         self.controller.send_command(self.controller.core.snap_image)
         img = self.controller.send_command(self.controller.core.get_image)
+        self._last_image = img.copy()
         img = self._reshape(img)
         with self._last_image_lock:
             self._last_image = img[:]
@@ -198,9 +209,11 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         if self._get_running():
 
             self.controller.send_command(self.controller.core.stop_sequence_acquisition)
-
             self._continuous_running.clear()
-            self._continuous_thread.join()
+            try:
+                self._continuous_thread.join()
+            except RuntimeError:
+                pass
 
         return True
 
@@ -219,8 +232,20 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         Returns the camera's current exposure setting
         :return:
         """
-        exposure = self.controller.send_command(self.controller.core.get_exposure)
-        return exposure
+        self.exposure = self.controller.send_command(self.controller.core.get_exposure)
+        return self.exposure
+
+    def set_binning(self, bin_size:int):
+        """
+        Sets the bin size for the camera. Bin must be 1,2,4,8
+        :param bin_size: size of one side of a square bin (4 becomes 4x4).
+        :return:
+        """
+        bins={1:"1x1", 2:"2x2", 4:"4x4", 8:"8x8"}
+        assert bin_size in bins.keys(), f"{bin_size} not in {bins.keys()}"
+        self.controller.send_command(self.controller.core.set_property,
+                                     args=(self._dev_name, "Binning", bins[bin_size]))
+        self.bin_size=bin_size
 
     def startup(self):
         """
@@ -229,7 +254,9 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         """
         h = self.controller.send_command(self.controller.core.get_image_height)
         w = self.controller.send_command(self.controller.core.get_image_width)
+        self._dev_name = self.controller.send_command(self.controller.get_device_name, args=('camera',))
         self.dimensions = [h,w]
+        self.get_exposure()
         return True
 
     def get_status(self):
