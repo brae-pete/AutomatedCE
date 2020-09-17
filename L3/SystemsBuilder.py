@@ -184,7 +184,7 @@ class UtilityBuilder(Builder):
 
     def add_shutter(self, controller, settings):
         role = settings[3]
-        self.constructed_object.fields[role] = self._filter_wheel_factory.build_object(controller, role)
+        self.constructed_object.fields[role] = self._shutter_factory.build_object(controller, role)
 
     def add_camera(self, controller, settings):
         role = settings[3]

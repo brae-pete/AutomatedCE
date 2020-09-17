@@ -51,7 +51,7 @@ class RootWindow(Frame):
 
         root.title('Automated Chip')
 
-        root.after(1000, self.check_queues)
+        root.after(250, self.check_queues)
 
     def check_queues(self):
         """
@@ -349,8 +349,28 @@ class LEDExpandable(CollapsiblePane):
                 self.root_window.system_queue.send_command('system.inlet_rgb.turn_on_channel', rgb)
             elif state == 0:
                 self.root_window.system_queue.send_command('system.inlet_rgb.turn_off_channel', rgb)
+class HighVoltageExpandable(CollapsiblePane):
+    def __init__(self, parent, root:RootWindow, **kwargs):
+        super().__init__(parent, **kwargs)
 
+        self.root_window = root
+        self.volt_spin = DoubleVar(value=0)
+        self.setup()
 
+    def setup(self):
+        lbl = ttk.Label(self.frame,text="Voltage (kV)")
+        lbl.grid()
+
+        spn = ttk.Spinbox(self.frame, textvariable=self.volt_spin)
+        spn.grid()
+
+        btn = ttk.Button(self.frame, text='Set Voltage', command=self.set_voltage)
+        btn.grid()
+
+    def set_voltage(self):
+        volts = self.volt_spin.get()
+        self.root_window.system_queue.send_command('system.high_voltage.set_voltage',voltage=volts)
+        self.root_window.system_queue.send_command('system.high_voltage.start')
 class LaserExpandable(CollapsiblePane):
 
     def __init__(self, parent, root: RootWindow, **kwargs):
@@ -425,6 +445,11 @@ class CESystemWindow(Frame):
         label.grid(row=6 + st, column=0, sticky="NEW")
         self.lysis_frame = LaserExpandable(window, parent)
         self.lysis_frame.grid(row=6 + st, column=1, sticky="NSEW")
+
+        label = ttk.Label(window, text='High Voltage')
+        label.grid(row=7 + st, column=0, sticky="NEW")
+        self.voltage_frame = HighVoltageExpandable(window, parent)
+        self.voltage_frame.grid(row=7 + st, column=1, sticky="NSEW")
 
     def reset_process(self):
         try:
@@ -560,7 +585,11 @@ class EgramWindow(Frame):
         # canvas.get_tk_widget().pack()
         self.canvas = canvas
 
+        btn = ttk.Button(self, text='RESET', command=self.start_acquire)
+        btn.grid()
 
+    def start_acquire(self):
+        self.parent.system_queue.send_command('system.detector.start')
 
     def add_data(self, data, *args, **kwargs):
         if data is not None:
@@ -832,7 +861,7 @@ class InjectionWindow(Frame):
         lf = ttk.LabelFrame(self, text='Injection Parameters')
         lf.grid()
         params = [('Time (s)', self.time_var, 0, 1000),
-                  ('Voltage (V)', self.volt_var, 0, 1000),
+                  ('Voltage (kV)', self.volt_var, 0, 1000),
                   ('Drop (mm)', self.drop_var, -10, 10)]
         c_idx = 0
         r_idx = 0
