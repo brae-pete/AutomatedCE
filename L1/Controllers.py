@@ -192,7 +192,11 @@ class PycromanagerController(ControllerAbstraction):
         """
         Opens the pycromanager core using configuration file
         """
-        self.core.load_system_configuration(self._config)
+        try:
+            self.core.load_system_configuration(self._config)
+        except Exception as e:
+            # Try to load twice for the Intensilight Source
+            self.core.load_system_configuration(self._config)
 
     def close(self):
         """
@@ -217,6 +221,7 @@ class PycromanagerController(ControllerAbstraction):
             args = settings['args']
             try:
                 ans = command(*args)
+                time.sleep(self._delay_time)
             except Exception as e:
 
                 if e.args[0].find('java.lang.Exception: Error in device "XY": (Error message unavailable)') >= 0:
