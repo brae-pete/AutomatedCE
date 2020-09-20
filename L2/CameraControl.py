@@ -144,9 +144,11 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         """
         self.controller.send_command(self.controller.core.snap_image)
         img = self.controller.send_command(self.controller.core.get_image)
+
+
+        img = self._reshape(img)
         self._last_image = img.copy()
         self._update_callbacks(self._last_image)
-        img = self._reshape(img)
         with self._last_image_lock:
             self._last_image = img[:]
         return img
