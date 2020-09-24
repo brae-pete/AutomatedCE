@@ -380,5 +380,28 @@ class PriorController(ControllerAbstraction):
         return ans
 
 
+class LumencorController(PriorController):
+
+    def _read_line(self, first=True):
+        ans = self._serial.read_until('\r'.encode()).decode().strip('\r')
+        if ans == "" and first:
+            time.sleep(0.3)
+            return self._read_line(False)
+        return ans
+
+    def send_command(self, command, expected=None):
+        """ Send the command and read the prior daqcontroller response
+
+        Then send a Empty command, and wait for the expected R response. Return whatever value was before the
+        expected R
+
+        """
+        with self.lock:
+            self._read_lines()
+            self._serial.write(command)
+            time.sleep(0.2)
+            response = self._read_lines()
+        return response
+
 if __name__ == "__main__":
     mmc = MicroManagerController(port=0, config=r'D:\Scripts\AutomatedCE\config\DemoCam.cfg')

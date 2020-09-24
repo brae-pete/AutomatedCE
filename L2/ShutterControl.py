@@ -68,6 +68,7 @@ class ShutterAbstraction(ABC):
         pass
 
 
+
 class MicroManagerShutter(ShutterAbstraction, UtilityControl):
     """ Class to control the filter wheel"""
 
