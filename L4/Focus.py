@@ -138,7 +138,7 @@ class FindFocus:
         self.system.objective.set_rel_z(distance)
         time.sleep(0.2)
 
-    def snap_image(self):
+    def snap_image(self, auto_shutter=True):
         img = self.system.camera.snap()
         return img
 
