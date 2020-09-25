@@ -1,9 +1,109 @@
+import datetime
+import threading
+import time
+
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from pathlib import Path
 import numpy as np
-from skimage import io, img_as_float
+from scipy.ndimage import distance_transform_edt
+from skimage import io, img_as_float, morphology, filters
+from skimage.feature import peak_local_max
+from skimage.measure import regionprops_table, label
+from skimage.morphology import watershed
+import pandas as pd
+
+from L3 import SystemsBuilder
+from L4 import FileIO
+
+
+def get_brightest_blobs(image):
+    close_size = 5
+    open_size = 5
+    watershed_footprint = (5, 5)
+    # Make sure types are the same
+    input_image = img_as_float(image)
+
+    # Filter Image
+    filtered_image = filters.median(input_image, behavior='ndimage')
+
+    # Edge Detection
+    edge_sobel = filters.sobel(filtered_image)
+
+    # Threshold
+    thresh = filters.threshold_otsu(filtered_image)
+    binary_otsu = filtered_image > thresh
+
+    # Binary Morphology Operations
+    structure_element = morphology.disk(close_size)
+    closed_image = morphology.binary_closing(binary_otsu, structure_element)
+    structure_element = morphology.disk(open_size)
+    opened_image = morphology.binary_opening(closed_image, structure_element)
+
+    # Watershed
+    distance = distance_transform_edt(opened_image)
+    local_maxi = peak_local_max(distance, indices=False, footprint=np.ones(watershed_footprint), labels=opened_image)
+    markers = label(local_maxi)[0]
+    labels = watershed(-distance, markers, mask=opened_image)
+
+    # Labeling and Sorting
+    regions = regionprops_table(labels, intensity_image=image,
+                                properties=('label', 'centroid', 'max_intensity', 'mean_intensity'))
+    df = pd.DataFrame(regions)
+    df = df.sort_values(by=['mean_intensity', 'max_intensity'], ascending=False)
+
+    return df
+
+
+class ImageSaver:
+
+    def __init__(self, system: SystemsBuilder.CESystem, folder_prefix=None, data_folder=None):
+        self.system = system
+        self.prefix = folder_prefix
+        self.data_folder = data_folder
+        self.images = []
+        self.times = []
+        self._lock = threading.RLock()
+        self.time_format = "%y-%m-%d %H-%M-%S %f"
+
+    def add_callback(self):
+        self.system.camera.add_callback(self.callback, tag='save_img')
+
+    def remove_callback(self):
+        self.system.camera.remove_callback(tag='save_img')
+
+    def callback(self, img, *args, **kwargs):
+        with self._lock:
+            self.images.append(img)
+            self.times.append(datetime.datetime.now().strftime(self.time_format))
+
+    def save_image(self, image_prefix='img', folder_prefix=None, data_folder=None, unique_folder=True, timestamp=False):
+        """
+        Saves the images into an folder with incrementing image names:
+
+        image_prefix: what the image filename should be caleld
+        folder_prefix: what the data folder will be called
+        data_folder: where the parent_directory resides
+        unique_folder: When true, create a new folder everytime the function is called
+        timestamp: When True add to the image prefix with the timestamp of the image
+
+        """
+
+        if folder_prefix is None:
+            folder_prefix = self.prefix
+        if data_folder is None:
+            data_folder = self.data_folder
+
+        if unique_folder:
+            data_dir = FileIO.get_data_folder(folder_prefix, data_folder)
+        else:
+            data_dir = data_folder
+        for time_id,image in zip(self.times,self.images):
+            if timestamp:
+                image_prefix += " "+time_id
+            data_file = FileIO.get_data_filename(image_prefix, data_dir, extension='.tiff')
+            io.imsave(data_file, image)
 
 
 class Blob(object):
@@ -52,6 +152,7 @@ class Blob(object):
 
     def get_bbox(self):
         return [self.xy, self.width, self.height]
+
 
 def image_iterator(parent_dir=r"D:\Scripts\working-at-home\fiji-haesleinhuepf\images\cells"):
     """
