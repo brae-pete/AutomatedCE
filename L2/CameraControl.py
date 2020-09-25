@@ -161,7 +161,7 @@ class CameraAbstraction(ABC):
         :param fnc:
         :return:
         """
-        self._postsnap_callback.append([fnc, args, kwargs])
+        self._postsnap_callbacks.append([fnc, args, kwargs])
 
 class PycromanagerControl(CameraAbstraction, UtilityControl):
     """
@@ -180,9 +180,9 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         self.controller.send_command(self.controller.core.snap_image)
         img = self.controller.send_command(self.controller.core.get_image)
         self.postsnap()
+        img = self._reshape(img)
         self._last_image = img.copy()
         self._update_callbacks(self._last_image)
-        img = self._reshape(img)
         with self._last_image_lock:
             self._last_image = img[:]
         return img

@@ -110,8 +110,7 @@ class PlaneFocus:
 
     def get_plane_focus(self):
         # If spline is not set up, keep the objective at the same position
-        if len(self._plane_vectors) < 3:
-            logging.warning("Adding to the plane")
+
         xy = self.system.xy_stage.read_xy()
         a, b, c, d = self._plane_coefficients
         z = (d - (a * xy[0]) - (b * xy[1])) / c

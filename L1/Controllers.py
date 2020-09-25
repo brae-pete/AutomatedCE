@@ -382,6 +382,10 @@ class PriorController(ControllerAbstraction):
 
 class LumencorController(PriorController):
 
+    def __init__(self, port):
+        super().__init__(port)
+        self.id='lumencor'
+
     def _read_line(self, first=True):
         ans = self._serial.read_until('\r'.encode()).decode().strip('\r')
         if ans == "" and first:

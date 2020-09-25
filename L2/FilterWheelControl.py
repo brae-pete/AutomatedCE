@@ -102,7 +102,7 @@ class PriorFilter(FilterWheelAbstraction, UtilityControl):
 
     def startup(self):
         """ Do  nothing on startup"""
-        self.controller.send_command(f"7 H\n")
+        self.controller.send_command(f"7 {self._filter_wheel},H\r")
 
     def stop(self):
         """
@@ -128,14 +128,20 @@ class PriorFilter(FilterWheelAbstraction, UtilityControl):
         if settings['position'].lower() == 'camera':
             channel = self._position_map[channel]
 
-        self.controller.send_command(f'7 {self._filter_wheel},{channel}\n')
+        self.controller.send_command(f'7 {self._filter_wheel},{channel}\r')
 
-    def read_channel(self, **kwargs):
+    def get_channel(self, **kwargs):
         """
         Reads the current filter wheel position
         :param kwargs:
         :return:
         """
+        pass
+
+    def shutdown(self):
+        pass
+
+
 
 
 class PycromanagerFilter(FilterWheelAbstraction, UtilityControl):
@@ -335,9 +341,9 @@ class FilterWheelFactory(UtilityFactory):
         elif controller.id == 'pycromanager':
             return PycromanagerFilter(controller, role)
         elif controller.id == 'prior':
-            return PriorFilter
+            return PriorFilter(controller,role)
         elif controller.id == 'lumencor':
-            return LumencorFilter
+            return LumencorFilter(controller,role)
         else:
             return None
 
