@@ -110,8 +110,7 @@ class PlaneFocus:
 
     def get_plane_focus(self):
         # If spline is not set up, keep the objective at the same position
-        if len(self._plane_vectors) < 3:
-            logging.warning("Adding to the plane")
+
         xy = self.system.xy_stage.read_xy()
         a, b, c, d = self._plane_coefficients
         z = (d - (a * xy[0]) - (b * xy[1])) / c
@@ -138,7 +137,7 @@ class FindFocus:
         self.system.objective.set_rel_z(distance)
         time.sleep(0.2)
 
-    def snap_image(self):
+    def snap_image(self, auto_shutter=True):
         img = self.system.camera.snap()
         return img
 
