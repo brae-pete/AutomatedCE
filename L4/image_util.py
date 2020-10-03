@@ -58,7 +58,7 @@ def get_brightest_blobs(image):
 
 class ImageSaver:
 
-    def __init__(self, system: SystemsBuilder.CESystem, folder_prefix=None, data_folder=None):
+    def __init__(self, system: SystemsBuilder.CESystem, folder_prefix="", data_folder=""):
         self.system = system
         self.prefix = folder_prefix
         self.data_folder = data_folder
@@ -100,9 +100,12 @@ class ImageSaver:
         else:
             data_dir = data_folder
         for time_id,image in zip(self.times,self.images):
+
             if timestamp:
-                image_prefix += " "+time_id
-            data_file = FileIO.get_data_filename(image_prefix, data_dir, extension='.tiff')
+                adj_prefix =image_prefix+ " "+time_id
+            else:
+                adj_prefix = image_prefix
+            data_file = FileIO.get_data_filename(adj_prefix, data_dir, extension='.tiff')
             io.imsave(data_file, image)
 
 

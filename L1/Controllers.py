@@ -186,7 +186,7 @@ class PycromanagerController(ControllerAbstraction):
         self._config = config
         self._bridge = pycromanager.Bridge()
         self.core = self._bridge.get_core()
-        self._delay_time = 0.15
+        self._delay_time = 0.05
 
     def open(self):
         """

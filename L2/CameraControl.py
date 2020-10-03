@@ -21,7 +21,7 @@ class CameraAbstraction(ABC):
         self._postsnap_callbacks=[]
         self._last_image = []
         self.dimensions = [1,1] # Width and height of the image in pixels
-        self.update_frequency = 16  # How many times per second to check the camera
+        self.update_frequency = 20  # How many times per second to check the camera
         self._last_image_lock = threading.RLock()
         # Continuous properties
         self._continuous_thread = threading.Thread()

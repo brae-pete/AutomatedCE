@@ -230,7 +230,7 @@ class FindFocus:
                 image_array = self.snap_image()
                 d_b, d_r, d_e, d_s, d_v, d_p = c_b, c_r, c_e, c_s, c_v, c_p
                 c_b, c_r, c_e, c_s, c_v, c_p = get_measures(image_array)
-
+            print(f"Position: {self.system.objective.read_z()}")
             n += 1
 
     def search_step_global(self, step_size=7, max_iterations=8):
@@ -268,7 +268,7 @@ class FindFocus:
 
             measure_difference = is_moving_toward_focus_2(c_b, c_r, c_e, c_s, c_v, c_p,
                                                           d_b, d_r, d_e, d_s, d_v, d_p)
-
+            print(f'meaure: {measure_difference}, step: {n}, pos= {self.system.objective.read_z()}')
             differences.append(measure_difference)
             c_b, c_r, c_e, c_s, c_v, c_p = d_b, d_r, d_e, d_s, d_v, d_p
 
@@ -278,7 +278,7 @@ class FindFocus:
                 differences[index] = np.mean([differences[index - 1], differences[index + 1]])
 
         index = -1
-
+        print(differences)
         try:
             while differences[index] < 0:
                 index -= 1
