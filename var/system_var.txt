@@ -1,2 +1,2 @@
 kinesis,"C:\\Program Files\\Thorlabs\\Kinesis"
-data_dir,r"C:\Users\NikonTE300CE\Documents\Data"
+data_dir,r".\Data"

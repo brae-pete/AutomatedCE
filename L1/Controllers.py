@@ -245,7 +245,7 @@ class PycromanagerController(ControllerAbstraction):
         XY = XY drive for the Nikon instruments.
         """
         keys = {'XY': ['xy'], 'filter':['filter'],
-                'shutter':['shutter'], 'camera':["dcam", "coolsnap"]}
+                'shutter':['shutter'], 'camera':["dcam", "coolsnap", 'qcamera']}
         devices = self.get_list(self.core.get_loaded_devices())
         if id not in keys.keys():
             keys[id]=[id.lower()]

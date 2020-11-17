@@ -127,8 +127,15 @@ class CameraAbstraction(ABC):
         try:
             img= img.reshape(self.dimensions)
         except ValueError:
-            self.startup()
-            img= img.reshape(self.dimensions)
+            try:
+                self.startup()
+                img= img.reshape(self.dimensions)
+            except ValueError:
+                new_d = [x for x in self.dimensions]
+                new_d.append(4)
+                img = img.reshape(new_d)
+
+
         return img
 
     def presnap(self):
