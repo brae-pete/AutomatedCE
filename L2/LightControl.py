@@ -86,6 +86,8 @@ class RGBArduino(RGBAbstraction, UtilityControl):
         return
 
 
+
+
 class RGBControlFactory(UtilityFactory):
     """ Determines the type of pressure utility object to return according to the daqcontroller id"""
 

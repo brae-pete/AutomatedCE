@@ -446,13 +446,13 @@ class XYControlFactory(UtilityFactory):
 
 
 if __name__ == "__main__":
-    from L1.Controllers import MicroManagerController
+    from L1.Controllers import PriorController
 
-    ctl = MicroManagerController()
+    ctl = PriorController(port="COM4")
     ctl.open()
-    xy = MicroManagerXY(ctl)
+    xy = PriorXY(ctl, 'idea')
     xy.read_xy()
-    xy.set_xy([444, 222])
+    #xy.set_xy([444, 222])
     xy.set_home()
-    xy.set_rel_xy([500, 500])
+    #xy.set_rel_xy([500, 500])
     xy.go_home()

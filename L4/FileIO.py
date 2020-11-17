@@ -72,6 +72,7 @@ def get_data_folder(name, file_dir):
         new_name = name + f"_{copy_number:05d}"
         folder = os.path.join(file_dir, new_name)
         copy_number += 1
+    Path(folder).mkdir(parents=True, exist_ok=True)
     return folder
 
 class OutputElectropherogram:

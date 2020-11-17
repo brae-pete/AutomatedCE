@@ -109,6 +109,10 @@ class ControllerBuilder(Builder):
             raise ValueError("No config was provided: {}".format(settings))
         self.constructed_object.fields[settings[1]] = Controllers.PycromanagerController(settings[2], settings[3])
 
+    def add_lumencor(self, settings):
+        self.constructed_object.fields[settings[1]] = Controllers.LumencorController(settings[3])
+
+
 
 class UtilityBuilder(Builder):
     """
@@ -259,6 +263,8 @@ class ConcreteDirector(Director):
                 self._controller_builder.add_kinesis(settings)
             elif control_type == 'pycromanager':
                 self._controller_builder.add_pycromanager(settings)
+            elif control_type == 'lumencor':
+                self._controller_builder.add_lumencor(settings)
             else:
                 raise ValueError('Entered invalid controller: {}'.format(control_type))
         return self._controller_builder.get_object()

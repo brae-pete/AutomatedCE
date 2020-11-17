@@ -186,13 +186,17 @@ class PycromanagerController(ControllerAbstraction):
         self._config = config
         self._bridge = pycromanager.Bridge()
         self.core = self._bridge.get_core()
-        self._delay_time = 0.075
+        self._delay_time = 0.05
 
     def open(self):
         """
         Opens the pycromanager core using configuration file
         """
-        self.core.load_system_configuration(self._config)
+        try:
+            self.core.load_system_configuration(self._config)
+        except Exception as e:
+            # Try to load twice for the Intensilight Source
+            self.core.load_system_configuration(self._config)
 
     def close(self):
         """
@@ -217,6 +221,7 @@ class PycromanagerController(ControllerAbstraction):
             args = settings['args']
             try:
                 ans = command(*args)
+                time.sleep(self._delay_time)
             except Exception as e:
 
                 if e.args[0].find('java.lang.Exception: Error in device "XY": (Error message unavailable)') >= 0:
@@ -240,7 +245,7 @@ class PycromanagerController(ControllerAbstraction):
         XY = XY drive for the Nikon instruments.
         """
         keys = {'XY': ['xy'], 'filter':['filter'],
-                'shutter':['shutter'], 'camera':["dcam", "coolsnap"]}
+                'shutter':['shutter'], 'camera':["dcam", "coolsnap", 'qcamera']}
         devices = self.get_list(self.core.get_loaded_devices())
         if id not in keys.keys():
             keys[id]=[id.lower()]
@@ -379,6 +384,33 @@ class PriorController(ControllerAbstraction):
             return self._read_line(False)
         return ans
 
+
+class LumencorController(PriorController):
+
+    def __init__(self, port):
+        super().__init__(port)
+        self.id='lumencor'
+
+    def _read_line(self, first=True):
+        ans = self._serial.read_until('\r'.encode()).decode().strip('\r')
+        if ans == "" and first:
+            time.sleep(0.3)
+            return self._read_line(False)
+        return ans
+
+    def send_command(self, command, expected=None):
+        """ Send the command and read the prior daqcontroller response
+
+        Then send a Empty command, and wait for the expected R response. Return whatever value was before the
+        expected R
+
+        """
+        with self.lock:
+            self._read_lines()
+            self._serial.write(command)
+            time.sleep(0.2)
+            response = self._read_lines()
+        return response
 
 if __name__ == "__main__":
     mmc = MicroManagerController(port=0, config=r'D:\Scripts\AutomatedCE\config\DemoCam.cfg')

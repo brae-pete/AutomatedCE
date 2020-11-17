@@ -17,9 +17,11 @@ class CameraAbstraction(ABC):
         self.bin_size = 1
         self._callbacks = []
         self._callback_tags = {}
+        self._presnap_callbacks=[]
+        self._postsnap_callbacks=[]
         self._last_image = []
         self.dimensions = [1,1] # Width and height of the image in pixels
-        self.update_frequency = 16  # How many times per second to check the camera
+        self.update_frequency = 20  # How many times per second to check the camera
         self._last_image_lock = threading.RLock()
         # Continuous properties
         self._continuous_thread = threading.Thread()
@@ -125,9 +127,48 @@ class CameraAbstraction(ABC):
         try:
             img= img.reshape(self.dimensions)
         except ValueError:
-            self.startup()
-            img= img.reshape(self.dimensions)
+            try:
+                self.startup()
+                img= img.reshape(self.dimensions)
+            except ValueError:
+                new_d = [x for x in self.dimensions]
+                new_d.append(4)
+                img = img.reshape(new_d)
+
+
         return img
+
+    def presnap(self):
+        """
+        Calls presnap functions
+        :return:
+        """
+        for fnc,args,kwargs in self._presnap_callbacks:
+            fnc(*args, **kwargs)
+
+    def postsnap(self):
+        """
+        Calls postsnap functions
+        :return:
+        """
+        for fnc, args, kwargs in self._postsnap_callbacks:
+            fnc(*args, **kwargs)
+
+    def add_presnap_callback(self, fnc, *args, **kwargs):
+        """
+        adds callback to presnap functions
+        :param fnc:
+        :return:
+        """
+        self._presnap_callbacks.append([fnc, args, kwargs])
+
+    def add_postsnap_callback(self, fnc, *args, **kwargs):
+        """
+        adds callback to postsnap functions
+        :param fnc:
+        :return:
+        """
+        self._postsnap_callbacks.append([fnc, args, kwargs])
 
 class PycromanagerControl(CameraAbstraction, UtilityControl):
     """
@@ -142,10 +183,13 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         Take one image from the camera and return the image
         :return:
         """
+        self.presnap()
         self.controller.send_command(self.controller.core.snap_image)
         img = self.controller.send_command(self.controller.core.get_image)
-        self._last_image = img.copy()
+        self.postsnap()
         img = self._reshape(img)
+        self._last_image = img.copy()
+        self._update_callbacks(self._last_image)
         with self._last_image_lock:
             self._last_image = img[:]
         return img
