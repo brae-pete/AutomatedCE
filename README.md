@@ -10,7 +10,7 @@ Open the Anaconda Prompt. Create the barracuda environment by downloading the th
 ~~~
 cd \path\to\env\txtfile\
 
-conda create --name CEpy37 --file barracuda-env.txt
+conda create --name CEpy37 --file env-lib.txt
 conda activate CEpy37
 python -m pip install opencv_python nidaqmx pycromanager
 conda deactivate
