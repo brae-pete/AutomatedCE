@@ -36,7 +36,7 @@ class Climb:
         """
         retrieves the current position
         """
-        self.current_pos = self.system.read_z()
+        self.current_pos = self.system.objective.read_z()
         return self.current_pos
 
     def get_image(self):
