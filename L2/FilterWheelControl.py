@@ -181,7 +181,6 @@ class PycromanagerFilter(FilterWheelAbstraction, UtilityControl):
         """
         self.labels = kwargs
 
-
 class LumencorFilter(FilterWheelAbstraction, UtilityControl):
 
     def startup(self):
@@ -342,7 +341,7 @@ class FilterWheelFactory(UtilityFactory):
             return PycromanagerFilter(controller, role)
         elif controller.id == 'prior':
             return PriorFilter(controller,role)
-        elif controller.id == 'lumencor':
+        elif controller.id == 'lumencor' or controller.id == 'simulator':
             return LumencorFilter(controller,role)
         else:
             return None

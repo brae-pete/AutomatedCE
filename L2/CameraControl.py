@@ -1,3 +1,4 @@
+import logging
 import threading
 from abc import ABC, abstractmethod
 from L2.Utility import UtilityControl, UtilityFactory
@@ -285,11 +286,15 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         :param bin_size: size of one side of a square bin (4 becomes 4x4).
         :return:
         """
+
         bins={1:"1x1", 2:"2x2", 4:"4x4", 8:"8x8"}
         assert bin_size in bins.keys(), f"{bin_size} not in {bins.keys()}"
-        self.controller.send_command(self.controller.core.set_property,
-                                     args=(self._dev_name, "Binning", bins[bin_size]))
-        self.bin_size=bin_size
+        if self._dev_name != 'Camera':
+            self.controller.send_command(self.controller.core.set_property,
+                                         args=(self._dev_name, "Binning", bins[bin_size]))
+            self.bin_size=bin_size
+        else:
+            logging.warning("Binning not possible with test configuration")
 
     def startup(self):
         """
