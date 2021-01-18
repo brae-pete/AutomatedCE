@@ -40,7 +40,7 @@ class RootWindow(Frame):
         egram_button = ttk.Button(root, text='Manual Cell', command=lambda x=self: InjectionWindow(x))
         egram_button.grid(column=3, row=0)
 
-        egram_button = ttk.Button(root, text='Egram', command=lambda x=self:EgramWindow(x))
+        egram_button = ttk.Button(root, text='Egram', command=lambda x=self: EgramWindow(x))
         egram_button.grid(column=4, row=0)
 
         egram_button = ttk.Button(root, text='Camera', command=lambda x=self: CameraWindow(x))
@@ -349,8 +349,10 @@ class LEDExpandable(CollapsiblePane):
                 self.root_window.system_queue.send_command('system.inlet_rgb.turn_on_channel', rgb)
             elif state == 0:
                 self.root_window.system_queue.send_command('system.inlet_rgb.turn_off_channel', rgb)
+
+
 class HighVoltageExpandable(CollapsiblePane):
-    def __init__(self, parent, root:RootWindow, **kwargs):
+    def __init__(self, parent, root: RootWindow, **kwargs):
         super().__init__(parent, **kwargs)
 
         self.root_window = root
@@ -358,7 +360,7 @@ class HighVoltageExpandable(CollapsiblePane):
         self.setup()
 
     def setup(self):
-        lbl = ttk.Label(self.frame,text="Voltage (kV)")
+        lbl = ttk.Label(self.frame, text="Voltage (kV)")
         lbl.grid()
 
         spn = ttk.Spinbox(self.frame, textvariable=self.volt_spin)
@@ -369,8 +371,10 @@ class HighVoltageExpandable(CollapsiblePane):
 
     def set_voltage(self):
         volts = self.volt_spin.get()
-        self.root_window.system_queue.send_command('system.high_voltage.set_voltage',voltage=volts)
+        self.root_window.system_queue.send_command('system.high_voltage.set_voltage', voltage=volts)
         self.root_window.system_queue.send_command('system.high_voltage.start')
+
+
 class LaserExpandable(CollapsiblePane):
 
     def __init__(self, parent, root: RootWindow, **kwargs):
@@ -470,6 +474,7 @@ class InitFrame(Frame):
         self.parent = parent
         self.grid()
         self.setup()
+
     def setup(self):
         """ Place the buttons"""
         window = self.window
@@ -500,7 +505,7 @@ class InitFrame(Frame):
         btn = ttk.Button(step_3_lbl, text='Home Z Stage', command=self.z_home)
         btn.grid()
 
-        btn = ttk.Button(step_3_lbl, text = 'Set XY Home', command=self.xy_home)
+        btn = ttk.Button(step_3_lbl, text='Set XY Home', command=self.xy_home)
         btn.grid()
 
         step_4_lbl = ttk.LabelFrame(instruction_frame, text="4. Calibration Check")
@@ -544,9 +549,11 @@ class InitFrame(Frame):
         """
         Moves to a well
         """
-        well_name=self.well_var.get()
+        well_name = self.well_var.get()
         if well_name != 'Select':
-            self.parent.system_queue.send_command('auto_run.move_to_well',well_name)
+            self.parent.system_queue.send_command('auto_run.move_to_well', well_name)
+
+
 class EgramWindow(Frame):
     def __init__(self, parent: RootWindow, **kw):
         self.parent = parent
@@ -555,14 +562,14 @@ class EgramWindow(Frame):
         self.fig = None  # type: Figure
         self.ax = None
         self._update = False
-        self.time = [1,2,3]
-        self.data={}
-        self.power_data={}
-        self.current= [0,0,0]
+        self.time = [1, 2, 3]
+        self.data = {}
+        self.power_data = {}
+        self.current = [0, 0, 0]
         self.im_plot = None
         self.canvas = None
-        self._artists=[]
-        self.plot_axes=[]
+        self._artists = []
+        self.plot_axes = []
         self.figure_setup()
         self.setup()
         self.ani = animation.FuncAnimation(self.fig, self.update_graph, interval=2000)
@@ -594,11 +601,11 @@ class EgramWindow(Frame):
     def add_data(self, data, *args, **kwargs):
         if data is not None:
             self.data = data
-            self._update=True
+            self._update = True
 
     def add_power_data(self, data, *args, **kwargs):
         if data is not None:
-            self.power_data=data
+            self.power_data = data
             self._update = True
 
     def figure_setup(self):
@@ -617,7 +624,7 @@ class EgramWindow(Frame):
 
     def update_graph(self, *args):
         if self._update:
-            self._update=False
+            self._update = False
             data = self.data
             power_data = self.power_data
             ax1, ax2 = self.plot_axes[0:2]
@@ -766,17 +773,19 @@ class CameraWindow(Frame):
         except Exception as e:
             print(e)
 
+
 class InjectionData():
     """ Object to hold collection data"""
-    def __init__(self, root_window:RootWindow):
+
+    def __init__(self, root_window: RootWindow):
         self.last_obj = None  # type: float
         self.difference = None  # type: float
-        self.cap_z = None # type: float
-        self.obj_z = None # type: float
+        self.cap_z = None  # type: float
+        self.obj_z = None  # type: float
         self.add_cap = False
         self.add_obj = False
         self.dif_var = DoubleVar()
-        self.root_window=root_window
+        self.root_window = root_window
         root_window.system_queue.add_info_callback('system.objective.read_z', self.obj_callback)
         root_window.system_queue.add_info_callback('system.inlet_z.read_z', self.inlet_callback)
 
@@ -796,17 +805,15 @@ class InjectionData():
 
     def obj_callback(self, z, *args, **kwargs):
         if self.add_obj:
-            self.obj_z=z
-            self.add_obj=False
+            self.obj_z = z
+            self.add_obj = False
             print(z)
 
     def inlet_callback(self, z, *args, **kwargs):
         if self.add_cap:
-            self.cap_z=z
-            self.add_cap=False
+            self.cap_z = z
+            self.add_cap = False
             self.get_difference()
-
-
 
 
 class InjectionWindow(Frame):
@@ -814,6 +821,7 @@ class InjectionWindow(Frame):
     Displays control buttons for the CE system Controller
     """
     calibration = []
+
     def __init__(self, parent: RootWindow, **kw):
         window = self.window = Toplevel(parent)
         self.methods = []
@@ -824,7 +832,6 @@ class InjectionWindow(Frame):
         self.volt_var = DoubleVar()
         self.drop_var = DoubleVar()
         self.setup()
-
 
     def setup(self):
 
@@ -853,7 +860,8 @@ class InjectionWindow(Frame):
         r_idx = 1
         for lbl, dis in moves:
             bt = ttk.Button(lf, text=lbl,
-                            command=lambda x=dis: self.root_window.system_queue.send_command('system.inlet_z.set_rel_z', x))
+                            command=lambda x=dis: self.root_window.system_queue.send_command('system.inlet_z.set_rel_z',
+                                                                                             x))
             bt.grid(row=r_idx, column=c_idx)
             c_idx += 1
 
@@ -877,7 +885,7 @@ class InjectionWindow(Frame):
         # Method Commands
         lf = ttk.LabelFrame(self, text='Method Control')
         lf.grid()
-        btn = ttk.Button(lf, text='Continue Method',command=self.continue_run )
+        btn = ttk.Button(lf, text='Continue Method', command=self.continue_run)
         btn.grid()
 
     def continue_run(self):
@@ -885,25 +893,26 @@ class InjectionWindow(Frame):
 
     def start_injection(self):
         """Injection"""
-        volts =self.volt_var.get()
+        volts = self.volt_var.get()
         drop = self.drop_var.get()
         dt = self.time_var.get()
 
         # Make sure inputs are floats
-        if type(volts) != float or type(drop)!= float or type(dt) != float:
+        if type(volts) != float or type(drop) != float or type(dt) != float:
             return
 
-        self.root_window.system_queue.send_command('auto_run.injection',dt,volts,drop)
+        self.root_window.system_queue.send_command('auto_run.injection', dt, volts, drop)
 
     def objective_focus(self):
-        self.root_window.injection_data.add_obj=True
+        self.root_window.injection_data.add_obj = True
 
     def capillary_focus(self):
-        self.root_window.injection_data.add_cap=True
+        self.root_window.injection_data.add_cap = True
 
     def lower_cap(self):
         diff = self.root_window.injection_data.difference
-        self.root_window.system_queue.send_command('auto_run.lower_dif',diff)
+        self.root_window.system_queue.send_command('auto_run.lower_dif', diff)
+
 
 class MethodWindow(Frame):
     """
@@ -941,12 +950,12 @@ class MethodWindow(Frame):
         btn = ttk.Button(window, text="Stop Run", command=self.stop_method)
         btn.grid(row=2, column=3, sticky="NSEW")
 
-        self.method_style=StringVar(value='CE')
+        self.method_style = StringVar(value='CE')
         rd = ttk.Radiobutton(window, text='CE Style', variable=self.method_style, value='CE')
         rd.grid(row=2, column=0)
         rd = ttk.Radiobutton(window, text='CHIP Style', variable=self.method_style, value='CHIP')
         rd.grid(row=2, column=1)
-        self.style='auto_run'
+        self.style = 'auto_run'
         self.text = text
         self.root_window = parent
 
@@ -976,12 +985,12 @@ class MethodWindow(Frame):
 
     def start_method(self):
 
-        if self.method_style.get()=='CE':
-            style='auto_run'
+        if self.method_style.get() == 'CE':
+            style = 'auto_run'
         else:
-            style='chip_run'
+            style = 'chip_run'
         value = self.reps.get()
-        self.style=style
+        self.style = style
 
         self.root_window.system_queue.send_command(f'{style}.set_repetitions', value)
         for method in self.methods:
