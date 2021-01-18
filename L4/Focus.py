@@ -16,6 +16,140 @@ from L3 import SystemsBuilder
 ''' Fill the two functions below with their actual implementations would probably be easiest. '''
 
 
+class Climb:
+    """
+    Basic focus search class that can move the focal plane, retrieve the position, and get the image.
+    """
+
+    def __init__(self, system, score_fnc):
+        self.system = system
+        self.current_pos = system.objective.read_z()
+        self.score_fnc = score_fnc
+        self.wait = 0.1 # how long to wait before taking image
+
+    def move(self, z):
+        """Moves the camera, or file indexer, to the position z"""
+        self.system.objective.set_z(z)
+        time.sleep(self.wait)
+
+    def get_position(self):
+        """
+        retrieves the current position
+        """
+        self.current_pos = self.system.read_z()
+        return self.current_pos
+
+    def get_image(self):
+        """
+        returns an image at the current position
+        """
+        img = self.system.camera.snap()
+        return img
+
+    def climb(self, *args, **kwargs):
+        """
+        runs the actual search algorithm
+        """
+        pass
+
+
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+class RefinedStepClimb(Climb):
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    def climb(self, initial_step=5, final_step=0.1, refinements=3, log=False):
+        """
+        Hill climb using smaller and smaller step sizes. When a maximum is found, start the refinement.
+        """
+
+        step_sizes = self._get_steps(initial_step, final_step, refinements, log)
+
+        positions = [self.get_position()]
+        img = self.get_image()
+
+        step_max = self.score_fnc(img)
+        scores = [step_max]
+        for step in step_sizes:
+            focus_max = step_max - 1
+            while step_max > focus_max:
+                # Update Maximum score and Maximum Position
+                focus_max = step_max
+                focus_idx = scores.index(focus_max)
+                focus_pos = positions[focus_idx]
+                # Get position below
+                below_pos = -1 * step + focus_pos
+                # Get Position Above
+                above_pos = 1 * step + focus_pos
+
+                # Check the Neighbor Values
+                neighbor_scores = []
+                for x in below_pos, above_pos:
+                    if x in positions:
+                        idx = positions.index(x)
+                        neighbor_scores.append(scores[idx])
+                    else:
+                        self.move(x)
+                        positions.append(x)
+                        img_score = self.score_fnc(self.get_image())
+                        scores.append(img_score)
+                        neighbor_scores.append(img_score)
+
+                # Set the Comoparison to the max of the neighbors, loop ends if step_max is < focus_max
+                step_max = max(neighbor_scores)
+        self.positions = positions
+        self.scores = scores
+        return focus_pos
+
+    @staticmethod
+    def _get_steps(initial_step, final_step, refinements, log):
+
+        if log:
+            return np.exp(np.linspace(np.log(initial_step), np.log(final_step), refinements))
+        else:
+            return np.linspace(initial_step, final_step, refinements)
+
+class StepClimb(Climb):
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    def climb(self, step_size=2, iterations=10, history=False):
+        """
+        Searches by scanning from step_size*iterations above and below the current position. Returns the position with the
+        best focus.
+
+        :param step_size: how far to move for each step
+        :param iterations: how many steps to take during the search
+        :return focus_z: the distance with the best focus
+        """
+
+        start_position = self.get_position()
+
+        scores = []
+        positions = []
+
+        for i in range(-iterations, iterations):
+            go_to_z = start_position + (step_size * i)
+
+            self.move(go_to_z)
+            img = self.get_image()
+            current_position = self.get_position()
+
+            scores.append(self.score_fnc(img))
+            positions.append(current_position)
+
+        self.scores = scores
+        self.positions = positions
+
+        return positions[np.argmax(scores)]
+
+
 class PlaneFocus:
 
     def __init__(self, ce_system: SystemsBuilder.CESystem):
@@ -230,10 +364,11 @@ class FindFocus:
                 image_array = self.snap_image()
                 d_b, d_r, d_e, d_s, d_v, d_p = c_b, c_r, c_e, c_s, c_v, c_p
                 c_b, c_r, c_e, c_s, c_v, c_p = get_measures(image_array)
-            print(f"Position: {self.system.objective.read_z()}")
+            #print(f"Position: {self.system.objective.read_z()}")
             n += 1
 
-    def search_step_global(self, step_size=7, max_iterations=8):
+
+    def search_step_global(self, step_size=7, max_iterations=8, z_multiplier=0.001):
         """
         A total of 'max_iterations' images will be taken with some distance between each image. The camera will initially
         move so that half the images are taken below the current position and half above.
@@ -253,7 +388,6 @@ class FindFocus:
             from the initial position when the function was called.
         """
 
-        z_multiplier = 0.001
 
         self.move_z(step_size * z_multiplier * -(max_iterations // 2))
         time.sleep(0.4)
@@ -268,7 +402,6 @@ class FindFocus:
 
             measure_difference = is_moving_toward_focus_2(c_b, c_r, c_e, c_s, c_v, c_p,
                                                           d_b, d_r, d_e, d_s, d_v, d_p)
-            print(f'meaure: {measure_difference}, step: {n}, pos= {self.system.objective.read_z()}')
             differences.append(measure_difference)
             c_b, c_r, c_e, c_s, c_v, c_p = d_b, d_r, d_e, d_s, d_v, d_p
 
@@ -278,7 +411,6 @@ class FindFocus:
                 differences[index] = np.mean([differences[index - 1], differences[index + 1]])
 
         index = -1
-        print(differences)
         try:
             while differences[index] < 0:
                 index -= 1
