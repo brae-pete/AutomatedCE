@@ -19,7 +19,7 @@ class CameraAbstraction(ABC):
         self._callback_tags = {}
         self._presnap_callbacks=[]
         self._postsnap_callbacks=[]
-        self._last_image = []
+        self._last_image = [] # Last Image
         self.dimensions = [1,1] # Width and height of the image in pixels
         self.update_frequency = 20  # How many times per second to check the camera
         self._last_image_lock = threading.RLock()
