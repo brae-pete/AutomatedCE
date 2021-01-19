@@ -22,7 +22,7 @@ def te300_postsnap(ce_sys, intensity=0):
     ce_sys.excitation_wheel.set_intensity(['red','blue','green','cyan','uv','teal'],intensity)
 
 def pre_fluoresence(ce_system,rgb=rgb_chnl,bins=bins,fluor_channel=fluor_channel,
-                    wait=wait, exp=exp,light_channel=light_channel auto_shutter=False):
+                    wait=wait, exp=exp,light_channel=light_channel, auto_shutter=False):
     # SNAP a FLUOR IMAGE
     # Set to new values
     ce_system.inlet_rgb.turn_off_channel(rgb)
@@ -35,7 +35,7 @@ def pre_fluoresence(ce_system,rgb=rgb_chnl,bins=bins,fluor_channel=fluor_channel
     #_old_bin = ce_system.camera.bin_size
     time.sleep(wait)
     
-def post_fluoresence(ce_system,rgb_channel=rgb_channel, old_exp=_old_exp,
+def post_fluoresence(ce_system,rgb_channel=rgb_chnl, old_exp=_old_exp,
                      old_bin=_old_bin,old_channel=_old_channel,
                      auto_shutter=False):
     # Return to old values
@@ -61,7 +61,7 @@ def move_to_blob(ce_system, df):
         ce_system.xy_stage.set_rel_x(movex)
         ce_system.xy_stage.set_rel_y(-movey)
         
-def limited_fire(ce_system, gravity_drop, voltage_level, injection_time, delta_z=0.002, delta_x=0.001, delta_time=0.25, under_pulses=2):
+def limited_fire(ce_system, gravity_drop, voltage_level, injection_time, delta_z=0.002, delta_x=0.001, delta_time=0.25, under_pulses=2, delay=0.3):
     time.sleep(delay)
     print('Fire')
     ce_system.outlet_z.set_rel_z(-gravity_drop)
