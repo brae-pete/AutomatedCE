@@ -1,3 +1,0 @@
-kinesis,"C:\\Program Files\\Thorlabs\\Kinesis"
-mmcorepy,"C:\Program Files\Micro-Manager-1.4"
-python2path,r"CEpy27\python.exe"

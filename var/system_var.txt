@@ -1,2 +1,0 @@
-kinesis,"C:\\Program Files\\Thorlabs\\Kinesis"
-data_dir,r".\Data"
