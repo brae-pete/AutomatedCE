@@ -118,7 +118,7 @@ class ZAbstraction(ABC):
             pos = new_pos
             new_pos = self.read_z()
 
-    def wait_for_target(self, z, timeout=30):
+    def wait_for_target(self, z, timeout=15):
         """
         :param z: target height in mm to wait for
         :param timeout: time to wait before returning False

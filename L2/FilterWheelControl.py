@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 from L2.Utility import UtilityControl, UtilityFactory
 
@@ -95,14 +96,16 @@ class PriorFilter(FilterWheelAbstraction, UtilityControl):
         self._position_map = {4: 1, 5: 2, 6: 3, 7: 4, 8: 5, 9: 6, 10: 7, 1: 8,
                               2: 9, 3: 10}  # Camera Port is at key when access is at value
 
-        settings = {'filter': 1}
+        settings = {'filter': 1, 'default_channel':1}
         settings.update(kwargs)
 
         self._filter_wheel = settings['filter']  # which filter port on the proscan to use
+        self.default_channel = settings['default_channel']
 
     def startup(self):
         """ Do  nothing on startup"""
         self.controller.send_command(f"7 {self._filter_wheel},H\r")
+        self.set_channel(self.default_channel)
 
     def stop(self):
         """
@@ -180,6 +183,7 @@ class PycromanagerFilter(FilterWheelAbstraction, UtilityControl):
         :return:
         """
         self.labels = kwargs
+
 
 class LumencorFilter(FilterWheelAbstraction, UtilityControl):
 
