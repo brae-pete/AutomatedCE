@@ -42,7 +42,7 @@ def post_fluoresence(ce_system,rgb_channel=rgb_chnl, old_exp=_old_exp,
     ce_system.camera.set_exposure(old_exp)
     #ce_system.camera.set_binning(old_bin)
     ce_system.filter_wheel.set_channel(old_channel)
-    ce_system.inlet_rgb.turn_on_channel(rgb_channel)
+    ce_system.inlet_rgb.turn_on_channel(rgb_chnl)
     ce_system.excitation_wheel.set_channel([])
     ce_system.camera.set_binning(old_bin)
     ce_system.camera.continuous_snap()
