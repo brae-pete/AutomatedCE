@@ -92,7 +92,7 @@ class RGBControlFactory(UtilityFactory):
     """ Determines the type of pressure utility object to return according to the daqcontroller id"""
 
     def build_object(self, controller, role, **kwargs):
-        if controller.id == 'arduino' or controller.id=='simulator':
+        if controller.id == 'arduino':
             return RGBArduino(controller, role, **kwargs)
         else:
             return None

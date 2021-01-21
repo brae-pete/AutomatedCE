@@ -1,4 +1,3 @@
-import logging
 import threading
 from abc import ABC, abstractmethod
 from L2.Utility import UtilityControl, UtilityFactory
@@ -20,7 +19,7 @@ class CameraAbstraction(ABC):
         self._callback_tags = {}
         self._presnap_callbacks=[]
         self._postsnap_callbacks=[]
-        self._last_image = [] # Last Image
+        self._last_image = []
         self.dimensions = [1,1] # Width and height of the image in pixels
         self.update_frequency = 20  # How many times per second to check the camera
         self._last_image_lock = threading.RLock()
@@ -286,7 +285,6 @@ class PycromanagerControl(CameraAbstraction, UtilityControl):
         :param bin_size: size of one side of a square bin (4 becomes 4x4).
         :return:
         """
-
         bins={1:"1x1", 2:"2x2", 4:"4x4", 8:"8x8"}
         assert bin_size in bins.keys(), f"{bin_size} not in {bins.keys()}"
         if self._dev_name != 'Camera':
