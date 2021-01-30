@@ -96,6 +96,7 @@ class Step:
         self.time = 0  # seconds
         self.special = ''
         self.data = False
+        self.name = ''
 
         # Read step
         if line != 'INJ':
@@ -506,6 +507,18 @@ class AutoRun:
         self.template = None
         self.template: Template
         self.path_information = PathTrace()
+        self.last_path = None
+        #of_x = FileIO.get_system_var('offset_x')
+        #of_y = FileIO.get_system_var('offset_y')
+        self.offset = (0,0)
+
+    def offset_template(self, well_xy):
+        xy = self.system.xy_stage.read_xy()
+        offset = [x2-x1 for x2, x1 in zip(xy, well_xy)]
+        print(f'Offset is: {offset}')
+        self.offset = offset
+        return offset
+
 
     def add_method(self, method_file=r'default'):
         """
@@ -579,7 +592,7 @@ class AutoRun:
 
     def lower_dif(self, diff):
         obj = self.system.objective.read_z()
-        cap = obj-diff
+        cap = obj - diff
         dif_z = cap - self.system.inlet_z.read_z()
         self.system.inlet_z.set_rel_z(dif_z)
 
@@ -619,7 +632,6 @@ class AutoRun:
                     state = self.system.outlet_z.wait_for_target(step.outlet_height)
                     self.error_message(state, "Outlet Move Down")
 
-
                 # Run the special command for injections here
                 after_special = True  # change this to false if we don't need to run the timed part of the step after
 
@@ -630,29 +642,29 @@ class AutoRun:
                 elif step.special == 'wait':
                     self.wait_to_continue()
 
-
                 # Run the special for Gating the separation here (get peak areas and set the next collection well)
                 print("After special", after_special)
                 # Run the timed step
                 if after_special:
-
                     self.timed_step(step, simulated)
                 # Output the electropherogram data
                 if step.data:
                     file_path = FileIO.get_data_filename(step.name, self.data_dir)
+                    self.last_path = file_path
                     self.path_information.append(f"Saving Data to {file_path}")
                     if not simulated:
                         FileIO.OutputElectropherogram(self.system, file_path)
         except ExitRun:
             logging.error("Exiting the run...")
 
-
     def move_to_well(self, well_name):
         assert self.template is not None, "Template must be selected first"
-        assert well_name in list(self.template.wells.keys()), f"{well_name} not in list of wells: \n {self.template.wells}"
+        assert well_name in list(
+            self.template.wells.keys()), f"{well_name} not in list of wells: \n {self.template.wells}"
         well = self.template.wells[well_name]
-        self.system.xy_stage.set_xy(well.xy)
-
+        xy = [well_x + offset_x for well_x, offset_x in zip(well.xy, self.offset)]
+        self.system.xy_stage.set_xy(xy)
+        return well
 
     def _get_move_positions(self, step, rep):
         """
@@ -667,6 +679,7 @@ class AutoRun:
 
         # Get Ending Positions, Special command for collection will override this
         x, y = self.template.wells[step.well_location[rep % len(step.well_location)]].xy
+        x,y = x + self.offset[0], y + self.offset[1]
         z = step.inlet_height
         xyz1 = [x, y, z]
 
@@ -754,7 +767,6 @@ class AutoRun:
         self.methods = []
         self.traced_thread.kill()
 
-
     def wait_to_continue(self, message=None, step=None, simulated=None, key=None):
         """Calls the continue_callbacks  for the user to set the continue_event before continuing
         There are two methods that could be employed. The first is the callback may return True when ready
@@ -789,7 +801,6 @@ class AutoRun:
 
 def send_wait_signal(msg, queue: Queue):
     queue.put(msg)
-
 
 
 class ChipRun(AutoRun):
