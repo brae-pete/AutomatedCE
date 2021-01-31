@@ -2,16 +2,19 @@ import datetime
 import threading
 import time
 
+import imageio
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from pathlib import Path
 import numpy as np
 from scipy.ndimage import distance_transform_edt
-from skimage import io, img_as_float, morphology, filters
+from skimage import io, img_as_float, morphology, filters, img_as_ubyte
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops_table, label
 from skimage.morphology import watershed
+from skimage.exposure import adjust_gamma, exposure
+from skimage.transform import resize
 import pandas as pd
 
 from L3 import SystemsBuilder
@@ -81,13 +84,11 @@ class ImageSaver:
     def save_image(self, image_prefix='img', folder_prefix=None, data_folder=None, unique_folder=True, timestamp=False):
         """
         Saves the images into an folder with incrementing image names:
-
         image_prefix: what the image filename should be caleld
         folder_prefix: what the data folder will be called
         data_folder: where the parent_directory resides
         unique_folder: When true, create a new folder everytime the function is called
         timestamp: When True add to the image prefix with the timestamp of the image
-
         """
 
         if folder_prefix is None:
@@ -99,28 +100,60 @@ class ImageSaver:
             data_dir = FileIO.get_data_folder(folder_prefix, data_folder)
         else:
             data_dir = data_folder
-        for time_id,image in zip(self.times,self.images):
+        for time_id, image in zip(self.times, self.images):
 
             if timestamp:
-                adj_prefix =image_prefix+ " "+time_id
+                adj_prefix = image_prefix + " " + time_id
             else:
                 adj_prefix = image_prefix
             data_file = FileIO.get_data_filename(adj_prefix, data_dir, extension='.tiff')
             io.imsave(data_file, image)
 
+    def save_gif(self, file_prefix, data_folder, correction=True,
+                 scale=1, percentile_low=.5, percentile_high=99.5):
+        """
+        Save images to a .gif format for easy comparison
+        :param file_prefix: what the gif file should start with
+        :param data_folder: where the gif should be saved to
+        :param correction: bool, whether to rescale and resize images
+        :param scale: (0,1] factor to scale the image by
+        :param percentile_low: (0,1) lower percentile of pixels to cut the lower threshold at
+        :param percentile_high: (0,1] upper percentile of pixesl to cut the upper threshold at
+        :return: None
+        """
+        if data_folder is None:
+            data_folder = self.data_folder
+
+        data_dir = data_folder
+        if correction:
+            new_images = [img_as_ubyte(scale_and_size_image(x, scale, percentile_low, percentile_high)) for x in self.images]
+        else:
+            new_images = self.images
+        data_file = FileIO.get_data_filename(file_prefix, data_dir, extension='.gif')
+        make_gif(new_images, data_file)
+        return data_file
+
+def make_gif(imgs, file_name):
+    imageio.mimsave(file_name, imgs)
+    return file_name
+
+
+def scale_and_size_image(image, scalar, percentile_low, percentile_high):
+    image = img_as_float(image)
+    resize_shape = [int(x * scalar) for x in image.shape]
+    image = resize(image, resize_shape)
+    low, p98 = np.percentile(image, [percentile_low, percentile_high])
+    img_rescale = exposure.rescale_intensity(image, in_range=(low, p98))
+    return img_rescale
+
 
 class Blob(object):
     """
     Data object for standarizing some of the common elements needed to determine a cell location.
-
-
     Blob.centroid is the row, column, pixel position of the centroid of the blob in the image. It is in row,column format
     to make image tasks easier.
-
     Blob.bbox is the bounding box of the blob in pixels, *currently this is in xy* Lx, Ly, w, h
-
     Blob.xy is the lower left corner of the bounding box
-
     """
 
     def __init__(self, xy=(0, 0), mm_per_pixel=1, size=50):
@@ -191,18 +224,14 @@ class ResizableBoxes(object):
     Uses matplotlib events to dynamically change Rectangle Patches on a Matplolib axes.
     The patches to be dynamically updated should have 'picker' set to True. Patches without the picker set to true will not
     be dynamically adjusted.
-
     Example:
-
     # Create a Resize Object
     resize = ResizableBoxes()
-
     # Connect the fig events to the Resize methods
     fig, axes = plt.subplots()
     fig.canvas.mpl_connect('pick_event', resize.on_pick)
     fig.canvas.mpl_connect('motion_notify_event', resize.on_motion)
     fig.canvas.mpl_connect('button_release_event', resize.on_release)
-
     # Create your rectangle Patch
     rect = mpatches.Rectangle((40, 40),30,60, picker = True)
     axes.add_patch(rect)
@@ -227,7 +256,6 @@ class ResizableBoxes(object):
     def on_pick(self, event):
         """
         Update information for when user clicks a box
-
         IF LMB near a corner, enable resizing
         If they MMB (Middle Mouse), enable center movement
         """
@@ -312,12 +340,10 @@ class ResizableBoxes(object):
 class Labeler(object):
     """
     Draw Rectangle bounding boxes over an axes shaded according to their labels.
-
     """
 
     def __init__(self, axes: plt.axes, labels: list, ):
         """
-
         :param axes: axes to plot the labels onto
         :param labels: list of strings that contain the labels
         """
@@ -340,7 +366,6 @@ class Labeler(object):
     def get_label_colors(labels: list, axes: plt.axes):
         """
         'Get colors for labels and add them to the legend'
-
         :param labels: list of strings containing labels for the blobs in the image
         :param axes: axes to plot the label legend to
         :return: dictionary of labels and their corresponding colors
@@ -384,7 +409,6 @@ class Labeler(object):
         '''Add changes to the label:
         double right click to enable or disable the label
         scroll the mouse wheel to change labels
-
         '''
         mouse = event  # Get the mouse event that brought us here
         blob = self.patches[artist][0]
@@ -458,7 +482,6 @@ def to_bbx_dict(bbx: list):
     """
     Converts bounding box from (XY),w,h to a dictionatry of corners x1, x2, y1, and y2.
     where x1 and y1 are lower in value than x2 and y2
-
     :param bbx: list containing corner point and width and height of bounding box [(x,y), w,h]
     :return: dictionary of bounding box corners
     :rtype: dict
@@ -475,14 +498,11 @@ def to_bbx_dict(bbx: list):
 def get_iou(bb1, bb2):
     """
     Calculate the Intersection over Union (IoU) of two bounding boxes.
-
     bb1 is (xy),w,h of bounding box 1, and bb2 is (xy),w,h of bounding box 2
-
     For axis-aligned bounding boxes it is relatively simple. "Axis-aligned" means that the bounding box isn't rotated;
     or in other words that the boxes lines are parallel to the axes.
     @Martin Thoma, StackOverflow
     https://stackoverflow.com/questions/25349178/calculating-percentage-of-bounding-box-overlap-for-image-detector-evaluation
-
     Parameters
     ----------
     bb1 : dict
@@ -493,7 +513,6 @@ def get_iou(bb1, bb2):
         Keys: {'x1', 'x2', 'y1', 'y2'}
         The (x, y) position is at the top left corner,
         the (x2, y2) position is at the bottom right corner
-
     Returns
     -------
     float
