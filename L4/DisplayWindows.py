@@ -279,7 +279,7 @@ class PLTCEDisplay(CEDisplayAbstraction):
             ax2.set_ylim(min(power_data['current']) * 0, 300)
             # ax2.set_ylim(min(power_data['current'])*0.95, max(power_data['current'])*1.05)
         except ValueError:
-            logging.warning("No data to plot")
+            logging.debug("No data to plot")
             return self._artists
         self._artists[0].set_data(data['time_data'], data['rfu'])
         self._artists[1].set_data(power_data['time_data'], power_data['current'])
