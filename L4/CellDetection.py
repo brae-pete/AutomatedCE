@@ -18,7 +18,7 @@ from L4.image_util import *
 import pandas as pd
 
 
-def get_blobs(image, algorithm, *args, **kwargs):
+def get_blobs(image, algorithm='scikit_threshold', *args, **kwargs):
     """
     This is a flexible find_blob function. User can select the algorithm they wish to use followed by the required
     arguments and keyword arguments.
@@ -48,6 +48,7 @@ def get_blobs(image, algorithm, *args, **kwargs):
 
     # Get the region properties for the image
     regions = regionprops(labels)
+    print(regions, labels)
     blobs = []
     for region in regions:
         new_blob = Blob()
