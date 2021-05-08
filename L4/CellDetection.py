@@ -251,10 +251,19 @@ class ImageDetect:
         self.opened2 = opened_image = morphology.binary_opening(closed_image, structure_element)
 
         # Watershed
-        distance = distance_transform_edt(opened_image)
-        local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((50,50)), labels=opened_image)
+        self.distance = distance_transform_edt(self.opened2)
+        local_maxi = peak_local_max(self.distance, indices=False, footprint=np.ones((20,20)), labels=self.opened2)
+        
+        self.locals = local_maxi
         markers = label(local_maxi)[0]
-        self.labels = labels = watershed(-distance, markers, mask=opened_image)
+
+        if len(local_maxi.shape)<2 :
+            markers = label(local_maxi)
+            
+        labels = watershed(-self.distance, markers, mask=self.opened2)
+        print(np.max(labels))
+        self.markers=markers
+        self.labels=labels.copy()
 
         #Regions
         assert np.max(labels)-np.min(labels)>=1, "No Cells Detected, Move and Try again"
@@ -262,7 +271,6 @@ class ImageDetect:
         properties = ['centroid', 'area', 'eccentricity', 'convex_area', 'equivalent_diameter']
         regions = regionprops_table(labels,properties=properties)
         self.regions = regions = pd.DataFrame(regions)
-        self.labels = labels
         return regions
     
     def select_cell(self):
