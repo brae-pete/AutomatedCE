@@ -273,7 +273,7 @@ class ImageDetect:
         assert regions.shape[0]>1, "No Cells Detected, Move and Try again"
 
         # Get a random row from the regions
-        row = regions.sample(1).iloc[0]
+        row = regions.sample(1, random_state=1).iloc[0]
         self.row = row
         return row
     
