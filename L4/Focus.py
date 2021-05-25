@@ -100,7 +100,7 @@ class RefinedStepClimb(Climb):
                         scores.append(img_score)
                         neighbor_scores.append(img_score)
 
-                # Set the Comoparison to the max of the neighbors, loop ends if step_max is < focus_max
+                # Set the Comparison to the max of the neighbors, loop ends if step_max is < focus_max
                 step_max = max(neighbor_scores)
         self.positions = positions
         self.scores = scores
@@ -195,6 +195,24 @@ class PlaneFocus:
 
         return True
 
+    def find_a_plane_from_many(self):
+        """
+        Uses many points (>3) to determine the plane equation
+        :return:
+        """
+        get_z = lambda xy, a, b, c, d: (d - (a * xy[0]) - (b * xy[1])) / c
+
+        points = self._plane_vectors
+        # Get the Normal for all the points
+        svd = np.linalg.svd(points.T - np.mean(points.T, axis=1, keepdims=True))
+        left = svd[0]
+        left = left[:, -1]
+        # Get the centroid for the points
+        centroid = np.mean(points, axis=0)
+        # Get the predicted Z value
+        self._plane_coefficients = [ left[0], left[1], left[2], np.dot(left, centroid)]
+        return True
+
     def get_three_points(self, travel=2):
         # Move Up
         def threaded_function(step):
@@ -244,7 +262,6 @@ class PlaneFocus:
 
     def get_plane_focus(self):
         # If spline is not set up, keep the objective at the same position
-
         xy = self.system.xy_stage.read_xy()
         a, b, c, d = self._plane_coefficients
         z = (d - (a * xy[0]) - (b * xy[1])) / c
